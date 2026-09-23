@@ -1,0 +1,24 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: glampro-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: glampro
+      MYSQL_USER: glampro
+      MYSQL_PASSWORD: glampro
+      MYSQL_ROOT_PASSWORD: local-root-password
+      TZ: Asia/Singapore
+    ports:
+      - '127.0.0.1:3307:3306'
+    volumes:
+      - glampro_mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost', '-u', 'root', '-plocal-root-password']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  glampro_mysql_data:
