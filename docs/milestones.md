@@ -10,8 +10,8 @@ update before the next one starts, and each builds on the foundations described 
 | 2   | Authentication and sessions | Done    |
 | 3   | Tenancy administration      | Done    |
 | 4   | Catalog and inventory       | Done    |
-| 5   | Customers and staff         | Next    |
-| 6   | Appointments                | Planned |
+| 5   | Customers and staff         | Done    |
+| 6   | Appointments                | Next    |
 | 7   | Point of sale               | Planned |
 | 8   | Reports and dashboard       | Planned |
 | 9   | Billing and platform admin  | Planned |
@@ -77,10 +77,39 @@ every new endpoint, the signed movement ledger, the below-zero guard, and the ze
 `packages/contracts/src/schemas/catalog.test.ts` covers the shared request and summary shapes; and
 `npm test` passes across all three workspaces.
 
-## 5. Customers and staff
+## 5. Customers and staff — done
 
-Customer profiles with visit history and notes, staff profiles, staff-to-service assignments,
-weekly schedules, and time off.
+- Customer profiles behind `customers.manage`, readable with `customers.read`: name, email, phone,
+  date of birth, gender, address, an optional member number for loyalty or legacy cards, and an
+  `isActive` soft archive.
+- Email, phone, and member number are unique per organization when present, so two tenants can
+  record the same person; a duplicate reads as `409`.
+- Append-only customer notes with the author, rendered as a timeline on the customer screen; the
+  author column is nullable so the note survives the removal of the member who wrote it.
+- Staff profiles behind `staff.manage`, readable with `staff.read`. A profile hangs off an existing
+  `ACTIVE` membership — `membershipId` is unique — so identity stays on the membership and the
+  roster never becomes a second directory.
+- `GET /staff/candidates` lists active memberships without a profile, so a manager can start one
+  without holding `members.manage`.
+- Staff-to-service assignments replaced as a full set, a weekly schedule replaced as a full week
+  (same shape as business hours, `422` on an invalid week), and dated time off underneath it.
+- Guards: a foreign profile, service, or membership reads as `404`; a second profile for one member
+  and a profile for a non-active member read as `409`; the hire and end dates cannot invert.
+- Audit entries for customer updates and notes, profile creation and updates, service replacement,
+  week replacement, and time-off creation and removal.
+- Web `Customers` module (book, profile, and note timeline) and `Staff` module (profiles, services,
+  schedule, and time off tabs), each gated by the permission it needs.
+
+Deliberately not in this milestone: visit history, which is derived from appointments (milestone 6)
+and sales (milestone 7); per-location staff schedules; and any approval workflow on time off. A
+membership that is suspended or removed later does not delete the profile — the roster marks it
+as no longer an active member.
+
+Exit criteria met: `apps/api/tests/customers.test.ts` and `apps/api/tests/staff.test.ts` cover the
+401/403/cross-tenant-404 matrix for every new endpoint, the duplicate and foreign-key conflicts,
+the schedule replacement, and the time-off lifecycle;
+`packages/contracts/src/schemas/people.test.ts` covers the shared request and summary shapes; and
+`npm test`, `npm run lint`, and `npm run build` pass across all three workspaces.
 
 ## 6. Appointments
 

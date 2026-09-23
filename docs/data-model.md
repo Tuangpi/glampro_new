@@ -56,6 +56,35 @@ first movement is recorded.
 adjustment endpoint never writes them, and an adjustment that would drive a level below zero is
 refused with `409`.
 
+### People
+
+| Model                    | Purpose                                                                      |
+| ------------------------ | ---------------------------------------------------------------------------- |
+| `Customer`               | Tenant-scoped profile: contact details, address, member number, soft archive |
+| `CustomerNote`           | Append-only note with an optional author, rendered as a timeline             |
+| `StaffProfile`           | Roster record for one membership: job title, colour, bookability, hire dates |
+| `StaffServiceAssignment` | Which services a staff member performs; replaced as a full set               |
+| `StaffSchedule`          | One row per weekday, mirroring `BusinessHour`                                |
+| `StaffTimeOff`           | Dated absence layered on the recurring week, with an optional reason         |
+
+`Customer.email`, `Customer.phone`, and `Customer.memberNumber` are each unique per organization
+when present, so two tenants can record the same person without clashing and a duplicate inside one
+tenant reads as `409`. `countryCode` defaults to `SG`, matching the organization default. `isActive`
+is a soft archive rather than a delete, because appointments and sales will reference the row as
+history.
+
+Notes are append-only: `CustomerNote` carries `createdAt` and no `updatedAt`, and the API creates
+and reads notes without ever editing or deleting one. `authorUserId` is nullable and its foreign key
+uses the default `Restrict`, so the note keeps its text if the member who wrote it is later removed;
+the author simply reads as null.
+
+`StaffProfile.membershipId` is unique, which makes the profile a 1:1 extension of
+`OrganizationMembership`: a person's name, email, and role stay on the membership, so the roster is a
+view of people who already exist in the organization rather than a second directory. A profile can
+only be attached to an `ACTIVE` membership in the same organization, and creating one writes seven
+non-working `StaffSchedule` rows so the schedule screen always has exactly one row per weekday.
+Weekly hours are organization-level, not per location.
+
 ### Identity
 
 | Model                    | Purpose                                                              |
@@ -90,7 +119,9 @@ Actions currently written: `auth.registered`, `auth.login`, `auth.login_failed`,
 `members.reactivated`, `members.removed`, `catalog.service_category_created`,
 `catalog.service_category_updated`, `catalog.service_created`, `catalog.service_updated`,
 `catalog.product_category_created`, `catalog.product_category_updated`, `catalog.product_created`,
-`catalog.product_updated`, and `inventory.movement_recorded`.
+`catalog.product_updated`, `inventory.movement_recorded`, `customer.created`, `customer.updated`,
+`customer.note_added`, `staff.profile_created`, `staff.profile_updated`, `staff.services_replaced`,
+`staff.schedule_replaced`, `staff.time_off_recorded`, and `staff.time_off_removed`.
 
 ## Enumerations
 
@@ -104,6 +135,7 @@ Actions currently written: `auth.registered`, `auth.login`, `auth.login_failed`,
 | `SubscriptionStatus`    | `TRIALING`, `ACTIVE`, `PAST_DUE`, `PAUSED`, `CANCELLED`, `INCOMPLETE`                                |
 | `AuditActorType`        | `USER`, `PLATFORM_ADMIN`, `SYSTEM`, `WEBHOOK`                                                        |
 | `InventoryMovementType` | `ADJUST_IN`, `ADJUST_OUT`, `SALE`, `RETURN`, `STOCK_CORRECTION`, `DAMAGE`, `EXPIRY`, `INITIAL_STOCK` |
+| `CustomerGender`        | `FEMALE`, `MALE`, `OTHER`, `UNDISCLOSED`                                                             |
 
 ## Relationship shape
 
@@ -122,31 +154,41 @@ Organization ──1:n── ProductCategory ──1:n── Product
 Product ──1:n── InventoryLevel ──n:1── Location
 Product ──1:n── InventoryMovement ──n:1── Location
 InventoryMovement ──n:1── User (performedBy)
+
+Organization ──1:n── Customer ──1:n── CustomerNote ──n:1── User (author)
+Organization ──1:n── StaffProfile ──1:1── OrganizationMembership ──n:1── User
+StaffProfile ──1:n── StaffServiceAssignment ──n:1── Service
+StaffProfile ──1:n── StaffSchedule, StaffTimeOff
 ```
 
 Every tenant-owned model either holds `organizationId` directly or reaches it through a parent
 that does. Deletes cascade from `Organization` to its memberships, invitations, locations,
-subscriptions, categories, services, products, and inventory rows; `AuditLog` relations use
-`SetNull` so history survives.
+subscriptions, categories, services, products, inventory rows, customers, notes, and staff rows;
+`AuditLog` relations use `SetNull` so history survives.
 
 `InventoryMovement` is never deleted or updated by the API, so the ledger is append-only even
-though the foreign key to `User` uses the default `Restrict` behaviour.
+though the foreign key to `User` uses the default `Restrict` behaviour. `CustomerNote.authorUserId`
+and `StaffTimeOff.createdById` keep the same default for the same reason.
 
 ## Planned models
 
 These are not in the schema yet. They are listed so the tenant columns, snapshotting rules, and
 money conventions are fixed before implementation.
 
-| Area         | Models                                                                                |
-| ------------ | ------------------------------------------------------------------------------------- |
-| People       | `Customer`, `StaffProfile`, `StaffServiceAssignment`, `StaffSchedule`, `StaffTimeOff` |
-| Appointments | `Appointment`, `AppointmentService`, `AppointmentStatusHistory`                       |
-| Sales        | `Sale`, `SaleLine`, `SalePayment`, `SaleRefund`                                       |
+| Area         | Models                                                          |
+| ------------ | --------------------------------------------------------------- |
+| Appointments | `Appointment`, `AppointmentService`, `AppointmentStatusHistory` |
+| Sales        | `Sale`, `SaleLine`, `SalePayment`, `SaleRefund`                 |
+
+Customer visit history is deliberately not a column on `Customer`: it is derived from `Appointment`
+(milestone 6) and `Sale` (milestone 7) once those exist, so the profile shows real activity instead
+of a counter that nothing maintains.
 
 Conventions that apply to all of them:
 
 1. `organizationId` on every model; `locationId` on the location-owned ones (inventory,
-   appointments, sales, schedules). — followed by `InventoryLevel` and `InventoryMovement`.
+   appointments, sales). — followed by `InventoryLevel` and `InventoryMovement`; staff schedules are
+   organization-level, so `StaffSchedule` carries no `locationId`.
 2. Historical records snapshot what they need. A `SaleLine` stores the name, unit price, tax, and
    discount applied at the time of sale, and an `AppointmentService` stores the duration and price
    used for scheduling. Editing the catalog later must not rewrite history.

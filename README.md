@@ -8,13 +8,13 @@ reference for business rules and workflow; no code is shared.
 
 ## Status
 
-Milestones 1 to 4 are in place; see [docs/milestones.md](docs/milestones.md) for the plan.
+Milestones 1 to 5 are in place; see [docs/milestones.md](docs/milestones.md) for the plan.
 
 - npm workspaces monorepo with the web app, API, shared contracts, and shared tooling config
 - Express 5 + TypeScript API with security middleware, request correlation, and a standard
   response envelope
 - Prisma schema covering tenancy, identity, sessions, invitations, subscriptions, catalog,
-  inventory, and audit logs
+  inventory, customers, staff, and audit logs
 - Authentication: registration, login, refresh-token rotation with reuse detection, logout,
   session listing and revocation, password reset, and email verification
 - `authenticate`, `withTenant`, `requirePermission`, `validate`, and CSRF guards for every module
@@ -23,13 +23,16 @@ Milestones 1 to 4 are in place; see [docs/milestones.md](docs/milestones.md) for
   status, invitations with single-use email links, and a tenant-scoped audit log viewer
 - Catalog and inventory: service and product categories, services and products with availability,
   per-location stock levels, and an append-only inventory movement ledger
+- Customers and staff: tenant-scoped customer profiles with an append-only note timeline, staff
+  profiles attached to active memberships, staff-to-service assignments, weekly schedules, and time
+  off
 - React 19 + TypeScript + Vite + Tailwind shell with a session provider, protected routes, and
   permission-aware navigation
 - Zod contracts shared between the API and the web client
 - Vitest suites for the API, the web app, and the contracts, including tenant-isolation tests
 
-Feature modules (appointments, POS, customers, staff, reports) are intentionally not implemented
-yet. Routes exist as placeholders and will be built against the foundations described in
+The appointments, point-of-sale, and reports modules are intentionally not implemented yet. Their
+routes exist as placeholders and will be built against the foundations described in
 [docs/architecture.md](docs/architecture.md).
 
 ## Stack
@@ -267,6 +270,38 @@ transaction. `ADJUST_IN`, `RETURN`, and `INITIAL_STOCK` add stock; `ADJUST_OUT`,
 refused with `409 CONFLICT`, and a product that does not track inventory refuses movements the same
 way. `SALE` rows are reserved for the point of sale.
 
+## Customers and staff
+
+| Method   | Endpoint                                | Purpose                                | Gate               |
+| -------- | --------------------------------------- | -------------------------------------- | ------------------ |
+| `GET`    | `/api/v1/customers`                     | Search the customer book               | `customers.read`   |
+| `POST`   | `/api/v1/customers`                     | Create a customer profile              | `customers.manage` |
+| `GET`    | `/api/v1/customers/:id`                 | Read one customer with their notes     | `customers.read`   |
+| `PATCH`  | `/api/v1/customers/:id`                 | Update a profile                       | `customers.manage` |
+| `GET`    | `/api/v1/customers/:id/notes`           | Read the note timeline                 | `customers.read`   |
+| `POST`   | `/api/v1/customers/:id/notes`           | Append a note                          | `customers.manage` |
+| `GET`    | `/api/v1/staff`                         | List the roster, optionally by service | `staff.read`       |
+| `POST`   | `/api/v1/staff`                         | Create a profile for an active member  | `staff.manage`     |
+| `GET`    | `/api/v1/staff/candidates`              | Active members without a profile       | `staff.manage`     |
+| `GET`    | `/api/v1/staff/:id`                     | Read a profile with services and week  | `staff.read`       |
+| `PATCH`  | `/api/v1/staff/:id`                     | Update job title, colour, or dates     | `staff.manage`     |
+| `GET`    | `/api/v1/staff/:id/services`            | Read the assigned services             | `staff.read`       |
+| `PUT`    | `/api/v1/staff/:id/services`            | Replace the assignment set             | `staff.manage`     |
+| `GET`    | `/api/v1/staff/:id/schedule`            | Read the weekly schedule               | `staff.read`       |
+| `PUT`    | `/api/v1/staff/:id/schedule`            | Replace the whole week                 | `staff.manage`     |
+| `GET`    | `/api/v1/staff/:id/time-off`            | List recorded absences                 | `staff.read`       |
+| `POST`   | `/api/v1/staff/:id/time-off`            | Record an absence                      | `staff.manage`     |
+| `DELETE` | `/api/v1/staff/:id/time-off/:timeOffId` | Remove an absence                      | `staff.manage`     |
+
+A customer's email, phone, and member number are each unique per organization when present, so the
+same person can be recorded by two tenants, while a duplicate inside one tenant reads as `409`.
+Notes are append-only and keep their text even if the member who wrote them is later removed. A
+staff profile is a 1:1 extension of an `ACTIVE` organization membership — created with `POST
+/staff`, which names the membership — so a person's name and email are never copied onto the roster.
+`GET /staff/candidates` exists because `staff.manage` does not imply `members.manage`: a manager
+needs the member list to start a profile. Service assignments and the weekly schedule are replaced
+as whole sets, and a foreign profile, service, or membership ID reads as `404`.
+
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) — boundaries, request lifecycle, security controls
@@ -281,8 +316,8 @@ public booking, customer portal, or mobile application yet. Stripe Billing cover
 GlamPro subscription and is separate from the POS "card" payment method, which only records that
 a card payment was taken on the salon's own terminal.
 
-The seeded owner account (`owner@glampro.local`) exists for local development only and shares the
-development password in this document; change or delete it before any environment is reachable by
-others.
+The seeded owner account (`owner@glampro.local`) and the seeded stylist (`stylist@glampro.local`)
+exist for local development only and share the development password in this document; change or
+delete them before any environment is reachable by others.
 
 All monetary values are stored as integer minor units, for example `5800` for `S$58.00`.

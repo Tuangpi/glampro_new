@@ -5,6 +5,11 @@ import {
   authenticatedSessionDataSchema,
   businessHoursDataSchema,
   currentUserDataSchema,
+  customerDataSchema,
+  customerDetailDataSchema,
+  customerNoteDataSchema,
+  customerNotesDataSchema,
+  customersDataSchema,
   emailVerifiedDataSchema,
   healthResponseSchema,
   inventoryLevelsDataSchema,
@@ -29,6 +34,14 @@ import {
   serviceCategoryDataSchema,
   serviceDataSchema,
   servicesDataSchema,
+  staffCandidatesDataSchema,
+  staffProfileDataSchema,
+  staffProfileDetailDataSchema,
+  staffProfilesDataSchema,
+  staffScheduleDataSchema,
+  staffServicesDataSchema,
+  staffTimeOffDataSchema,
+  staffTimeOffEntryDataSchema,
 } from '@glampro/contracts';
 import type {
   AcceptInvitationRequest,
@@ -37,7 +50,12 @@ import type {
   BusinessHour,
   ChangeMemberRoleRequest,
   ChangeMemberStatusRequest,
+  CreateCustomerNoteRequest,
   CreateLocationRequest,
+  CustomerDetail,
+  CustomerNoteSummary,
+  CustomerRequest,
+  CustomerSummary,
   EmailVerificationRequest,
   ForgotPasswordRequest,
   HealthResponse,
@@ -54,17 +72,28 @@ import type {
   ProductRequest,
   ProductSummary,
   RegistrationRequest,
+  ReplaceStaffServicesRequest,
   ResetPasswordRequest,
   ServiceCategoryRequest,
   ServiceCategorySummary,
   ServiceRequest,
   ServiceSummary,
+  StaffCandidate,
+  StaffProfileDetail,
+  StaffProfileRequest,
+  StaffProfileSummary,
+  StaffScheduleRequest,
+  StaffScheduleSummary,
+  StaffTimeOffRequest,
+  StaffTimeOffSummary,
+  UpdateCustomerRequest,
   UpdateLocationRequest,
   UpdateOrganizationRequest,
   UpdateProductCategoryRequest,
   UpdateProductRequest,
   UpdateServiceCategoryRequest,
   UpdateServiceRequest,
+  UpdateStaffProfileRequest,
 } from '@glampro/contracts';
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? '';
@@ -470,4 +499,139 @@ export const fetchInventoryMovements = async (
 export const createInventoryMovement = async (input: InventoryMovementRequest) =>
   inventoryMovementDataSchema.parse(
     await apiRequest<unknown>('/api/v1/inventory/movements', { method: 'POST', body: input }),
+  );
+
+type CustomerListQuery = { q?: string; limit?: number; isActive?: boolean };
+
+/** Query values are optional, so anything undefined is left out entirely. */
+const queryStringOf = (params: Record<string, string | number | boolean | undefined>) => {
+  const search = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined) {
+      search.set(key, String(value));
+    }
+  }
+
+  const query = search.toString();
+  return query === '' ? '' : `?${query}`;
+};
+
+/** Customers: search, profiles, and the append-only note timeline. */
+
+export const fetchCustomers = async (
+  query: CustomerListQuery = {},
+): Promise<{ customers: CustomerSummary[] }> =>
+  customersDataSchema.parse(await apiRequest<unknown>(`/api/v1/customers${queryStringOf(query)}`));
+
+export const fetchCustomer = async (customerId: string): Promise<{ customer: CustomerDetail }> =>
+  customerDetailDataSchema.parse(await apiRequest<unknown>(`/api/v1/customers/${customerId}`));
+
+export const createCustomer = async (input: CustomerRequest) =>
+  customerDataSchema.parse(
+    await apiRequest<unknown>('/api/v1/customers', { method: 'POST', body: input }),
+  );
+
+export const updateCustomer = async (customerId: string, input: UpdateCustomerRequest) =>
+  customerDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/customers/${customerId}`, { method: 'PATCH', body: input }),
+  );
+
+export const fetchCustomerNotes = async (
+  customerId: string,
+): Promise<{ notes: CustomerNoteSummary[] }> =>
+  customerNotesDataSchema.parse(await apiRequest<unknown>(`/api/v1/customers/${customerId}/notes`));
+
+export const createCustomerNote = async (customerId: string, input: CreateCustomerNoteRequest) =>
+  customerNoteDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/customers/${customerId}/notes`, {
+      method: 'POST',
+      body: input,
+    }),
+  );
+
+type StaffListQuery = { serviceId?: string; isActive?: boolean };
+
+/** Staff: the roster, its service assignments, its week, and its time off. */
+
+export const fetchStaffProfiles = async (
+  query: StaffListQuery = {},
+): Promise<{ staffProfiles: StaffProfileSummary[] }> =>
+  staffProfilesDataSchema.parse(await apiRequest<unknown>(`/api/v1/staff${queryStringOf(query)}`));
+
+export const fetchStaffProfile = async (
+  staffProfileId: string,
+): Promise<{ staffProfile: StaffProfileDetail }> =>
+  staffProfileDetailDataSchema.parse(await apiRequest<unknown>(`/api/v1/staff/${staffProfileId}`));
+
+/** Active members without a profile yet — the choices in the create form. */
+export const fetchStaffCandidates = async (): Promise<{ candidates: StaffCandidate[] }> =>
+  staffCandidatesDataSchema.parse(await apiRequest<unknown>('/api/v1/staff/candidates'));
+
+export const createStaffProfile = async (input: StaffProfileRequest) =>
+  staffProfileDataSchema.parse(
+    await apiRequest<unknown>('/api/v1/staff', { method: 'POST', body: input }),
+  );
+
+export const updateStaffProfile = async (
+  staffProfileId: string,
+  input: UpdateStaffProfileRequest,
+) =>
+  staffProfileDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/staff/${staffProfileId}`, { method: 'PATCH', body: input }),
+  );
+
+export const fetchStaffServices = async (
+  staffProfileId: string,
+): Promise<{ services: ServiceSummary[] }> =>
+  staffServicesDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/staff/${staffProfileId}/services`),
+  );
+
+export const replaceStaffServices = async (
+  staffProfileId: string,
+  input: ReplaceStaffServicesRequest,
+) =>
+  staffServicesDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/staff/${staffProfileId}/services`, {
+      method: 'PUT',
+      body: input,
+    }),
+  );
+
+export const fetchStaffSchedule = async (
+  staffProfileId: string,
+): Promise<{ schedule: StaffScheduleSummary[] }> =>
+  staffScheduleDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/staff/${staffProfileId}/schedule`),
+  );
+
+export const replaceStaffSchedule = async (staffProfileId: string, input: StaffScheduleRequest) =>
+  staffScheduleDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/staff/${staffProfileId}/schedule`, {
+      method: 'PUT',
+      body: input,
+    }),
+  );
+
+export const fetchStaffTimeOff = async (
+  staffProfileId: string,
+): Promise<{ timeOff: StaffTimeOffSummary[] }> =>
+  staffTimeOffDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/staff/${staffProfileId}/time-off`),
+  );
+
+export const createStaffTimeOff = async (staffProfileId: string, input: StaffTimeOffRequest) =>
+  staffTimeOffEntryDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/staff/${staffProfileId}/time-off`, {
+      method: 'POST',
+      body: input,
+    }),
+  );
+
+export const removeStaffTimeOff = async (staffProfileId: string, timeOffId: string) =>
+  staffTimeOffEntryDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/staff/${staffProfileId}/time-off/${timeOffId}`, {
+      method: 'DELETE',
+    }),
   );

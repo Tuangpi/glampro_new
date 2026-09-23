@@ -10,7 +10,9 @@ import {
 import type { ComponentType } from 'react';
 import type { Permission } from '@glampro/contracts';
 import { CatalogPage } from '../features/catalog/CatalogPage';
+import { CustomersPage } from '../features/customers/CustomersPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
+import { StaffPage } from '../features/staff/StaffPage';
 
 export type ModuleRoute = {
   path: string;
@@ -58,6 +60,7 @@ export const moduleRoutes: ModuleRoute[] = [
     permission: 'customers.read',
     group: 'main',
     icon: Users,
+    element: CustomersPage,
   },
   {
     path: 'inventory',
@@ -77,6 +80,7 @@ export const moduleRoutes: ModuleRoute[] = [
     permission: 'staff.read',
     group: 'main',
     icon: UserRoundCog,
+    element: StaffPage,
   },
   {
     path: 'reports',

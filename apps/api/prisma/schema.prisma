@@ -79,6 +79,8 @@ model User {
   acceptedInvitations OrganizationInvitation[] @relation("InvitationAcceptor")
   auditLogs           AuditLog[]               @relation("AuditUser")
   inventoryMovements  InventoryMovement[]
+  customerNotes       CustomerNote[]
+  staffTimeOffCreated StaffTimeOff[]
 
   @@index([emailVerifiedAt])
 }
@@ -159,6 +161,12 @@ model Organization {
   products              Product[]
   inventoryLevels       InventoryLevel[]
   inventoryMovements    InventoryMovement[]
+  customers             Customer[]
+  customerNotes         CustomerNote[]
+  staffProfiles         StaffProfile[]
+  staffServiceAssignments StaffServiceAssignment[]
+  staffSchedules        StaffSchedule[]
+  staffTimeOff          StaffTimeOff[]
 
   @@index([status])
 }
@@ -174,6 +182,7 @@ model OrganizationMembership {
   updatedAt      DateTime         @updatedAt
   organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  staffProfile   StaffProfile?
 
   @@unique([organizationId, userId])
   @@index([userId, status])
@@ -324,6 +333,7 @@ model Service {
   updatedAt       DateTime @updatedAt
     organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   serviceCategory ServiceCategory @relation(fields: [serviceCategoryId], references: [id])
+  staffAssignments StaffServiceAssignment[]
 
   @@index([organizationId, sortOrder])
   @@index([organizationId, isAvailable])
@@ -400,3 +410,144 @@ model InventoryMovement {
   @@index([organizationId, createdAt])
   @@index([productId, locationId])
 }
+
+enum CustomerGender {
+  FEMALE
+  MALE
+  OTHER
+  UNDISCLOSED
+}
+
+/**
+ * Customer profile. Email, phone, and member number are unique per organization
+ * when present, so two tenants can record the same person. `isActive` is a soft
+ * archive: customer rows are never deleted, because appointments and sales will
+ * reference them as history.
+ */
+model Customer {
+  id             String          @id @default(cuid())
+  organizationId String
+  firstName      String          @db.VarChar(80)
+  lastName       String?         @db.VarChar(80)
+  email          String?         @db.VarChar(254)
+  phone          String?         @db.VarChar(40)
+  dateOfBirth    DateTime?       @db.Date
+  gender         CustomerGender?
+  addressLine1   String?         @db.VarChar(200)
+  addressLine2   String?         @db.VarChar(200)
+  city           String?         @db.VarChar(100)
+  postalCode     String?         @db.VarChar(30)
+  countryCode    String          @default("SG") @db.Char(2)
+  memberNumber   String?         @db.VarChar(40)
+  isActive       Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  notes          CustomerNote[]
+
+  @@unique([organizationId, email])
+  @@unique([organizationId, phone])
+  @@unique([organizationId, memberNumber])
+  @@index([organizationId, isActive])
+  @@index([organizationId, lastName, firstName])
+}
+
+/**
+ * Append-only note on a customer profile: rows are created and read, never
+ * updated, so the timeline stays an accurate record of who said what and when.
+ */
+model CustomerNote {
+  id             String       @id @default(cuid())
+  organizationId String
+  customerId     String
+  authorUserId   String?
+  body           String       @db.VarChar(1000)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer       Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  author         User?        @relation(fields: [authorUserId], references: [id])
+
+  @@index([organizationId, customerId, createdAt])
+}
+
+/**
+ * Salon-operational record for one organization member. Identity (name, email)
+ * stays on `OrganizationMembership.user`, so this table carries only what a
+ * staff profile adds: job title, calendar colour, bookability, and hire dates.
+ * `membershipId` is unique because membership IDs are globally unique cuids, so
+ * the 1:1 relation also enforces one profile per membership per organization.
+ */
+model StaffProfile {
+  id             String           @id @default(cuid())
+  organizationId String
+  membershipId   String           @unique
+  displayName    String?          @db.VarChar(160)
+  jobTitle       String?          @db.VarChar(120)
+  bio            String?          @db.VarChar(500)
+  color          String?          @db.Char(7)
+  isBookable     Boolean          @default(true)
+  hireDate       DateTime?        @db.Date
+  endDate        DateTime?        @db.Date
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  membership     OrganizationMembership @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  serviceAssignments StaffServiceAssignment[]
+  schedules      StaffSchedule[]
+  timeOff        StaffTimeOff[]
+
+  @@index([organizationId, isActive])
+}
+
+/** Which services a staff member can perform; replaced as a full set. */
+model StaffServiceAssignment {
+  id             String       @id @default(cuid())
+  organizationId String
+  staffProfileId String
+  serviceId      String
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staffProfile   StaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+  service        Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, staffProfileId, serviceId])
+  @@index([organizationId, serviceId])
+}
+
+/** One row per weekday, mirroring `BusinessHour`; the week is replaced as a set. */
+model StaffSchedule {
+  id             String       @id @default(cuid())
+  organizationId String
+  staffProfileId String
+  dayOfWeek      Int
+  startsAt       String?      @db.Char(5)
+  endsAt         String?      @db.Char(5)
+  isWorking      Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staffProfile   StaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, staffProfileId, dayOfWeek])
+}
+
+/** Absence window for a staff member, recorded by whoever manages the roster. */
+model StaffTimeOff {
+  id             String       @id @default(cuid())
+  organizationId String
+  staffProfileId String
+  startsAt       DateTime
+  endsAt         DateTime
+  reason         String?      @db.VarChar(255)
+  createdById    String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  staffProfile   StaffProfile @relation(fields: [staffProfileId], references: [id], onDelete: Cascade)
+  createdBy      User?        @relation(fields: [createdById], references: [id])
+
+  @@index([organizationId, staffProfileId, startsAt])
+}
+
+

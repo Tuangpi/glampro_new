@@ -70,6 +70,14 @@ Role grants:
 `ORG_OWNER` and `ORG_ADMIN` currently hold every permission. Phase 2 will tighten `ORG_ADMIN`
 where owner-only actions (transferring ownership, cancelling the subscription) need separation.
 
+Two people-module notes that are easy to mistake for gaps:
+
+- `staff.manage` deliberately does not imply `members.manage`, so `GET /api/v1/staff/candidates`
+  is gated on `staff.manage` and returns only `ACTIVE` memberships of the caller's own
+  organization. Without it a manager could not pick the membership a profile attaches to.
+- The role named `STAFF` holds `customers.read` but not `staff.read`: a stylist needs the customer
+  book at the chair, not the roster or its schedules.
+
 ## Enforcement
 
 `requirePermission(permission)` is the only place role checks happen. It returns middleware that:
@@ -139,8 +147,9 @@ payload. `actorType` distinguishes `USER`, `PLATFORM_ADMIN`, `SYSTEM`, and `WEBH
 Stripe-driven changes are attributable.
 
 Events that must be audited include authentication outcomes, membership and role changes,
-invitation lifecycle, subscription changes, catalog price changes, inventory adjustments, sale
-voids, and refunds.
+invitation lifecycle, subscription changes, catalog price changes, inventory adjustments, customer
+profile and note changes, staff profile, assignment, schedule, and time-off changes, sale voids,
+and refunds.
 
 ## Testing requirements
 
@@ -154,8 +163,9 @@ Any new module ships with integration tests covering:
 `apps/api/src/modules/auth/authorization.test.ts` covers the role-to-permission matrix.
 `apps/api/tests/auth.test.ts` covers the authentication lifecycle,
 `apps/api/tests/tenant-isolation.test.ts` covers the tenant boundary cases above,
-`apps/api/tests/tenancy.test.ts` covers the settings, members, invitation, and audit endpoints, and
-`apps/api/tests/catalog.test.ts` covers the service and product catalog plus the inventory ledger.
-All of them run against the dedicated `glampro_test` database, which the suites truncate between
-cases; see the README for creating it. New modules extend the same file pattern rather than
-inventing their own harness.
+`apps/api/tests/tenancy.test.ts` covers the settings, members, invitation, and audit endpoints,
+`apps/api/tests/catalog.test.ts` covers the service and product catalog plus the inventory ledger,
+and `apps/api/tests/customers.test.ts` and `apps/api/tests/staff.test.ts` cover the customer book
+and the roster. All of them run against the dedicated `glampro_test` database, which the suites
+truncate between cases; see the README for creating it. New modules extend the same file pattern
+rather than inventing their own harness.

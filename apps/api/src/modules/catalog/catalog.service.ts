@@ -35,7 +35,7 @@ const serviceCategorySelection = {
   updatedAt: true,
 } as const;
 
-const serviceSelection = {
+export const serviceSelection = {
   id: true,
   organizationId: true,
   serviceCategoryId: true,
@@ -79,7 +79,8 @@ export type ProductRow = Prisma.ProductGetPayload<{ select: typeof productSelect
 type ServiceCategoryRow = Prisma.ServiceCategoryGetPayload<{
   select: typeof serviceCategorySelection;
 }>;
-type ServiceRow = Prisma.ServiceGetPayload<{ select: typeof serviceSelection }>;
+/** Exported so the staff module can reuse the projection for assigned services. */
+export type ServiceRow = Prisma.ServiceGetPayload<{ select: typeof serviceSelection }>;
 type ProductCategoryRow = Prisma.ProductCategoryGetPayload<{
   select: typeof productCategorySelection;
 }>;
@@ -90,7 +91,7 @@ const toServiceCategory = (row: ServiceCategoryRow): ServiceCategorySummary => (
   updatedAt: row.updatedAt.toISOString(),
 });
 
-const toService = (row: ServiceRow): ServiceSummary => ({
+export const toService = (row: ServiceRow): ServiceSummary => ({
   ...row,
   createdAt: row.createdAt.toISOString(),
   updatedAt: row.updatedAt.toISOString(),
