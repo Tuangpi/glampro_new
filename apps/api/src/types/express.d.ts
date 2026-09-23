@@ -15,6 +15,16 @@ declare global {
         role: MembershipRole;
         locationIds: string[];
       };
+      /**
+       * Values produced by the `validate` middleware. Express 5 keeps
+       * `request.query` behind a prototype getter, so parsed query values are
+       * also installed as an own property and read through these helpers.
+       */
+      validated?: {
+        body?: unknown;
+        query?: unknown;
+        params?: unknown;
+      };
     }
   }
 }

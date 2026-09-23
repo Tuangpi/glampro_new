@@ -1,32 +1,13 @@
 import type { MembershipRole } from '../../generated/prisma/client.js';
 import type { NextFunction, Request, Response } from 'express';
+import { permissions, type Permission } from '@glampro/contracts';
 import { AppError } from '../../shared/http/app-error.js';
 
-export const permissions = [
-  'appointments.read',
-  'appointments.manage',
-  'customers.read',
-  'customers.manage',
-  'services.read',
-  'services.manage',
-  'products.read',
-  'products.manage',
-  'inventory.read',
-  'inventory.adjust',
-  'sales.create',
-  'sales.read',
-  'sales.void',
-  'sales.refund',
-  'staff.read',
-  'staff.manage',
-  'reports.view',
-  'settings.manage',
-  'members.manage',
-  'billing.manage',
-  'audit.read',
-] as const;
-
-export type Permission = (typeof permissions)[number];
+/**
+ * Permission names live in `@glampro/contracts` so the web client can gate
+ * navigation with the same identifiers. The grants below stay server-side.
+ */
+export { permissions, type Permission };
 
 const allPermissions = new Set<Permission>(permissions);
 const operationalPermissions = new Set<Permission>([
@@ -72,6 +53,10 @@ const rolePermissions: Record<MembershipRole, ReadonlySet<Permission>> = {
 
 export const roleHasPermission = (role: MembershipRole, permission: Permission) =>
   rolePermissions[role].has(permission);
+
+export const permissionsForRole = (role: MembershipRole): Permission[] => [
+  ...rolePermissions[role],
+];
 
 export const requirePermission =
   (permission: Permission) => (request: Request, _response: Response, next: NextFunction) => {

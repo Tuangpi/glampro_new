@@ -8,15 +8,20 @@ reference for business rules and workflow; no code is shared.
 
 ## Status
 
-Milestone 1 (foundation) is in place:
+Milestones 1 and 2 are in place; see [docs/milestones.md](docs/milestones.md) for the plan.
 
 - npm workspaces monorepo with the web app, API, shared contracts, and shared tooling config
 - Express 5 + TypeScript API with security middleware, request correlation, and a standard
   response envelope
 - Prisma schema covering tenancy, identity, sessions, invitations, subscriptions, and audit logs
-- React 19 + TypeScript + Vite + Tailwind shell inspired by the design handoff
+- Authentication: registration, login, refresh-token rotation with reuse detection, logout,
+  session listing and revocation, password reset, and email verification
+- `authenticate`, `withTenant`, `requirePermission`, `validate`, and CSRF guards for every module
+  that follows
+- React 19 + TypeScript + Vite + Tailwind shell with a session provider, protected routes, and
+  permission-aware navigation
 - Zod contracts shared between the API and the web client
-- Vitest suites for the API and the web app
+- Vitest suites for the API, the web app, and the contracts, including tenant-isolation tests
 
 Feature modules (appointments, POS, inventory, reports) are intentionally not implemented yet.
 Routes exist as placeholders and will be built against the foundations described in
@@ -24,14 +29,15 @@ Routes exist as placeholders and will be built against the foundations described
 
 ## Stack
 
-| Layer     | Choice                                                               |
-| --------- | -------------------------------------------------------------------- |
-| Frontend  | React 19, TypeScript, Vite, Tailwind CSS, React Router, lucide-react |
-| Backend   | Node.js 22+, Express 5, TypeScript                                   |
-| Database  | MySQL 8.4 with Prisma ORM 7 and the MariaDB driver adapter           |
-| Contracts | Zod schemas shared through `@glampro/contracts`                      |
-| Testing   | Vitest, Supertest                                                    |
-| Quality   | ESLint flat config, Prettier                                         |
+| Layer     | Choice                                                                    |
+| --------- | ------------------------------------------------------------------------- |
+| Frontend  | React 19, TypeScript, Vite, Tailwind CSS, React Router, lucide-react      |
+| Backend   | Node.js 22+, Express 5, TypeScript                                        |
+| Database  | MySQL 8.4 with Prisma ORM 7 and the MariaDB driver adapter                |
+| Auth      | `jose` HS256 access tokens, bcrypt password hashes, opaque refresh tokens |
+| Contracts | Zod schemas shared through `@glampro/contracts`                           |
+| Testing   | Vitest, Supertest                                                         |
+| Quality   | ESLint flat config, Prettier                                              |
 
 ## Layout
 
@@ -101,6 +107,19 @@ The local MySQL container binds to `127.0.0.1:3307` to avoid conflicts with host
 installations. Prisma uses the separate `glampro_shadow` database during development migrations;
 Docker creates it automatically for fresh database volumes.
 
+Integration tests run against a dedicated `glampro_test` database that they truncate between
+cases, and they refuse to run against a database whose name does not end in `_test`. Fresh Docker
+volumes create it through `docker/mysql/init/02-test-database.sql`; for an existing volume create
+it once by hand:
+
+```bash
+docker exec glampro-mysql mysql -uroot -plocal-root-password \
+  -e "CREATE DATABASE IF NOT EXISTS glampro_test; GRANT ALL PRIVILEGES ON glampro_test.* TO 'glampro'@'%'; FLUSH PRIVILEGES;"
+```
+
+`npm test` applies the committed migrations to that database before the suite runs. Set
+`DATABASE_URL_TEST` to use a different server.
+
 Prisma Client is generated into `apps/api/src/generated/prisma`, which is git-ignored. Run
 `npm run db:generate` after installing dependencies and whenever the schema changes; typechecking
 and building the API fail until the client exists. Connection URLs live in `apps/api/prisma.config.ts`
@@ -153,11 +172,41 @@ ID and never leak stack traces outside development.
 Every response carries `meta.requestId` and the matching `x-request-id` header. A client-supplied
 `x-request-id` is accepted (truncated to 100 characters) so that traces survive across services.
 
+## Authentication
+
+| Method   | Endpoint                       | Purpose                                            |
+| -------- | ------------------------------ | -------------------------------------------------- |
+| `POST`   | `/api/v1/auth/register`        | Create an organization, its owner, and a session   |
+| `POST`   | `/api/v1/auth/login`           | Start a session                                    |
+| `POST`   | `/api/v1/auth/refresh`         | Rotate the refresh token and issue an access token |
+| `POST`   | `/api/v1/auth/logout`          | Revoke the session family and clear cookies        |
+| `GET`    | `/api/v1/auth/me`              | Current user, membership, permissions, locations   |
+| `GET`    | `/api/v1/auth/sessions`        | Active sessions for the signed-in user             |
+| `DELETE` | `/api/v1/auth/sessions/:id`    | Revoke one session                                 |
+| `POST`   | `/api/v1/auth/password/forgot` | Request a password reset link                      |
+| `POST`   | `/api/v1/auth/password/reset`  | Complete a password reset                          |
+| `POST`   | `/api/v1/auth/email/verify`    | Confirm an email address                           |
+
+Access tokens are short-lived HS256 JWTs held in memory by the web client. The refresh token is an
+opaque value in an HTTP-only cookie scoped to `/api/v1/auth`, and only its SHA-256 hash is stored.
+Each refresh rotates the token; replaying a retired token revokes the whole session family. A
+readable `glampro_csrf` cookie plus the `x-csrf-token` header protects the cookie-authenticated
+endpoints, and every state change that matters is written to `AuditLog`.
+
+Protected routes accept `authorization: Bearer <access token>`. Routes that resolve tenant scope
+also accept `x-organization-id`, which only selects among memberships the user already holds —
+never a scope the client invents.
+
+Email verification and password reset messages go through the `EmailTransport` interface. The
+development transport writes them to the API log (`EMAIL_TRANSPORT=log`) and is ignored in
+production, where a provider implementation is required.
+
 ## Documentation
 
 - [docs/architecture.md](docs/architecture.md) — boundaries, request lifecycle, security controls
 - [docs/authorization.md](docs/authorization.md) — roles, permissions, tenant isolation rules
 - [docs/data-model.md](docs/data-model.md) — current schema and planned entities
+- [docs/milestones.md](docs/milestones.md) — delivery order and exit criteria per milestone
 
 ## Scope notes
 
@@ -165,5 +214,9 @@ Phase 1 is staff-operated. Appointments are created and managed by salon employe
 public booking, customer portal, or mobile application yet. Stripe Billing covers the salon's
 GlamPro subscription and is separate from the POS "card" payment method, which only records that
 a card payment was taken on the salon's own terminal.
+
+The seeded owner account (`owner@glampro.local`) exists for local development only and shares the
+development password in this document; change or delete it before any environment is reachable by
+others.
 
 All monetary values are stored as integer minor units, for example `5800` for `S$58.00`.

@@ -29,7 +29,8 @@ HTTP request
   ├─ express.urlencoded      body limit 100 KB
   ├─ cookieParser            read HTTP-only session cookies
   ├─ route handlers
-  │    ├─ authenticate       verify access token, load auth context
+  │    ├─ requireCsrf        double-submit check for cookie-authenticated writes
+  │    ├─ authenticate       verify the access token, reject retired sessions
   │    ├─ withTenant         resolve organization membership into request.tenant
   │    ├─ requirePermission  role-to-permission gate
   │    └─ validate           Zod parse of params, query, and body
@@ -39,6 +40,34 @@ HTTP request
 
 Raw-body routes such as the Stripe webhook must be registered before `express.json()`, or must
 use their own parser, so signature verification sees the untouched payload.
+
+## Session lifecycle
+
+```text
+POST /auth/login ──► verify bcrypt hash ──► AuthSession row (refresh hash, family id)
+                                        └─► HS256 access token (userId, sessionId, JWT id)
+
+POST /auth/refresh ─► look up the refresh hash ─┬─ retired long ago ─► revoke family, 401
+                                                ├─ retired just now ─► 401 without revocation
+                                                └─ live ─► mark rotated, insert successor, new token
+
+POST /auth/logout ──► revoke every live token in the family, clear cookies
+```
+
+Several details are deliberate:
+
+- Access tokens carry the session id, so a session that has been rotated away, revoked, or has
+  expired is rejected on the next request rather than at token expiry.
+- Refresh tokens are opaque random values; the database stores only a SHA-256 hash, so a database
+  read cannot be replayed as a credential.
+- A retired refresh token presented inside a short grace window is treated as a benign double
+  submit, which keeps two concurrent refreshes from destroying a real session. Reuse outside that
+  window is treated as theft and revokes the whole family.
+- The refresh cookie is scoped to `/api/v1/auth`, which keeps it off ordinary API requests.
+- Cookie-authenticated writes require a matching `x-csrf-token` header, and requests without a
+  session cookie are left to the handler so they fail with `401` rather than a CSRF error.
+- `validate` writes parsed input back onto the request. Express 5 exposes `request.query` through
+  a prototype getter, so parsed query values are installed as an own property.
 
 ## Module boundaries
 
@@ -78,6 +107,10 @@ Rust query engine. Responsibilities are split deliberately:
 Because `DATABASE_URL` is validated as a `mysql://` URL before the pool is created, a malformed
 value fails at startup instead of on the first query.
 
+The database name is passed to the adapter as part of the pool config, not only as the adapter
+option: `@prisma/adapter-mariadb` uses the option for connection metadata, so a session without
+the pool-level value can run model queries but fails raw SQL with `No database selected`.
+
 ## Security controls
 
 | Control             | Implementation                                                          |
@@ -106,12 +139,17 @@ Production startup refuses to boot if the development token secrets are still in
 
 ```text
 apps/web/src/
-├── app/          router and route table
+├── app/          router, module table and their permissions
 ├── components/   layout primitives (AppShell, PageHeader)
-├── features/     one directory per module
+├── features/     one directory per module; auth holds the session provider
 ├── lib/          typed API client, formatters
 └── styles/       Tailwind entrypoint and component classes
 ```
+
+The session lives in memory inside `AuthProvider`; a reload restores it from the refresh cookie
+rather than from stored tokens, and `RequireAuth` gates the authenticated routes. `apiRequest`
+unwraps the response envelope, raises typed errors, and renews an expired access token once before
+retrying.
 
 The shell renders a responsive navy sidebar that collapses to a horizontal bar on small screens.
 Permission-aware navigation will be driven by the authorization model rather than hard-coded role
@@ -145,7 +183,10 @@ The visual direction follows the design handoff. Tokens live in `apps/web/tailwi
 
 - The initial migration is committed; create subsequent development migrations with
   `npm run db:migrate -- --name <migration-name>`.
-- Email delivery for verification and password reset is not wired to a provider.
+- Email delivery runs through a development log transport. A provider implementation behind
+  `EmailTransport` is required before verification and reset links reach real inboxes.
 - Stripe Billing is modelled but not implemented; `STRIPE_*` variables are optional.
 - Rate limiting is in-memory, so it must move to a shared store before running multiple API
   instances.
+- Integration tests need the `glampro_test` database and a reachable MySQL server; they are the
+  only suite with an external dependency.

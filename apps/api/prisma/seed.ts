@@ -10,6 +10,7 @@ const adapter = new PrismaMariaDb(
     port: parsed.port ? Number(parsed.port) : 3306,
     user: decodeURIComponent(parsed.username),
     password: decodeURIComponent(parsed.password),
+    database: decodeURIComponent(parsed.pathname.slice(1)),
     connectionLimit: 5,
   },
   { database: decodeURIComponent(parsed.pathname.slice(1)) },

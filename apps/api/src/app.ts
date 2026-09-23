@@ -10,6 +10,7 @@ import { logger } from './config/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { globalRateLimit } from './middleware/rate-limits.js';
 import { requestContext } from './middleware/request-context.js';
+import { authRouter } from './modules/auth/auth.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
 
 /**
@@ -52,6 +53,7 @@ export const createApp = () => {
   app.use(cookieParser());
 
   app.use('/api/v1', healthRouter);
+  app.use('/api/v1/auth', authRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

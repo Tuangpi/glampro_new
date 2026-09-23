@@ -24,10 +24,15 @@ Organization roles, from `MembershipRole`:
 
 ## Permissions
 
-Permissions are declared as a single `as const` array in
-`apps/api/src/modules/auth/authorization.ts`, and `Permission` is derived from it. The role map is
-typed as `Record<MembershipRole, ReadonlySet<Permission>>`, so TypeScript fails the build if a
-role is missing or a permission name is misspelled.
+Permission names are declared as a single `as const` array in
+`packages/contracts/src/schemas/permissions.ts`, so the web client can gate navigation with the
+same identifiers instead of duplicating strings. The role-to-permission grants stay server-side in
+`apps/api/src/modules/auth/authorization.ts`, typed as
+`Record<MembershipRole, ReadonlySet<Permission>>`, so TypeScript fails the build if a role is
+missing or a permission name is misspelled.
+
+`GET /api/v1/auth/me` returns the effective permission list for the active membership, which keeps
+the grants in one place and lets the client render only the modules a member can open.
 
 ```text
 appointments.read    appointments.manage
@@ -74,9 +79,8 @@ where owner-only actions (transferring ownership, cancelling the subscription) n
 2. rejects with `403 PERMISSION_DENIED` when the role lacks the permission;
 3. otherwise continues.
 
-Routes compose it after the authentication and tenant middlewares. `requirePermission` ships with
-the foundation; `authenticate`, `withTenant`, and `validate` arrive with the authentication,
-tenancy, and shared-validation modules respectively, at which point the chain looks like:
+Routes compose it after the authentication and tenant middlewares, and every module follows the
+same chain:
 
 ```ts
 router.post(
@@ -88,6 +92,23 @@ router.post(
   createSaleHandler,
 );
 ```
+
+`authenticate` verifies the access token and rejects a session that has been revoked or rotated
+away with `401 SESSION_REVOKED`, or an expired one with `401 SESSION_EXPIRED`. `withTenant` then
+resolves the membership:
+
+| Situation                                                     | Result                          |
+| ------------------------------------------------------------- | ------------------------------- |
+| Missing or invalid token                                      | `401 AUTHENTICATION_REQUIRED`   |
+| No active membership in any organization                      | `403 TENANT_REQUIRED`           |
+| Several memberships and no `x-organization-id` header         | `400 TENANT_REQUIRED`           |
+| `x-organization-id` naming an organization the user is not in | `404 NOT_FOUND`                 |
+| Membership suspended, removed, or still invited               | `403 TENANT_REQUIRED`           |
+| Membership active but the organization is suspended/cancelled | `403 ORGANIZATION_INACTIVE`     |
+| Active membership resolved                                    | continues with `request.tenant` |
+
+Cookie-authenticated writes add `requireCsrf` before the handler, which compares the readable
+`glampro_csrf` cookie with the `x-csrf-token` header.
 
 Controllers must not read `request.tenant.role` to make decisions. `roleHasPermission` exists for
 services that need a secondary check on a sensitive transition, such as refunding a sale that has
@@ -130,5 +151,8 @@ Any new module ships with integration tests covering:
 3. a request from organization A for a record owned by organization B returns `404`;
 4. a permitted request within the tenant succeeds and leaves data outside the tenant untouched.
 
-`apps/api/src/modules/auth/authorization.test.ts` covers the role-to-permission matrix. Tenant
-isolation tests are added per module as those modules are built.
+`apps/api/src/modules/auth/authorization.test.ts` covers the role-to-permission matrix.
+`apps/api/tests/auth.test.ts` covers the authentication lifecycle, and
+`apps/api/tests/tenant-isolation.test.ts` covers the tenant boundary cases above. Both run against
+the dedicated `glampro_test` database, which the suites truncate between cases; see the README for
+creating it. New modules extend the same file pattern rather than inventing their own harness.

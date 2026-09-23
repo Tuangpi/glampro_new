@@ -9,6 +9,11 @@ const environmentSchema = z.object({
   ACCESS_TOKEN_SECRET: z.string().min(32).default('development-access-secret-change-me'),
   REFRESH_TOKEN_SECRET: z.string().min(32).default('development-refresh-secret-change-me'),
   COOKIE_DOMAIN: z.string().optional(),
+  ACCESS_TOKEN_TTL_MINUTES: z.coerce.number().int().positive().max(1440).default(15),
+  REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().max(365).default(30),
+  PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().max(1440).default(60),
+  EMAIL_VERIFICATION_TTL_HOURS: z.coerce.number().int().positive().max(168).default(24),
+  EMAIL_TRANSPORT: z.enum(['log', 'disabled']).default('log'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
@@ -33,6 +38,10 @@ if (result.data.NODE_ENV === 'production') {
   ) {
     throw new Error('Production token secrets must be explicitly configured');
   }
+}
+
+if (result.data.NODE_ENV === 'production' && result.data.EMAIL_TRANSPORT === 'log') {
+  console.warn('EMAIL_TRANSPORT=log is ignored in production; outbound email is dropped');
 }
 
 export const env = result.data;

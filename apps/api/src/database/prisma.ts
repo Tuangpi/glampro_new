@@ -37,7 +37,13 @@ const createAdapter = () => {
     process.env.DATABASE_URL ?? 'mysql://glampro:glampro@127.0.0.1:3307/glampro',
   );
 
-  return new PrismaMariaDb({ host, port, user, password, connectionLimit: 5 }, { database });
+  // The database is part of the pool config so the session selects a schema;
+  // the adapter option only feeds connection metadata, and raw SQL fails
+  // without it with "No database selected".
+  return new PrismaMariaDb(
+    { host, port, user, password, database, connectionLimit: 5 },
+    { database },
+  );
 };
 
 const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };

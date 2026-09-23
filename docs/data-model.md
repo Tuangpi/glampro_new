@@ -36,14 +36,20 @@ Splitting credentials from the person record keeps password material out of ordi
 queries. Splitting sessions from credentials allows device-level revocation without invalidating
 a password.
 
-`AuthSession.refreshTokenHash` is unique, and `tokenFamilyId` groups the chain of rotations. When
-a rotated token is presented again, the whole family is revoked.
+`AuthSession.refreshTokenHash` is unique, and `tokenFamilyId` groups the chain of rotations. A
+rotated row is superseded by its successor: its access token stops working immediately and the row
+is no longer listed as an active session. When a retired token is presented again outside a short
+grace window the whole family is revoked, and signing out revokes the family too.
 
 ### Platform
 
 | Model      | Purpose                                                              |
 | ---------- | -------------------------------------------------------------------- |
 | `AuditLog` | Actor, action, entity, request ID, IP, user agent, and JSON metadata |
+
+Actions currently written: `auth.registered`, `auth.login`, `auth.login_failed`,
+`auth.session_refreshed`, `auth.refresh_reuse_detected`, `auth.logout`, `auth.session_revoked`,
+`auth.password_reset_requested`, `auth.password_reset_completed`, and `auth.email_verified`.
 
 ## Enumerations
 
