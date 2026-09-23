@@ -8,7 +8,7 @@ reference for business rules and workflow; no code is shared.
 
 ## Status
 
-Milestones 1 and 2 are in place; see [docs/milestones.md](docs/milestones.md) for the plan.
+Milestones 1 to 3 are in place; see [docs/milestones.md](docs/milestones.md) for the plan.
 
 - npm workspaces monorepo with the web app, API, shared contracts, and shared tooling config
 - Express 5 + TypeScript API with security middleware, request correlation, and a standard
@@ -18,6 +18,8 @@ Milestones 1 and 2 are in place; see [docs/milestones.md](docs/milestones.md) fo
   session listing and revocation, password reset, and email verification
 - `authenticate`, `withTenant`, `requirePermission`, `validate`, and CSRF guards for every module
   that follows
+- Tenancy administration: organization and location settings, business hours, member roles and
+  status, invitations with single-use email links, and a tenant-scoped audit log viewer
 - React 19 + TypeScript + Vite + Tailwind shell with a session provider, protected routes, and
   permission-aware navigation
 - Zod contracts shared between the API and the web client
@@ -200,6 +202,37 @@ never a scope the client invents.
 Email verification and password reset messages go through the `EmailTransport` interface. The
 development transport writes them to the API log (`EMAIL_TRANSPORT=log`) and is ignored in
 production, where a provider implementation is required.
+
+## Tenancy administration
+
+| Method   | Endpoint                               | Purpose                                 | Gate               |
+| -------- | -------------------------------------- | --------------------------------------- | ------------------ |
+| `GET`    | `/api/v1/settings/organization`        | Read organization settings              | `settings.manage`  |
+| `PATCH`  | `/api/v1/settings/organization`        | Update organization settings            | `settings.manage`  |
+| `GET`    | `/api/v1/locations`                    | List locations                          | `settings.manage`  |
+| `POST`   | `/api/v1/locations`                    | Create a location with default hours    | `settings.manage`  |
+| `GET`    | `/api/v1/locations/:id`                | Read one location                       | `settings.manage`  |
+| `PATCH`  | `/api/v1/locations/:id`                | Update tax mode, receipts, and contact  | `settings.manage`  |
+| `GET`    | `/api/v1/locations/:id/business-hours` | Read the weekly opening hours           | `settings.manage`  |
+| `PUT`    | `/api/v1/locations/:id/business-hours` | Replace the weekly opening hours        | `settings.manage`  |
+| `GET`    | `/api/v1/members`                      | List members                            | `members.manage`   |
+| `PATCH`  | `/api/v1/members/:id`                  | Change a member's role                  | `members.manage`   |
+| `PATCH`  | `/api/v1/members/:id/status`           | Suspend, reactivate, or remove a member | `members.manage`   |
+| `GET`    | `/api/v1/invitations`                  | List invitations                        | `members.manage`   |
+| `POST`   | `/api/v1/invitations`                  | Invite someone by email                 | `members.manage`   |
+| `DELETE` | `/api/v1/invitations/:id`              | Revoke an invitation                    | `members.manage`   |
+| `POST`   | `/api/v1/invitations/accept`           | Accept an invitation (signed-in caller) | authenticated only |
+| `GET`    | `/api/v1/audit`                        | Read the audit log, paginated           | `audit.read`       |
+
+Membership guards stop you from changing your own role or status, and any change that would leave
+the organization without an active owner is refused with `409 CONFLICT`. Cross-tenant record IDs
+return `404`, never `403`.
+
+Invitation links point at `/invitations/accept?token=…` in the web app. Only the token's SHA-256
+hash is stored, links expire after `INVITATION_TTL_HOURS` (seven days by default), and acceptance
+requires the signed-in account's email to match the invited address. Acceptance is the single
+tenant write that runs without `withTenant`, because the acceptor cannot hold an active membership
+yet.
 
 ## Documentation
 

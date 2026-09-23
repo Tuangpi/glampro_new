@@ -27,6 +27,7 @@ export const apiErrorCodes = [
   'MEMBERSHIP_INACTIVE',
   'ORGANIZATION_INACTIVE',
   'PERMISSION_DENIED',
+  'CONFLICT',
 ] as const;
 
 export type ApiErrorCode = (typeof apiErrorCodes)[number];

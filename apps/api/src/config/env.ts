@@ -13,6 +13,7 @@ const environmentSchema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().max(365).default(30),
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().max(1440).default(60),
   EMAIL_VERIFICATION_TTL_HOURS: z.coerce.number().int().positive().max(168).default(24),
+  INVITATION_TTL_HOURS: z.coerce.number().int().positive().max(8760).default(168),
   EMAIL_TRANSPORT: z.enum(['log', 'disabled']).default('log'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   STRIPE_SECRET_KEY: z.string().optional(),

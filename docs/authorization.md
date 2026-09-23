@@ -152,7 +152,9 @@ Any new module ships with integration tests covering:
 4. a permitted request within the tenant succeeds and leaves data outside the tenant untouched.
 
 `apps/api/src/modules/auth/authorization.test.ts` covers the role-to-permission matrix.
-`apps/api/tests/auth.test.ts` covers the authentication lifecycle, and
-`apps/api/tests/tenant-isolation.test.ts` covers the tenant boundary cases above. Both run against
-the dedicated `glampro_test` database, which the suites truncate between cases; see the README for
-creating it. New modules extend the same file pattern rather than inventing their own harness.
+`apps/api/tests/auth.test.ts` covers the authentication lifecycle,
+`apps/api/tests/tenant-isolation.test.ts` covers the tenant boundary cases above, and
+`apps/api/tests/tenancy.test.ts` covers the settings, members, invitation, and audit endpoints.
+All of them run against the dedicated `glampro_test` database, which the suites truncate between
+cases; see the README for creating it. New modules extend the same file pattern rather than
+inventing their own harness.

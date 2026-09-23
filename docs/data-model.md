@@ -49,7 +49,11 @@ grace window the whole family is revoked, and signing out revokes the family too
 
 Actions currently written: `auth.registered`, `auth.login`, `auth.login_failed`,
 `auth.session_refreshed`, `auth.refresh_reuse_detected`, `auth.logout`, `auth.session_revoked`,
-`auth.password_reset_requested`, `auth.password_reset_completed`, and `auth.email_verified`.
+`auth.password_reset_requested`, `auth.password_reset_completed`, `auth.email_verified`,
+`settings.organization_updated`, `settings.location_created`, `settings.location_updated`,
+`settings.business_hours_updated`, `members.invited`, `members.invitation_revoked`,
+`members.invitation_accepted`, `members.role_changed`, `members.suspended`,
+`members.reactivated`, and `members.removed`.
 
 ## Enumerations
 

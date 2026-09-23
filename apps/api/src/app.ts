@@ -12,6 +12,9 @@ import { globalRateLimit } from './middleware/rate-limits.js';
 import { requestContext } from './middleware/request-context.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
+import { auditRouter } from './modules/tenancy/audit.routes.js';
+import { invitationsRouter, membersRouter } from './modules/tenancy/members.routes.js';
+import { locationsRouter, settingsRouter } from './modules/tenancy/settings.routes.js';
 
 /**
  * Reads the request ID set by the preceding requestContext middleware.
@@ -54,6 +57,11 @@ export const createApp = () => {
 
   app.use('/api/v1', healthRouter);
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/settings', settingsRouter);
+  app.use('/api/v1/locations', locationsRouter);
+  app.use('/api/v1/members', membersRouter);
+  app.use('/api/v1/invitations', invitationsRouter);
+  app.use('/api/v1/audit', auditRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

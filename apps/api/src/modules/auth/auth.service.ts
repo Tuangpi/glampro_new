@@ -9,7 +9,6 @@ import type {
   SessionSummary,
 } from '@glampro/contracts';
 import { env } from '../../config/env.js';
-import { logger } from '../../config/logger.js';
 import { prisma } from '../../database/prisma.js';
 import type {
   MembershipRole,
@@ -19,8 +18,7 @@ import type {
 } from '../../generated/prisma/client.js';
 import { type AuditContext, recordAuditEvent } from '../../shared/audit.js';
 import { AppError } from '../../shared/http/app-error.js';
-import type { EmailMessage } from '../../services/email/email-transport.js';
-import { emailTransport } from '../../services/email/email-transport.js';
+import { sendEmail } from '../../services/email/email-transport.js';
 import { permissionsForRole } from './authorization.js';
 import { hashPassword, verifyPassword } from './password.js';
 import {
@@ -239,14 +237,6 @@ const sessionPayload = (
     permissions: active ? permissionsForRole(active.role) : [],
     csrfToken: tokens.csrfToken,
   };
-};
-
-const sendEmail = async (message: EmailMessage) => {
-  try {
-    await emailTransport.send(message);
-  } catch (error) {
-    logger.warn({ err: error, to: message.to }, 'Email delivery failed');
-  }
 };
 
 export const register = async (

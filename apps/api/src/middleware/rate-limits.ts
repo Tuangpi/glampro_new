@@ -24,3 +24,16 @@ export const authenticationRateLimit = rateLimit({
     },
   },
 });
+
+/** Invitation emails are outbound side effects, so creation is throttled harder than reads. */
+export const invitationRateLimit = rateLimit({
+  ...commonOptions,
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  message: {
+    error: {
+      code: 'RATE_LIMITED',
+      message: 'Too many invitations. Please try again later.',
+    },
+  },
+});

@@ -7,6 +7,7 @@ import { RequireAuth } from '../features/auth/RequireAuth';
 import { ResetPasswordPage } from '../features/auth/ResetPasswordPage';
 import { VerifyEmailPage } from '../features/auth/VerifyEmailPage';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
+import { InviteAcceptPage } from '../features/settings/InviteAcceptPage';
 import { ModulePlaceholderPage } from '../features/shared/ModulePlaceholderPage';
 import { moduleRoutes } from './modules';
 
@@ -24,10 +25,17 @@ export const App = () => (
           <Route
             key={route.path}
             path={route.path}
-            element={<ModulePlaceholderPage title={route.title} description={route.description} />}
+            element={
+              route.element ? (
+                <route.element />
+              ) : (
+                <ModulePlaceholderPage title={route.title} description={route.description} />
+              )
+            }
           />
         ))}
       </Route>
+      <Route path="invitations/accept" element={<InviteAcceptPage />} />
     </Route>
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import type { Permission } from '@glampro/contracts';
+import { SettingsPage } from '../features/settings/SettingsPage';
 
 export type ModuleRoute = {
   path: string;
@@ -20,6 +21,8 @@ export type ModuleRoute = {
   group: 'main' | 'account';
   icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
   badge?: string;
+  /** Real screen for implemented modules; others fall back to the placeholder. */
+  element?: ComponentType;
 };
 
 /**
@@ -90,6 +93,7 @@ export const moduleRoutes: ModuleRoute[] = [
     permission: 'settings.manage',
     group: 'account',
     icon: Settings,
+    element: SettingsPage,
   },
 ];
 

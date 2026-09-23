@@ -1,22 +1,44 @@
 import {
+  acceptedInvitationDataSchema,
   apiErrorSchema,
+  auditLogPageSchema,
   authenticatedSessionDataSchema,
+  businessHoursDataSchema,
   currentUserDataSchema,
   emailVerifiedDataSchema,
   healthResponseSchema,
+  invitationDataSchema,
+  invitationsDataSchema,
+  locationDataSchema,
+  locationsDataSchema,
   logoutDataSchema,
+  memberDataSchema,
+  membersDataSchema,
+  organizationSettingsSchema,
   passwordResetCompletedDataSchema,
   passwordResetRequestedDataSchema,
   refreshSessionDataSchema,
 } from '@glampro/contracts';
 import type {
+  AcceptInvitationRequest,
+  AuditLogPage,
   AuthenticatedSession,
+  BusinessHour,
+  ChangeMemberRoleRequest,
+  ChangeMemberStatusRequest,
+  CreateLocationRequest,
   EmailVerificationRequest,
   ForgotPasswordRequest,
   HealthResponse,
+  InviteMemberRequest,
+  LocationDetail,
   LoginRequest,
+  MembershipSummary,
+  OrganizationSettings,
   RegistrationRequest,
   ResetPasswordRequest,
+  UpdateLocationRequest,
+  UpdateOrganizationRequest,
 } from '@glampro/contracts';
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? '';
@@ -207,4 +229,98 @@ export const completePasswordReset = async (input: ResetPasswordRequest) =>
 export const verifyEmailAddress = async (input: EmailVerificationRequest) =>
   emailVerifiedDataSchema.parse(
     await apiRequest<unknown>('/api/v1/auth/email/verify', { method: 'POST', body: input }),
+  );
+
+/** Tenancy administration: organization and location settings. */
+
+export const fetchOrganizationSettings = async (): Promise<OrganizationSettings> =>
+  organizationSettingsSchema.parse(await apiRequest<unknown>('/api/v1/settings/organization'));
+
+export const updateOrganizationSettings = async (
+  input: UpdateOrganizationRequest,
+): Promise<OrganizationSettings> =>
+  organizationSettingsSchema.parse(
+    await apiRequest<unknown>('/api/v1/settings/organization', { method: 'PATCH', body: input }),
+  );
+
+export const fetchLocations = async (): Promise<{ locations: LocationDetail[] }> =>
+  locationsDataSchema.parse(await apiRequest<unknown>('/api/v1/locations'));
+
+export const createLocation = async (
+  input: CreateLocationRequest,
+): Promise<{ location: LocationDetail }> =>
+  locationDataSchema.parse(
+    await apiRequest<unknown>('/api/v1/locations', { method: 'POST', body: input }),
+  );
+
+export const updateLocation = async (
+  locationId: string,
+  input: UpdateLocationRequest,
+): Promise<{ location: LocationDetail }> =>
+  locationDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/locations/${locationId}`, { method: 'PATCH', body: input }),
+  );
+
+export const fetchBusinessHours = async (locationId: string): Promise<{ hours: BusinessHour[] }> =>
+  businessHoursDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/locations/${locationId}/business-hours`),
+  );
+
+export const updateBusinessHours = async (
+  locationId: string,
+  hours: BusinessHour[],
+): Promise<{ hours: BusinessHour[] }> =>
+  businessHoursDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/locations/${locationId}/business-hours`, {
+      method: 'PUT',
+      body: { hours },
+    }),
+  );
+
+/** Tenancy administration: members and invitations. */
+
+export const fetchMembers = async () =>
+  membersDataSchema.parse(await apiRequest<unknown>('/api/v1/members'));
+
+export const changeMemberRole = async (membershipId: string, input: ChangeMemberRoleRequest) =>
+  memberDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/members/${membershipId}`, { method: 'PATCH', body: input }),
+  );
+
+export const changeMemberStatus = async (membershipId: string, input: ChangeMemberStatusRequest) =>
+  memberDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/members/${membershipId}/status`, {
+      method: 'PATCH',
+      body: input,
+    }),
+  );
+
+export const fetchInvitations = async () =>
+  invitationsDataSchema.parse(await apiRequest<unknown>('/api/v1/invitations'));
+
+export const createInvitation = async (input: InviteMemberRequest) =>
+  invitationDataSchema.parse(
+    await apiRequest<unknown>('/api/v1/invitations', { method: 'POST', body: input }),
+  );
+
+export const revokeInvitation = async (invitationId: string) =>
+  invitationDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/invitations/${invitationId}`, { method: 'DELETE' }),
+  );
+
+export const acceptInvitation = async (
+  input: AcceptInvitationRequest,
+): Promise<{ membership: MembershipSummary }> =>
+  acceptedInvitationDataSchema.parse(
+    await apiRequest<unknown>('/api/v1/invitations/accept', { method: 'POST', body: input }),
+  );
+
+/** Tenancy administration: the tenant-scoped audit trail. */
+
+export const fetchAuditLog = async (query: {
+  page: number;
+  pageSize: number;
+}): Promise<AuditLogPage> =>
+  auditLogPageSchema.parse(
+    await apiRequest<unknown>(`/api/v1/audit?page=${query.page}&pageSize=${query.pageSize}`),
   );

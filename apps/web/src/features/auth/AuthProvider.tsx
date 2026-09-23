@@ -119,6 +119,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setState(signedOutState);
         }
       },
+      reloadSession: loadSession,
     }),
     [applySession, state],
   );

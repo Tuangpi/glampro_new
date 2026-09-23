@@ -1,4 +1,4 @@
-import type { RequestHandler } from 'express';
+import type { Request, RequestHandler } from 'express';
 import { prisma } from '../database/prisma.js';
 import { AppError } from '../shared/http/app-error.js';
 
@@ -84,4 +84,16 @@ export const withTenant: RequestHandler = async (request, _response, next) => {
   };
 
   next();
+};
+
+/**
+ * Reads the tenant scope for handlers mounted behind `withTenant`, which
+ * guarantees it is present.
+ */
+export const tenantOf = (request: Request) => {
+  if (!request.tenant) {
+    throw new AppError(401, 'AUTHENTICATION_REQUIRED', 'Authentication is required');
+  }
+
+  return request.tenant;
 };

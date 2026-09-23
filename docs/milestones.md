@@ -8,8 +8,8 @@ update before the next one starts, and each builds on the foundations described 
 | --- | --------------------------- | ------- |
 | 1   | Foundation                  | Done    |
 | 2   | Authentication and sessions | Done    |
-| 3   | Tenancy administration      | Next    |
-| 4   | Catalog and inventory       | Planned |
+| 3   | Tenancy administration      | Done    |
+| 4   | Catalog and inventory       | Next    |
 | 5   | Customers and staff         | Planned |
 | 6   | Appointments                | Planned |
 | 7   | Point of sale               | Planned |
@@ -36,13 +36,23 @@ Vitest suites.
 Exit criteria met: `npm test` covers the 401/403/cross-tenant-404 matrix and the rotation and
 reuse cases, and the seeded owner can sign in against the local MySQL container.
 
-## 3. Tenancy administration — next
+## 3. Tenancy administration — done
 
-Organization and location settings (tax mode, receipt numbering, business hours), member
-management with invitations and role changes, membership suspension, and the audit log viewer.
+- Organization settings (legal and GST details, timezone) behind `settings.manage`.
+- Location settings behind `settings.manage`: tax mode, receipt prefix (the receipt counter stays
+  server-managed), address and contact fields, plus location creation with default business hours.
+- Per-location business hours as a full-week replacement, validated against the shared contract.
+- Member management behind `members.manage`: role changes, suspend/reactivate/remove, with guards
+  against changing your own membership and against leaving the organization without an owner.
+- Invitations: single-use SHA-256-hashed tokens delivered through `EmailTransport`, expiry from
+  `INVITATION_TTL_HOURS`, duplicate and already-a-member conflicts, and revocation.
+- Invitation acceptance runs on `authenticate` alone — the acceptor has no membership yet — and
+  requires the signed-in email to match the invitation.
+- Audit log viewer behind `audit.read`, paginated and scoped to the organization.
 
-Exit criteria: `members.manage` and `settings.manage` gates on every endpoint, invitation
-acceptance tested end to end, and tenant-isolation tests for each new endpoint.
+Exit criteria met: `apps/api/tests/tenancy.test.ts` covers the 401/403/cross-tenant-404 matrix for
+every new endpoint, invitation acceptance is tested end to end through to the permissions returned
+by `/auth/me`, and `npm test` passes across all three workspaces.
 
 ## 4. Catalog and inventory
 

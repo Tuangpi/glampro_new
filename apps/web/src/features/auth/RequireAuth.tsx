@@ -15,7 +15,9 @@ export const RequireAuth = () => {
   }
 
   if (status === 'unauthenticated') {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+    // The full path (including any query string, such as an invitation token)
+    // survives the round trip through the login page.
+    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   }
 
   return <Outlet />;

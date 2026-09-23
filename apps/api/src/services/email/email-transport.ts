@@ -36,3 +36,16 @@ const disabledTransport: EmailTransport = {
 
 export const emailTransport: EmailTransport =
   env.EMAIL_TRANSPORT === 'log' && env.NODE_ENV !== 'production' ? logTransport : disabledTransport;
+
+/**
+ * Delivers a message without letting a transport failure break the request that
+ * triggered it, for example a member invitation whose link still exists in the
+ * database even when the provider is temporarily unreachable.
+ */
+export const sendEmail = async (message: EmailMessage): Promise<void> => {
+  try {
+    await emailTransport.send(message);
+  } catch (error) {
+    logger.warn({ err: error, to: message.to }, 'Email delivery failed');
+  }
+};

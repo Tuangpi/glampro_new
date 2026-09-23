@@ -26,6 +26,8 @@ export type AuthContextValue = AuthState & {
   signIn: (input: LoginRequest) => Promise<void>;
   register: (input: RegistrationRequest) => Promise<void>;
   signOutUser: () => Promise<void>;
+  /** Re-reads the session after a membership change, for example joining an organization. */
+  reloadSession: () => Promise<void>;
 };
 
 export const signedOutState: AuthState = {
