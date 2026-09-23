@@ -2,6 +2,12 @@ import { prisma } from '../../src/database/prisma.js';
 
 /** Child tables first, so referential integrity holds without disabling FK checks. */
 const tablesInDeleteOrder = [
+  'InventoryMovement',
+  'InventoryLevel',
+  'Service',
+  'Product',
+  'ServiceCategory',
+  'ProductCategory',
   'AuditLog',
   'BusinessHour',
   'Location',

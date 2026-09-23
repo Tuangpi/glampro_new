@@ -7,6 +7,9 @@ import {
   currentUserDataSchema,
   emailVerifiedDataSchema,
   healthResponseSchema,
+  inventoryLevelsDataSchema,
+  inventoryMovementDataSchema,
+  inventoryMovementsDataSchema,
   invitationDataSchema,
   invitationsDataSchema,
   locationDataSchema,
@@ -17,7 +20,15 @@ import {
   organizationSettingsSchema,
   passwordResetCompletedDataSchema,
   passwordResetRequestedDataSchema,
+  productCategoriesDataSchema,
+  productCategoryDataSchema,
+  productDataSchema,
+  productsDataSchema,
   refreshSessionDataSchema,
+  serviceCategoriesDataSchema,
+  serviceCategoryDataSchema,
+  serviceDataSchema,
+  servicesDataSchema,
 } from '@glampro/contracts';
 import type {
   AcceptInvitationRequest,
@@ -30,15 +41,30 @@ import type {
   EmailVerificationRequest,
   ForgotPasswordRequest,
   HealthResponse,
+  InventoryLevelSummary,
+  InventoryMovementRequest,
+  InventoryMovementSummary,
   InviteMemberRequest,
   LocationDetail,
   LoginRequest,
   MembershipSummary,
   OrganizationSettings,
+  ProductCategoryRequest,
+  ProductCategorySummary,
+  ProductRequest,
+  ProductSummary,
   RegistrationRequest,
   ResetPasswordRequest,
+  ServiceCategoryRequest,
+  ServiceCategorySummary,
+  ServiceRequest,
+  ServiceSummary,
   UpdateLocationRequest,
   UpdateOrganizationRequest,
+  UpdateProductCategoryRequest,
+  UpdateProductRequest,
+  UpdateServiceCategoryRequest,
+  UpdateServiceRequest,
 } from '@glampro/contracts';
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? '';
@@ -323,4 +349,125 @@ export const fetchAuditLog = async (query: {
 }): Promise<AuditLogPage> =>
   auditLogPageSchema.parse(
     await apiRequest<unknown>(`/api/v1/audit?page=${query.page}&pageSize=${query.pageSize}`),
+  );
+
+/** Catalog: service and product categories, services, and products. */
+
+export const fetchServiceCategories = async (): Promise<{
+  serviceCategories: ServiceCategorySummary[];
+}> => serviceCategoriesDataSchema.parse(await apiRequest<unknown>('/api/v1/service-categories'));
+
+export const createServiceCategory = async (input: ServiceCategoryRequest) =>
+  serviceCategoryDataSchema.parse(
+    await apiRequest<unknown>('/api/v1/service-categories', { method: 'POST', body: input }),
+  );
+
+export const updateServiceCategory = async (
+  serviceCategoryId: string,
+  input: UpdateServiceCategoryRequest,
+) =>
+  serviceCategoryDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/service-categories/${serviceCategoryId}`, {
+      method: 'PATCH',
+      body: input,
+    }),
+  );
+
+export const fetchServices = async (
+  query: {
+    serviceCategoryId?: string;
+  } = {},
+): Promise<{ services: ServiceSummary[] }> =>
+  servicesDataSchema.parse(
+    await apiRequest<unknown>(
+      query.serviceCategoryId
+        ? `/api/v1/services?serviceCategoryId=${query.serviceCategoryId}`
+        : '/api/v1/services',
+    ),
+  );
+
+export const createService = async (input: ServiceRequest) =>
+  serviceDataSchema.parse(
+    await apiRequest<unknown>('/api/v1/services', { method: 'POST', body: input }),
+  );
+
+export const updateService = async (serviceId: string, input: UpdateServiceRequest) =>
+  serviceDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/services/${serviceId}`, { method: 'PATCH', body: input }),
+  );
+
+export const fetchProductCategories = async (): Promise<{
+  productCategories: ProductCategorySummary[];
+}> => productCategoriesDataSchema.parse(await apiRequest<unknown>('/api/v1/product-categories'));
+
+export const createProductCategory = async (input: ProductCategoryRequest) =>
+  productCategoryDataSchema.parse(
+    await apiRequest<unknown>('/api/v1/product-categories', { method: 'POST', body: input }),
+  );
+
+export const updateProductCategory = async (
+  productCategoryId: string,
+  input: UpdateProductCategoryRequest,
+) =>
+  productCategoryDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/product-categories/${productCategoryId}`, {
+      method: 'PATCH',
+      body: input,
+    }),
+  );
+
+export const fetchProducts = async (
+  query: {
+    productCategoryId?: string;
+  } = {},
+): Promise<{ products: ProductSummary[] }> =>
+  productsDataSchema.parse(
+    await apiRequest<unknown>(
+      query.productCategoryId
+        ? `/api/v1/products?productCategoryId=${query.productCategoryId}`
+        : '/api/v1/products',
+    ),
+  );
+
+export const createProduct = async (input: ProductRequest) =>
+  productDataSchema.parse(
+    await apiRequest<unknown>('/api/v1/products', { method: 'POST', body: input }),
+  );
+
+export const updateProduct = async (productId: string, input: UpdateProductRequest) =>
+  productDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/products/${productId}`, { method: 'PATCH', body: input }),
+  );
+
+/** Inventory: current levels and the append-only movement ledger. */
+
+export const fetchInventoryLevels = async (
+  query: {
+    locationId?: string;
+  } = {},
+): Promise<{ inventoryLevels: InventoryLevelSummary[] }> =>
+  inventoryLevelsDataSchema.parse(
+    await apiRequest<unknown>(
+      query.locationId
+        ? `/api/v1/inventory/levels?locationId=${query.locationId}`
+        : '/api/v1/inventory/levels',
+    ),
+  );
+
+export const fetchInventoryMovements = async (
+  query: {
+    productId?: string;
+  } = {},
+): Promise<{ inventoryMovements: InventoryMovementSummary[] }> =>
+  inventoryMovementsDataSchema.parse(
+    await apiRequest<unknown>(
+      query.productId
+        ? `/api/v1/inventory/movements?productId=${query.productId}`
+        : '/api/v1/inventory/movements',
+    ),
+  );
+
+export const createInventoryMovement = async (input: InventoryMovementRequest) =>
+  inventoryMovementDataSchema.parse(
+    await apiRequest<unknown>('/api/v1/inventory/movements', { method: 'POST', body: input }),
   );

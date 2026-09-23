@@ -8,25 +8,28 @@ reference for business rules and workflow; no code is shared.
 
 ## Status
 
-Milestones 1 to 3 are in place; see [docs/milestones.md](docs/milestones.md) for the plan.
+Milestones 1 to 4 are in place; see [docs/milestones.md](docs/milestones.md) for the plan.
 
 - npm workspaces monorepo with the web app, API, shared contracts, and shared tooling config
 - Express 5 + TypeScript API with security middleware, request correlation, and a standard
   response envelope
-- Prisma schema covering tenancy, identity, sessions, invitations, subscriptions, and audit logs
+- Prisma schema covering tenancy, identity, sessions, invitations, subscriptions, catalog,
+  inventory, and audit logs
 - Authentication: registration, login, refresh-token rotation with reuse detection, logout,
   session listing and revocation, password reset, and email verification
 - `authenticate`, `withTenant`, `requirePermission`, `validate`, and CSRF guards for every module
   that follows
 - Tenancy administration: organization and location settings, business hours, member roles and
   status, invitations with single-use email links, and a tenant-scoped audit log viewer
+- Catalog and inventory: service and product categories, services and products with availability,
+  per-location stock levels, and an append-only inventory movement ledger
 - React 19 + TypeScript + Vite + Tailwind shell with a session provider, protected routes, and
   permission-aware navigation
 - Zod contracts shared between the API and the web client
 - Vitest suites for the API, the web app, and the contracts, including tenant-isolation tests
 
-Feature modules (appointments, POS, inventory, reports) are intentionally not implemented yet.
-Routes exist as placeholders and will be built against the foundations described in
+Feature modules (appointments, POS, customers, staff, reports) are intentionally not implemented
+yet. Routes exist as placeholders and will be built against the foundations described in
 [docs/architecture.md](docs/architecture.md).
 
 ## Stack
@@ -53,7 +56,7 @@ glampro_new/
 │   │   │   ├── database/       Prisma client and driver adapter
 │   │   │   ├── generated/      Generated Prisma Client (git-ignored)
 │   │   │   ├── middleware/     Request context, rate limits, error handling
-│   │   │   ├── modules/        Feature modules (health, auth)
+│   │   │   ├── modules/        Feature modules (health, auth, catalog, tenancy)
 │   │   │   ├── shared/         Errors and response helpers
 │   │   │   ├── types/          Express type augmentation
 │   │   │   ├── app.ts          App composition
@@ -233,6 +236,36 @@ hash is stored, links expire after `INVITATION_TTL_HOURS` (seven days by default
 requires the signed-in account's email to match the invited address. Acceptance is the single
 tenant write that runs without `withTenant`, because the acceptor cannot hold an active membership
 yet.
+
+## Catalog and inventory
+
+| Method  | Endpoint                         | Purpose                                 | Gate               |
+| ------- | -------------------------------- | --------------------------------------- | ------------------ |
+| `GET`   | `/api/v1/service-categories`     | List service categories                 | `services.read`    |
+| `POST`  | `/api/v1/service-categories`     | Create a service category               | `services.manage`  |
+| `PATCH` | `/api/v1/service-categories/:id` | Rename or reorder a service category    | `services.manage`  |
+| `GET`   | `/api/v1/services`               | List services, optionally by category   | `services.read`    |
+| `POST`  | `/api/v1/services`               | Create a service                        | `services.manage`  |
+| `GET`   | `/api/v1/services/:id`           | Read one service                        | `services.read`    |
+| `PATCH` | `/api/v1/services/:id`           | Update price, duration, or availability | `services.manage`  |
+| `GET`   | `/api/v1/product-categories`     | List product categories                 | `products.read`    |
+| `POST`  | `/api/v1/product-categories`     | Create a product category               | `products.manage`  |
+| `PATCH` | `/api/v1/product-categories/:id` | Rename or reorder a product category    | `products.manage`  |
+| `GET`   | `/api/v1/products`               | List products, optionally by category   | `products.read`    |
+| `POST`  | `/api/v1/products`               | Create a product                        | `products.manage`  |
+| `GET`   | `/api/v1/products/:id`           | Read one product                        | `products.read`    |
+| `PATCH` | `/api/v1/products/:id`           | Update price, cost, SKU, or tracking    | `products.manage`  |
+| `GET`   | `/api/v1/inventory/levels`       | Stock on hand, optionally per location  | `inventory.read`   |
+| `GET`   | `/api/v1/inventory/movements`    | Movement ledger, optionally per product | `inventory.read`   |
+| `POST`  | `/api/v1/inventory/movements`    | Record a stock adjustment               | `inventory.adjust` |
+
+Prices and costs travel as integer cents. Category names are unique per organization, and a SKU is
+unique per organization when one is given. Stock is never edited directly: `POST
+/inventory/movements` appends a ledger row and applies its signed effect to the level inside one
+transaction. `ADJUST_IN`, `RETURN`, and `INITIAL_STOCK` add stock; `ADJUST_OUT`, `SALE`, `DAMAGE`,
+`EXPIRY`, and `STOCK_CORRECTION` remove it. An adjustment that would leave a level below zero is
+refused with `409 CONFLICT`, and a product that does not track inventory refuses movements the same
+way. `SALE` rows are reserved for the point of sale.
 
 ## Documentation
 

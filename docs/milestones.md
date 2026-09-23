@@ -9,8 +9,8 @@ update before the next one starts, and each builds on the foundations described 
 | 1   | Foundation                  | Done    |
 | 2   | Authentication and sessions | Done    |
 | 3   | Tenancy administration      | Done    |
-| 4   | Catalog and inventory       | Next    |
-| 5   | Customers and staff         | Planned |
+| 4   | Catalog and inventory       | Done    |
+| 5   | Customers and staff         | Next    |
 | 6   | Appointments                | Planned |
 | 7   | Point of sale               | Planned |
 | 8   | Reports and dashboard       | Planned |
@@ -54,10 +54,28 @@ Exit criteria met: `apps/api/tests/tenancy.test.ts` covers the 401/403/cross-ten
 every new endpoint, invitation acceptance is tested end to end through to the permissions returned
 by `/auth/me`, and `npm test` passes across all three workspaces.
 
-## 4. Catalog and inventory
+## 4. Catalog and inventory — done
 
-Service categories and services (duration, price, tax), product categories and products, stock
-levels per location, and an append-only inventory movement ledger with adjustment reasons.
+- Service categories and services behind `services.manage`, readable with `services.read`: name,
+  description, duration in minutes, price in cents, sort order, and availability.
+- Product categories and products behind `products.manage`, readable with `products.read`: optional
+  per-organization SKU, price, cost, inventory-tracking flag, and availability.
+- Inventory levels per product and location, readable with `inventory.read`.
+- Stock adjustments behind `inventory.adjust`, recorded as append-only `InventoryMovement` rows with
+  an optional reason and the performer, applied to the level inside one transaction.
+- Guards: category names are unique per organization, SKUs are unique per organization when present,
+  a rejected cross-tenant category or product reads as `404`, an adjustment that would drive stock
+  below zero reads as `409`, and a product that does not track inventory refuses movements.
+- A tracked product starts with a zero-stock level row per active location, and turning tracking on
+  later backfills the same rows inside the update transaction.
+- Audit entries for category, service, and product changes plus every inventory movement.
+- Web `Products & inventory` module with Services, Products, and Inventory tabs, gated by the read
+  permission each tab needs.
+
+Exit criteria met: `apps/api/tests/catalog.test.ts` covers the 401/403/cross-tenant-404 matrix for
+every new endpoint, the signed movement ledger, the below-zero guard, and the zero-stock seeding;
+`packages/contracts/src/schemas/catalog.test.ts` covers the shared request and summary shapes; and
+`npm test` passes across all three workspaces.
 
 ## 5. Customers and staff
 

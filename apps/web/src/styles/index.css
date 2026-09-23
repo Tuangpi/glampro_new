@@ -40,4 +40,39 @@
   .status-pill {
     @apply inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-extrabold;
   }
+
+  /* Thin, unobtrusive scrollbar for the navy icon rail. Keeps keyboard and
+     short-viewport users able to reach Settings / Log out. */
+  .shell-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(255 255 255 / 0.25) transparent;
+  }
+
+  .shell-scroll::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .shell-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .shell-scroll::-webkit-scrollbar-thumb {
+    background: rgb(255 255 255 / 0.22);
+    border-radius: 9999px;
+  }
+
+  .shell-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgb(255 255 255 / 0.35);
+  }
+
+  /* Hide the horizontal scrollbar on the mobile top bar while keeping
+     touch / keyboard scrolling. */
+  .no-scrollbar {
+    scrollbar-width: none;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }

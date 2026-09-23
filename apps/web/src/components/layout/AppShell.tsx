@@ -22,7 +22,7 @@ const NavigationItem = ({ item }: { item: ShellNavItem }) => {
       end={item.path === '/'}
       className={({ isActive }) =>
         [
-          'relative flex min-h-14 min-w-14 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[9px] font-bold transition-colors',
+          'relative flex min-h-14 min-w-14 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[9px] font-bold transition-colors focus-visible:ring-white/70 focus-visible:ring-offset-0 focus-visible:ring-offset-ink',
           isActive
             ? 'bg-brand text-white shadow-brand'
             : 'text-[#9299CB] hover:bg-white/10 hover:text-white',
@@ -67,7 +67,7 @@ export const AppShell = () => {
 
   return (
     <div className="min-h-screen bg-canvas lg:grid lg:grid-cols-[84px_minmax(0,1fr)]">
-      <aside className="sticky top-0 z-30 flex h-[72px] items-center gap-3 overflow-x-auto bg-ink px-4 lg:h-screen lg:flex-col lg:overflow-visible lg:px-0 lg:py-5">
+      <aside className="no-scrollbar sticky top-0 z-30 flex h-[72px] shrink-0 items-center gap-3 overflow-x-auto overflow-y-hidden bg-ink px-4 lg:h-dvh lg:max-h-dvh lg:flex-col lg:items-center lg:overflow-x-hidden lg:overflow-y-hidden lg:px-0 lg:py-5">
         <NavLink
           to="/"
           aria-label="GlamPro home"
@@ -76,7 +76,7 @@ export const AppShell = () => {
           G
         </NavLink>
         <nav
-          className="flex flex-1 gap-2 lg:w-full lg:flex-col lg:items-center"
+          className="shell-scroll flex min-w-0 flex-1 gap-2 lg:min-h-0 lg:w-full lg:flex-1 lg:flex-col lg:items-center lg:overflow-y-auto lg:overflow-x-hidden lg:px-2 lg:py-1 lg:overscroll-contain"
           aria-label="Main navigation"
         >
           {mainItems.map((item) => (
@@ -84,7 +84,7 @@ export const AppShell = () => {
           ))}
         </nav>
         <nav
-          className="flex gap-2 lg:w-full lg:flex-col lg:items-center"
+          className="flex shrink-0 gap-2 lg:w-full lg:flex-col lg:items-center lg:border-t lg:border-white/10 lg:px-2 lg:pt-3"
           aria-label="Account navigation"
         >
           {accountItems.map((item) => (
@@ -93,14 +93,14 @@ export const AppShell = () => {
           <button
             type="button"
             onClick={() => void handleSignOut()}
-            className="relative flex min-h-14 min-w-14 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[9px] font-bold text-[#9299CB] transition-colors hover:bg-white/10 hover:text-white"
+            className="relative flex min-h-14 min-w-14 shrink-0 flex-col items-center justify-center gap-1 rounded-2xl px-2 text-[9px] font-bold text-[#9299CB] transition-colors hover:bg-white/10 hover:text-white"
           >
             <LogOut className="h-[19px] w-[19px]" aria-hidden />
             <span>Log out</span>
           </button>
         </nav>
       </aside>
-      <main className="min-w-0">
+      <main className="min-w-0 lg:min-h-dvh">
         <Outlet />
       </main>
     </div>

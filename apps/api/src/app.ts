@@ -11,6 +11,13 @@ import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { globalRateLimit } from './middleware/rate-limits.js';
 import { requestContext } from './middleware/request-context.js';
 import { authRouter } from './modules/auth/auth.routes.js';
+import {
+  inventoryRouter,
+  productCategoriesRouter,
+  productsRouter,
+  serviceCategoriesRouter,
+  servicesRouter,
+} from './modules/catalog/catalog.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { auditRouter } from './modules/tenancy/audit.routes.js';
 import { invitationsRouter, membersRouter } from './modules/tenancy/members.routes.js';
@@ -62,6 +69,11 @@ export const createApp = () => {
   app.use('/api/v1/members', membersRouter);
   app.use('/api/v1/invitations', invitationsRouter);
   app.use('/api/v1/audit', auditRouter);
+  app.use('/api/v1/service-categories', serviceCategoriesRouter);
+  app.use('/api/v1/services', servicesRouter);
+  app.use('/api/v1/product-categories', productCategoriesRouter);
+  app.use('/api/v1/products', productsRouter);
+  app.use('/api/v1/inventory', inventoryRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

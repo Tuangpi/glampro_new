@@ -24,7 +24,7 @@ export const PageHeader = ({ title, subtitle, actions }: PageHeaderProps) => {
     : 'G';
 
   return (
-    <header className="flex min-h-[76px] flex-wrap items-center gap-3 border-b border-line bg-white px-5 py-3 sm:px-7">
+    <header className="sticky top-[72px] z-20 flex min-h-[76px] flex-wrap items-center gap-3 border-b border-line bg-white/95 px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/85 sm:px-7 lg:top-0">
       <div className="mr-auto">
         <h1 className="text-lg font-extrabold text-ink">{title}</h1>
         <p className="text-xs font-medium text-muted">{subtitle}</p>

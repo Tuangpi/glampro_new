@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import type { Permission } from '@glampro/contracts';
+import { CatalogPage } from '../features/catalog/CatalogPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 
 export type ModuleRoute = {
@@ -66,6 +67,7 @@ export const moduleRoutes: ModuleRoute[] = [
     permission: 'products.read',
     group: 'main',
     icon: Boxes,
+    element: CatalogPage,
   },
   {
     path: 'staff',

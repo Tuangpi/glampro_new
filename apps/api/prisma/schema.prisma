@@ -78,6 +78,7 @@ model User {
   sentInvitations     OrganizationInvitation[] @relation("InvitationSender")
   acceptedInvitations OrganizationInvitation[] @relation("InvitationAcceptor")
   auditLogs           AuditLog[]               @relation("AuditUser")
+  inventoryMovements  InventoryMovement[]
 
   @@index([emailVerifiedAt])
 }
@@ -152,6 +153,12 @@ model Organization {
   locations             Location[]
   subscriptions         Subscription[]
   auditLogs             AuditLog[]
+  serviceCategories     ServiceCategory[]
+  services              Service[]
+  productCategories     ProductCategory[]
+  products              Product[]
+  inventoryLevels       InventoryLevel[]
+  inventoryMovements    InventoryMovement[]
 
   @@index([status])
 }
@@ -216,6 +223,8 @@ model Location {
   updatedAt         DateTime       @updatedAt
   organization      Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   businessHours     BusinessHour[]
+  inventoryLevels   InventoryLevel[]
+  inventoryMovements InventoryMovement[]
 
   @@unique([organizationId, code])
   @@index([organizationId, isActive])
@@ -270,7 +279,124 @@ model AuditLog {
   organization   Organization?  @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   actorUser      User?          @relation("AuditUser", fields: [actorUserId], references: [id], onDelete: SetNull)
 
-  @@index([organizationId, createdAt])
+    @@index([organizationId, createdAt])
   @@index([actorUserId, createdAt])
   @@index([entityType, entityId])
+}
+
+enum InventoryMovementType {
+  ADJUST_IN
+  ADJUST_OUT
+  SALE
+  RETURN
+  STOCK_CORRECTION
+  DAMAGE
+  EXPIRY
+  INITIAL_STOCK
+}
+
+model ServiceCategory {
+  id              String   @id @default(cuid())
+  organizationId  String
+  name            String   @db.VarChar(120)
+  description     String?  @db.VarChar(500)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  services        Service[]
+
+  @@index([organizationId, sortOrder])
+  @@unique([organizationId, name])
+}
+
+model Service {
+  id              String   @id @default(cuid())
+  organizationId  String
+  serviceCategoryId String
+  name            String   @db.VarChar(160)
+  description     String?  @db.VarChar(500)
+  durationMinutes Int
+  priceInCents    Int
+  sortOrder       Int      @default(0)
+  isAvailable     Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+    organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  serviceCategory ServiceCategory @relation(fields: [serviceCategoryId], references: [id])
+
+  @@index([organizationId, sortOrder])
+  @@index([organizationId, isAvailable])
+}
+
+model ProductCategory {
+  id              String   @id @default(cuid())
+  organizationId  String
+  name            String   @db.VarChar(120)
+  description     String?  @db.VarChar(500)
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  products        Product[]
+
+  @@index([organizationId, sortOrder])
+  @@unique([organizationId, name])
+}
+
+model Product {
+  id              String   @id @default(cuid())
+  organizationId  String
+  productCategoryId String
+  name            String   @db.VarChar(160)
+  description     String?  @db.VarChar(500)
+  sku             String?  @db.VarChar(64)
+  priceInCents    Int
+  costInCents     Int?
+  trackInventory  Boolean  @default(true)
+  isAvailable     Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+    organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  productCategory ProductCategory @relation(fields: [productCategoryId], references: [id])
+  inventoryLevels InventoryLevel[]
+  inventoryMovements InventoryMovement[]
+
+  @@index([organizationId, name])
+  @@index([organizationId, isAvailable])
+  @@unique([organizationId, sku])
+}
+
+model InventoryLevel {
+  id              String     @id @default(cuid())
+  organizationId  String
+  productId       String
+  locationId      String
+  quantityOnHand  Int        @default(0)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product         Product      @relation(fields: [productId], references: [id])
+  location        Location     @relation(fields: [locationId], references: [id])
+
+  @@unique([organizationId, productId, locationId])
+}
+
+model InventoryMovement {
+  id              String               @id @default(cuid())
+  organizationId  String
+  productId       String
+  locationId      String
+  movementType    InventoryMovementType
+  quantity        Int
+  reason          String?              @db.VarChar(255)
+  performedById   String?
+  createdAt       DateTime             @default(now())
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  product         Product              @relation(fields: [productId], references: [id])
+  location        Location             @relation(fields: [locationId], references: [id])
+  performedBy     User?                @relation(fields: [performedById], references: [id])
+
+  @@index([organizationId, createdAt])
+  @@index([productId, locationId])
 }
