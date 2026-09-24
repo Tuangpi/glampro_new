@@ -149,7 +149,7 @@ Stripe-driven changes are attributable.
 Events that must be audited include authentication outcomes, membership and role changes,
 invitation lifecycle, subscription changes, catalog price changes, inventory adjustments, customer
 profile and note changes, staff profile, assignment, schedule, and time-off changes, appointment
-bookings, edits, service replacements, and status changes, sale voids, and refunds.
+bookings, edits, service replacements, and status changes, sale creation, voids, and refunds.
 
 ## Testing requirements
 
@@ -166,7 +166,8 @@ Any new module ships with integration tests covering:
 `apps/api/tests/tenancy.test.ts` covers the settings, members, invitation, and audit endpoints,
 `apps/api/tests/catalog.test.ts` covers the service and product catalog plus the inventory ledger,
 `apps/api/tests/customers.test.ts` and `apps/api/tests/staff.test.ts` cover the customer book
-and the roster, and `apps/api/tests/appointments.test.ts` covers the calendar, availability, and
-the status trail. All of them run against the dedicated `glampro_test` database, which the suites
+and the roster, `apps/api/tests/appointments.test.ts` covers the calendar, availability, and
+the status trail, and `apps/api/tests/sales.test.ts` covers checkout, receipts, inventory, and
+reversals. All of them run against the dedicated `glampro_test` database, which the suites
 truncate between cases; see the README for creating it. New modules extend the same file pattern
 rather than inventing their own harness.

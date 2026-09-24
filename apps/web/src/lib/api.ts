@@ -34,6 +34,8 @@ import {
   productDataSchema,
   productsDataSchema,
   refreshSessionDataSchema,
+  saleDataSchema,
+  salesDataSchema,
   serviceCategoriesDataSchema,
   serviceCategoryDataSchema,
   serviceDataSchema,
@@ -63,6 +65,8 @@ import type {
   CreateAppointmentRequest,
   CreateCustomerNoteRequest,
   CreateLocationRequest,
+  CreateSaleRefundRequest,
+  CreateSaleRequest,
   CustomerDetail,
   CustomerNoteSummary,
   CustomerRequest,
@@ -86,6 +90,8 @@ import type {
   ReplaceAppointmentServicesRequest,
   ReplaceStaffServicesRequest,
   ResetPasswordRequest,
+  SaleQuery,
+  SaleSummary,
   ServiceCategoryRequest,
   ServiceCategorySummary,
   ServiceRequest,
@@ -107,6 +113,7 @@ import type {
   UpdateServiceCategoryRequest,
   UpdateServiceRequest,
   UpdateStaffProfileRequest,
+  VoidSaleRequest,
 } from '@glampro/contracts';
 
 const apiBaseUrl = import.meta.env.VITE_API_URL ?? '';
@@ -749,6 +756,37 @@ export const changeAppointmentStatus = async (
   appointmentDataSchema.parse(
     await apiRequest<unknown>(`/api/v1/appointments/${appointmentId}/status`, {
       method: 'PATCH',
+      body: input,
+    }),
+  );
+
+/** Point of sale: catalog-driven checkout, receipts, and financial reversals. */
+export const fetchSales = async (
+  query: Partial<SaleQuery> = {},
+): Promise<{ sales: SaleSummary[] }> =>
+  salesDataSchema.parse(await apiRequest<unknown>(`/api/v1/sales${queryStringOf(query)}`));
+
+export const fetchSale = async (saleId: string): Promise<{ sale: SaleSummary }> =>
+  saleDataSchema.parse(await apiRequest<unknown>(`/api/v1/sales/${saleId}`));
+
+export const createSale = async (input: CreateSaleRequest): Promise<{ sale: SaleSummary }> =>
+  saleDataSchema.parse(await apiRequest<unknown>('/api/v1/sales', { method: 'POST', body: input }));
+
+export const voidSale = async (
+  saleId: string,
+  input: VoidSaleRequest,
+): Promise<{ sale: SaleSummary }> =>
+  saleDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/sales/${saleId}/void`, { method: 'POST', body: input }),
+  );
+
+export const refundSale = async (
+  saleId: string,
+  input: CreateSaleRefundRequest,
+): Promise<{ sale: SaleSummary }> =>
+  saleDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/sales/${saleId}/refunds`, {
+      method: 'POST',
       body: input,
     }),
   );

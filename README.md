@@ -8,7 +8,7 @@ reference for business rules and workflow; no code is shared.
 
 ## Status
 
-Milestones 1 to 6 are in place; see [docs/milestones.md](docs/milestones.md) for the plan.
+Milestones 1 to 7 are in place; see [docs/milestones.md](docs/milestones.md) for the plan.
 
 - npm workspaces monorepo with the web app, API, shared contracts, and shared tooling config
 - Express 5 + TypeScript API with security middleware, request correlation, and a standard
@@ -28,14 +28,15 @@ Milestones 1 to 6 are in place; see [docs/milestones.md](docs/milestones.md) for
   off
 - Appointments: a day calendar with per-visit service snapshots, availability derived from business
   hours and the staff week, guarded status transitions, and a per-visit status trail
+- Point of sale: mixed service/product carts, optional customer and staff attribution, split cash,
+  PayNow, card, and other payments, per-location receipts, inventory-backed sales, and refunds/voids
 - React 19 + TypeScript + Vite + Tailwind shell with a session provider, protected routes, and
   permission-aware navigation
 - Zod contracts shared between the API and the web client
 - Vitest suites for the API, the web app, and the contracts, including tenant-isolation tests
 
-The point-of-sale and reports modules are intentionally not implemented yet. Their routes exist as
-placeholders and will be built against the foundations described in
-[docs/architecture.md](docs/architecture.md).
+The reports module is intentionally not implemented yet. Its route remains a placeholder and will be
+built against the completed sales history described in [docs/architecture.md](docs/architecture.md).
 
 ## Stack
 
@@ -322,6 +323,27 @@ the transitions declared in `@glampro/contracts`, skipping ahead is allowed (a w
 and completed in one step), and nothing moves backwards out of `COMPLETED`, `CANCELLED`, or
 `NO_SHOW`. Times are read and written in the location's zone rather than the caller's, using
 `apps/api/src/shared/zoned-time.ts`.
+
+## Point of sale
+
+The sales module is a tenant-scoped cashier workflow. A sale snapshots its service/product lines and
+payment tenders, allocates the next receipt number for the location, and updates tracked inventory
+inside the same transaction. Card and PayNow rows record that a salon terminal completed a payment;
+the API does not store card numbers or contact a payment gateway.
+
+| Method | Endpoint                    | Purpose                                        | Gate           |
+| ------ | --------------------------- | ---------------------------------------------- | -------------- |
+| `GET`  | `/api/v1/sales`             | List recent sales for a location or customer   | `sales.read`   |
+| `GET`  | `/api/v1/sales/:id`         | Read one receipt, payments, and reversals      | `sales.read`   |
+| `POST` | `/api/v1/sales`             | Create a mixed cart and complete payment       | `sales.create` |
+| `POST` | `/api/v1/sales/:id/void`    | Void a completed sale and return tracked stock | `sales.void`   |
+| `POST` | `/api/v1/sales/:id/refunds` | Record a full or partial refund                | `sales.refund` |
+
+The browser checkout uses the shared Zod contracts, calculates a preview for the current catalog, and
+lets the API remain authoritative for prices, discounts, payment totals, stock, and receipt numbers.
+Tracked products create `SALE` inventory movements when sold and `RETURN` movements when voided or
+refunded. Full refunds automatically return every remaining tracked product; partial refunds can
+return selected quantities through the API contract.
 
 ## Documentation
 

@@ -52,9 +52,32 @@ first movement is recorded.
 `InventoryMovementType` carries the direction because the quantity is always positive:
 `ADJUST_IN`, `RETURN`, and `INITIAL_STOCK` add stock, while `ADJUST_OUT`, `SALE`, `DAMAGE`,
 `EXPIRY`, and `STOCK_CORRECTION` remove it. A surplus found during a count is therefore recorded as
-`ADJUST_IN`. `SALE` rows are written by the point of sale in a later milestone; the manual
-adjustment endpoint never writes them, and an adjustment that would drive a level below zero is
-refused with `409`.
+`ADJUST_IN`. `SALE` rows are written by the point of sale, and `RETURN` rows are written when a
+sale is voided or refunded; the manual adjustment endpoint never writes either type, and an adjustment
+that would drive a level below zero is refused with `409`.
+
+### Sales
+
+| Model            | Purpose                                                                     |
+| ---------------- | --------------------------------------------------------------------------- |
+| `Sale`           | Completed receipt with location-scoped numbering, totals, status, and actor |
+| `SaleLine`       | Snapshotted service/product line with quantity, price, discount, and tax    |
+| `SalePayment`    | One payment tender; multiple rows allow a split payment                     |
+| `SaleRefund`     | Financial reversal with method, amount, reason, and processor               |
+| `SaleRefundLine` | Product quantity returned by one refund, capped by the original line        |
+
+A sale belongs to one organization and location, may link to a customer and appointment, and can be
+created for a walk-in without either link. `SaleLine` keeps the catalog name, unit price, discount,
+tax, and total as snapshots. A service line may carry an optional `StaffProfile` attribution; product
+lines retain the `Product` link and whether stock was tracked at sale time.
+
+Checkout calculates all totals from the current tenant catalog, requires the payment rows to add up
+exactly, allocates `receiptPrefix` plus the next per-location number, and creates `SALE` inventory
+movements in the same transaction. A void is allowed only for a completed sale and creates `RETURN`
+movements. Refunds may be partial; a full refund with no explicit return list returns every remaining
+tracked product, while the `SaleRefundLine` ledger prevents cumulative returns from exceeding the
+quantity sold. Payment methods record terminal events only; no card data or external payment state is
+stored.
 
 ### People
 
@@ -143,8 +166,8 @@ Actions currently written: `auth.registered`, `auth.login`, `auth.login_failed`,
 `catalog.product_updated`, `inventory.movement_recorded`, `customer.created`, `customer.updated`,
 `customer.note_added`, `staff.profile_created`, `staff.profile_updated`, `staff.services_replaced`,
 `staff.schedule_replaced`, `staff.time_off_recorded`, `staff.time_off_removed`,
-`appointment.created`, `appointment.updated`, `appointment.services_replaced`, and
-`appointment.status_changed`.
+`appointment.created`, `appointment.updated`, `appointment.services_replaced`,
+`appointment.status_changed`, `sale.created`, `sale.voided`, and `sale.refunded`.
 
 ## Enumerations
 
@@ -160,6 +183,9 @@ Actions currently written: `auth.registered`, `auth.login`, `auth.login_failed`,
 | `InventoryMovementType` | `ADJUST_IN`, `ADJUST_OUT`, `SALE`, `RETURN`, `STOCK_CORRECTION`, `DAMAGE`, `EXPIRY`, `INITIAL_STOCK` |
 | `CustomerGender`        | `FEMALE`, `MALE`, `OTHER`, `UNDISCLOSED`                                                             |
 | `AppointmentStatus`     | `SCHEDULED`, `CONFIRMED`, `CHECKED_IN`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`           |
+| `SaleStatus`            | `COMPLETED`, `VOIDED`, `PARTIALLY_REFUNDED`, `REFUNDED`                                              |
+| `SaleLineType`          | `SERVICE`, `PRODUCT`                                                                                 |
+| `PaymentMethod`         | `CASH`, `PAYNOW`, `CARD`, `OTHER`                                                                    |
 
 ## Relationship shape
 
@@ -188,6 +214,12 @@ Organization ──1:n── Appointment ──n:1── Location, Customer, Sta
 Appointment ──1:n── AppointmentService ──n:1── Service
 Appointment ──1:n── AppointmentStatusHistory ──n:1── User (changedBy)
 Appointment ──n:1── User (createdBy)
+
+Organization ──1:n── Sale ──n:1── Location, Customer, Appointment, User (createdBy/voidedBy)
+Sale ──1:n── SaleLine ──n:1── Service, Product, StaffProfile
+Sale ──1:n── SalePayment
+Sale ──1:n── SaleRefund ──1:n── SaleRefundLine ──n:1── SaleLine
+InventoryMovement ──n:1── Sale, SaleLine (nullable source links)
 ```
 
 Every tenant-owned model either holds `organizationId` directly or reaches it through a parent
@@ -204,48 +236,16 @@ Appointments reach their location, customer, staff profile, and services through
 foreign keys: a visit is history, so none of those rows can be deleted out from under it. The status
 trail cascades with its appointment, because a visit that never existed has no trail to keep.
 
-## Planned models
+## Cross-model financial rules
 
-These are not in the schema yet. They are listed so the tenant columns, snapshotting rules, and
-money conventions are fixed before implementation.
+Sales and refunds follow the same tenant, location, money, snapshot, and append-only rules as the
+earlier modules. A sale's `receiptNumber` is unique within an organization and location; its
+`receiptCode` freezes the prefix used at the time. Catalog edits never rewrite `SaleLine` snapshots.
+Payments are explicit rows, so a sale can be split across methods without storing payment credentials.
+Inventory movements may point back to the sale and line that caused them, but remain append-only.
 
-| Area  | Models                                          |
-| ----- | ----------------------------------------------- |
-| Sales | `Sale`, `SaleLine`, `SalePayment`, `SaleRefund` |
-
-Customer visit history is deliberately not a column on `Customer`: the profile reads it from
-`Appointment` rows today, and milestone 7 adds `Sale` rows to the same view, so the screen shows
-real activity instead of a counter that nothing maintains.
-
-Conventions that apply to all of them:
-
-1. `organizationId` on every model; `locationId` on the location-owned ones (inventory,
-   appointments, sales). — followed by `InventoryLevel`, `InventoryMovement`, and `Appointment`;
-   staff schedules are organization-level, so `StaffSchedule` carries no `locationId`.
-2. Historical records snapshot what they need. A `SaleLine` stores the name, unit price, tax, and
-   discount applied at the time of sale, and an `AppointmentService` stores the name, duration, and
-   price used for scheduling. Editing the catalog later must not rewrite history. — followed by
-   `AppointmentService`.
-3. Money is stored as integer minor units in an `Int` column, with the currency taken from the
-   location's organization. — followed by `Service.priceInCents`, `Product.priceInCents`, and
-   `Product.costInCents`.
-4. Inventory changes are recorded as movements rather than direct edits, so `InventoryLevel` is a
-   derived current quantity and `InventoryMovement` is the append-only ledger. — implemented.
-5. Sales and refunds carry an explicit `SalePayment` row per tender, allowing split payments
-   across cash, PayNow, and card.
-6. Status fields use enums: appointment status (`SCHEDULED`, `CONFIRMED`, `CHECKED_IN`,
-   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`) and payment method (`CASH`, `PAYNOW`,
-   `CARD`, `OTHER`). — the appointment statuses are implemented as `AppointmentStatus`.
-7. Historical records snapshot what they need. A `SaleLine` stores the name, unit price, tax, and
-   discount applied at the time of sale, and an `AppointmentService` stores the duration and price
-   used for scheduling. Editing the catalog later must not rewrite history.
-8. Money is stored as integer minor units in an `Int` column, with the currency taken from the
-   location's organization. — followed by `Service.priceInCents`, `Product.priceInCents`, and
-   `Product.costInCents`.
-9. Inventory changes are recorded as movements rather than direct edits, so `InventoryLevel` is a
-   derived current quantity and `InventoryMovement` is the append-only ledger. — implemented.
-10. Sales and refunds carry an explicit `SalePayment` row per tender, allowing split payments
-    across cash, PayNow, and card.
-11. Status fields use enums: appointment status (`SCHEDULED`, `CONFIRMED`, `CHECKED_IN`,
-    `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`) and payment method (`CASH`, `PAYNOW`,
-    `CARD`, `OTHER`).
+Customer visit history is derived from appointments and sales rather than copied onto `Customer`.
+A sale may be a walk-in with no customer or appointment; when either link is supplied, the API checks
+that it belongs to the same organization and that the appointment matches the selected location and
+customer. Sale voids and refunds are audited, and their return quantities are tracked separately so
+a product cannot be returned more times than it was sold.

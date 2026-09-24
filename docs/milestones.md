@@ -12,7 +12,7 @@ update before the next one starts, and each builds on the foundations described 
 | 4   | Catalog and inventory       | Done    |
 | 5   | Customers and staff         | Done    |
 | 6   | Appointments                | Done    |
-| 7   | Point of sale               | Planned |
+| 7   | Point of sale               | Done    |
 | 8   | Reports and dashboard       | Planned |
 | 9   | Billing and platform admin  | Planned |
 
@@ -153,11 +153,22 @@ that no longer fits), the status matrix with its trail, and the reschedule guard
 `packages/contracts/src/schemas/appointments.test.ts` covers the shared request, query, and read
 shapes; and `npm test`, `npm run lint`, and `npm run build` pass across all three workspaces.
 
-## 7. Point of sale
+## 7. Point of sale — done
 
-Cart with services, products, and staff attribution, split payments across cash, PayNow, and
-card, per-location receipt numbering inside the sale transaction, and void/refund flows with
-audit entries.
+Cart with services, products, and staff attribution, split payments across cash, PayNow, and card,
+per-location receipt numbering inside the sale transaction, and void/refund flows with audit entries.
+The API snapshots catalog values, rejects client-side totals that do not match the server calculation,
+writes `SALE` inventory movements, and reverses tracked products through `RETURN` movements. Full
+refunds automatically return every remaining tracked product; partial refunds record their returned
+quantities. The web `/sales` module includes catalog search, cart controls, split tender entry,
+receipt history, and permission-gated void/refund controls.
+
+Exit criteria met: `apps/api/tests/sales.test.ts` covers the 401/403/cross-tenant-404 matrix,
+split-payment totals, receipt sequencing, insufficient-stock rollback, voids, partial refunds, and full
+refund stock returns; `packages/contracts/src/schemas/sales.test.ts` covers request, query, and
+receipt shapes; and `apps/web/src/features/sales/saleView.test.ts` covers cart totals and money
+formatting. The POS intentionally records card/PayNow terminal events only and does not integrate a
+payment gateway.
 
 ## 8. Reports and dashboard
 

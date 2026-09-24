@@ -14,6 +14,7 @@ import { CatalogPage } from '../features/catalog/CatalogPage';
 import { CustomersPage } from '../features/customers/CustomersPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { StaffPage } from '../features/staff/StaffPage';
+import { SalesPage } from '../features/sales/SalesPage';
 
 export type ModuleRoute = {
   path: string;
@@ -43,6 +44,7 @@ export const moduleRoutes: ModuleRoute[] = [
     group: 'main',
     icon: ShoppingCart,
     badge: '1',
+    element: SalesPage,
   },
   {
     path: 'appointments',

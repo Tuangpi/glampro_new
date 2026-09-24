@@ -59,7 +59,7 @@ const productCategorySelection = {
   updatedAt: true,
 } as const;
 
-const productSelection = {
+export const productSelection = {
   id: true,
   organizationId: true,
   productCategoryId: true,

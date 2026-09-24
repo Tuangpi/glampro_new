@@ -22,6 +22,7 @@ import {
 import { customersRouter } from './modules/customers/customers.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { staffRouter } from './modules/staff/staff.routes.js';
+import { salesRouter } from './modules/sales/sales.routes.js';
 import { auditRouter } from './modules/tenancy/audit.routes.js';
 import { invitationsRouter, membersRouter } from './modules/tenancy/members.routes.js';
 import { locationsRouter, settingsRouter } from './modules/tenancy/settings.routes.js';
@@ -80,6 +81,7 @@ export const createApp = () => {
   app.use('/api/v1/customers', customersRouter);
   app.use('/api/v1/appointments', appointmentsRouter);
   app.use('/api/v1/staff', staffRouter);
+  app.use('/api/v1/sales', salesRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

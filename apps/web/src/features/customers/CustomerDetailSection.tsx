@@ -10,12 +10,14 @@ import type {
   CustomerDetail,
   CustomerGender,
   CustomerSummary,
+  SaleSummary,
   UpdateCustomerRequest,
 } from '@glampro/contracts';
 import {
   apiErrorMessage,
   createCustomerNote,
   fetchAppointments,
+  fetchSales,
   updateCustomer,
 } from '../../lib/api';
 import { formatDate, formatDateTime, formatSgd } from '../../lib/format';
@@ -32,6 +34,7 @@ import {
   appointmentStatusTone,
   staffNameOf,
 } from '../appointments/appointmentView';
+import { saleStatusLabels, saleStatusTone } from '../sales/saleView';
 
 const genderLabels: Record<CustomerGender, string> = {
   FEMALE: 'Female',
@@ -93,8 +96,8 @@ const displayNameOf = (customer: CustomerDetail) =>
   [customer.firstName, customer.lastName].filter(Boolean).join(' ');
 
 /**
- * One customer in full: the editable profile on top, the visit history taken
- * from their appointments, and the append-only note timeline underneath. A
+ * One customer in full: the editable profile on top, appointment and sales history,
+ * and the append-only note timeline underneath. A
  * member without `customers.manage` reads all of it and edits none, so the same
  * screen serves the front desk and a stylist.
  */
@@ -109,9 +112,11 @@ export const CustomerDetailSection = ({
 }) => {
   const { hasPermission } = useAuth();
   const canReadVisits = hasPermission('appointments.read');
+  const canReadSales = hasPermission('sales.read');
 
   const [form, setForm] = useState(() => customerFormFrom(customer));
   const [visits, setVisits] = useState<AppointmentSummary[] | null>(null);
+  const [sales, setSales] = useState<SaleSummary[] | null>(null);
   const [noteBody, setNoteBody] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [noteError, setNoteError] = useState<string | null>(null);
@@ -124,7 +129,7 @@ export const CustomerDetailSection = ({
     (value: CustomerForm[K]) =>
       setForm((current) => ({ ...current, [key]: value }));
 
-  // Visit history is derived from appointments: the customer row only has notes.
+  // Visit and sales history are derived from the customer's related records.
   useEffect(() => {
     if (!canReadVisits) {
       return;
@@ -149,6 +154,24 @@ export const CustomerDetailSection = ({
       active = false;
     };
   }, [canReadVisits, customer.id]);
+
+  useEffect(() => {
+    if (!canReadSales) return;
+    let active = true;
+    fetchSales({ customerId: customer.id, limit: 20 })
+      .then((data) => {
+        if (active) setSales(data.sales);
+      })
+      .catch((loadError: unknown) => {
+        if (active) {
+          setSales([]);
+          setError(apiErrorMessage(loadError));
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [canReadSales, customer.id]);
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -389,7 +412,7 @@ export const CustomerDetailSection = ({
       </SectionCard>
       <SectionCard
         title="Visit history"
-        description="Derived from appointments; the point-of-sale sales list joins this in a later milestone."
+        description="Appointments and sales recorded for this customer."
       >
         {!canReadVisits ? (
           <p className="text-xs font-bold text-muted">
@@ -428,6 +451,40 @@ export const CustomerDetailSection = ({
             ))}
           </ol>
         )}
+        {canReadSales ? (
+          <div className="mt-5 border-t border-line pt-5">
+            <h3 className="mb-3 text-xs font-extrabold">Sales</h3>
+            {sales === null ? (
+              <p className="text-xs font-bold text-muted">Loading sales…</p>
+            ) : sales.length === 0 ? (
+              <p className="text-xs font-bold text-muted">No sales recorded yet.</p>
+            ) : (
+              <ol className="flex flex-col gap-3">
+                {sales.map((sale) => (
+                  <li
+                    key={sale.id}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-line bg-white px-3 py-2.5"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-xs font-extrabold">{sale.receiptCode}</span>
+                      <span className="text-[11px] font-bold text-muted">
+                        {formatDateTime(sale.createdAt)}
+                      </span>
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <span className="text-xs font-extrabold">{formatSgd(sale.totalInCents)}</span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${saleStatusTone[sale.status]}`}
+                      >
+                        {saleStatusLabels[sale.status]}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        ) : null}
       </SectionCard>
     </>
   );

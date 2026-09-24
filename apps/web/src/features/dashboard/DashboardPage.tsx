@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { ArrowUpRight, CalendarDays, DollarSign, TrendingUp, Users } from 'lucide-react';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { getApiHealth } from '../../lib/api';
@@ -106,10 +107,13 @@ export const DashboardPage = () => (
       title="Dashboard"
       subtitle="Friday, 18 September 2026"
       actions={
-        <button className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-xs font-extrabold text-white shadow-brand">
+        <Link
+          to="/sales"
+          className="flex items-center gap-2 rounded-xl bg-brand px-4 py-2.5 text-xs font-extrabold text-white shadow-brand"
+        >
           New sale
           <ArrowUpRight className="h-3.5 w-3.5" aria-hidden />
-        </button>
+        </Link>
       }
     />
 

@@ -83,6 +83,9 @@ model User {
   staffTimeOffCreated StaffTimeOff[]
   appointmentsCreated Appointment[]             @relation("AppointmentCreator")
   appointmentStatusChanges AppointmentStatusHistory[] @relation("AppointmentStatusChanger")
+  salesCreated         Sale[]                @relation("SaleCreator")
+  salesVoided          Sale[]                @relation("SaleVoider")
+  saleRefundsProcessed SaleRefund[]          @relation("RefundProcessor")
 
   @@index([emailVerifiedAt])
 }
@@ -172,6 +175,11 @@ model Organization {
   appointments          Appointment[]
   appointmentServices   AppointmentService[]
   appointmentStatusHistory AppointmentStatusHistory[]
+  sales                 Sale[]
+  saleLines             SaleLine[]
+  salePayments          SalePayment[]
+  saleRefunds           SaleRefund[]
+  saleRefundLines       SaleRefundLine[]
 
   @@index([status])
 }
@@ -240,6 +248,7 @@ model Location {
   inventoryLevels   InventoryLevel[]
   inventoryMovements InventoryMovement[]
   appointments      Appointment[]
+  sales             Sale[]
 
   @@unique([organizationId, code])
   @@index([organizationId, isActive])
@@ -341,6 +350,7 @@ model Service {
   serviceCategory ServiceCategory @relation(fields: [serviceCategoryId], references: [id])
   staffAssignments StaffServiceAssignment[]
   appointmentServices AppointmentService[]
+  saleLines          SaleLine[]
 
   @@index([organizationId, sortOrder])
   @@index([organizationId, isAvailable])
@@ -378,6 +388,7 @@ model Product {
   productCategory ProductCategory @relation(fields: [productCategoryId], references: [id])
   inventoryLevels InventoryLevel[]
   inventoryMovements InventoryMovement[]
+  saleLines          SaleLine[]
 
   @@index([organizationId, name])
   @@index([organizationId, isAvailable])
@@ -408,11 +419,15 @@ model InventoryMovement {
   quantity        Int
   reason          String?              @db.VarChar(255)
   performedById   String?
+  saleId          String?
+  saleLineId      String?
   createdAt       DateTime             @default(now())
   organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   product         Product              @relation(fields: [productId], references: [id])
   location        Location             @relation(fields: [locationId], references: [id])
   performedBy     User?                @relation(fields: [performedById], references: [id])
+  sale            Sale?                @relation(fields: [saleId], references: [id], onDelete: SetNull)
+  saleLine        SaleLine?            @relation(fields: [saleLineId], references: [id], onDelete: SetNull)
 
   @@index([organizationId, createdAt])
   @@index([productId, locationId])
@@ -452,6 +467,7 @@ model Customer {
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   notes          CustomerNote[]
   appointments   Appointment[]
+  sales          Sale[]
 
   @@unique([organizationId, email])
   @@unique([organizationId, phone])
@@ -505,6 +521,7 @@ model StaffProfile {
   schedules      StaffSchedule[]
   timeOff        StaffTimeOff[]
   appointments   Appointment[]
+  saleLines      SaleLine[]
 
   @@index([organizationId, isActive])
 }
@@ -599,6 +616,7 @@ model Appointment {
   createdBy          User?             @relation("AppointmentCreator", fields: [createdById], references: [id])
   services           AppointmentService[]
   statusHistory      AppointmentStatusHistory[]
+  sales              Sale[]
 
   @@index([organizationId, startsAt])
   @@index([organizationId, status])
@@ -652,4 +670,150 @@ model AppointmentStatusHistory {
   @@index([organizationId, createdAt])
 }
 
+
+
+enum SaleStatus {
+  COMPLETED
+  VOIDED
+  PARTIALLY_REFUNDED
+  REFUNDED
+}
+
+enum SaleLineType {
+  SERVICE
+  PRODUCT
+}
+
+enum PaymentMethod {
+  CASH
+  PAYNOW
+  CARD
+  OTHER
+}
+
+/** A completed sale. Lines and payments are append-only history; transitions are audited. */
+model Sale {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  locationId         String
+  receiptNumber      Int
+  receiptCode        String       @db.VarChar(40)
+  customerId         String?
+  appointmentId      String?
+  status             SaleStatus   @default(COMPLETED)
+  subtotalInCents    Int
+  discountInCents    Int          @default(0)
+  taxInCents         Int          @default(0)
+  totalInCents       Int
+  paidInCents        Int
+  refundedInCents    Int          @default(0)
+  notes              String?      @db.VarChar(1000)
+  createdById        String?
+  voidedAt           DateTime?
+  voidReason         String?      @db.VarChar(255)
+  voidedById         String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location           Location     @relation(fields: [locationId], references: [id])
+  customer           Customer?    @relation(fields: [customerId], references: [id])
+  appointment        Appointment? @relation(fields: [appointmentId], references: [id])
+  createdBy          User?        @relation("SaleCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  voidedBy           User?        @relation("SaleVoider", fields: [voidedById], references: [id], onDelete: SetNull)
+  lines              SaleLine[]
+  payments           SalePayment[]
+  refunds            SaleRefund[]
+  inventoryMovements InventoryMovement[]
+
+  @@unique([organizationId, locationId, receiptNumber])
+  @@index([organizationId, createdAt])
+  @@index([locationId, createdAt])
+  @@index([customerId, createdAt])
+  @@index([status])
+}
+
+
+/** Snapshot of a service or product at the moment it was sold. */
+model SaleLine {
+  id              String       @id @default(cuid())
+  organizationId  String
+  saleId          String
+  type            SaleLineType
+  serviceId       String?
+  productId       String?
+  staffProfileId  String?
+  name            String       @db.VarChar(160)
+  quantity        Int
+  unitPriceInCents Int
+  discountInCents Int          @default(0)
+  taxInCents      Int          @default(0)
+  totalInCents    Int
+  inventoryTracked Boolean     @default(false)
+  createdAt       DateTime     @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sale            Sale         @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  service         Service?     @relation(fields: [serviceId], references: [id])
+  product         Product?     @relation(fields: [productId], references: [id])
+  staffProfile    StaffProfile? @relation(fields: [staffProfileId], references: [id])
+  inventoryMovements InventoryMovement[]
+  refundLines     SaleRefundLine[]
+
+  @@index([organizationId, saleId])
+  @@index([serviceId])
+  @@index([productId])
+  @@index([staffProfileId])
+}
+
+/** One row per tender; a sale may be paid by more than one method. */
+model SalePayment {
+  id             String       @id @default(cuid())
+  organizationId String
+  saleId         String
+  method         PaymentMethod
+  amountInCents  Int
+  reference      String?      @db.VarChar(120)
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sale           Sale         @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, saleId])
+  @@index([method])
+}
+
+/** A financial reversal. Product returns are recorded separately in the inventory ledger. */
+model SaleRefund {
+  id             String        @id @default(cuid())
+  organizationId String
+  saleId         String
+  amountInCents  Int
+  method         PaymentMethod
+  reason         String        @db.VarChar(500)
+  reference      String?       @db.VarChar(120)
+  processedById  String?
+  createdAt      DateTime      @default(now())
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sale           Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  processedBy    User?         @relation("RefundProcessor", fields: [processedById], references: [id], onDelete: SetNull)
+  lines          SaleRefundLine[]
+
+  @@index([organizationId, saleId])
+  @@index([saleId, createdAt])
+}
+
+
+/** Quantities returned by one refund, kept separately so cumulative returns cannot exceed the sale. */
+model SaleRefundLine {
+  id             String       @id @default(cuid())
+  organizationId String
+  refundId       String
+  saleLineId     String
+  quantity       Int
+  createdAt      DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  refund         SaleRefund   @relation(fields: [refundId], references: [id], onDelete: Cascade)
+  saleLine       SaleLine     @relation(fields: [saleLineId], references: [id], onDelete: Restrict)
+
+  @@unique([refundId, saleLineId])
+  @@index([organizationId, saleLineId])
+}
 
