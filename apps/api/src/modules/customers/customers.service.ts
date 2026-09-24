@@ -23,7 +23,8 @@ import { AppError } from '../../shared/http/app-error.js';
  * it is derived from appointments and sales in later milestones.
  */
 
-const customerSelection = {
+/** Exported so the appointment module can embed the same customer projection. */
+export const customerSelection = {
   id: true,
   organizationId: true,
   firstName: true,
@@ -58,8 +59,11 @@ const noteLimit = 100;
 type CustomerRow = Prisma.CustomerGetPayload<{ select: typeof customerSelection }>;
 type NoteRow = Prisma.CustomerNoteGetPayload<{ select: typeof noteSelection }>;
 
+/** Exported so the appointment module can project the same customer shape. */
+export type { CustomerRow };
+
 /** `DATE` columns are date-only, so they travel as `YYYY-MM-DD`. */
-const toCustomer = (row: CustomerRow): CustomerSummary => ({
+export const toCustomer = (row: CustomerRow): CustomerSummary => ({
   ...row,
   dateOfBirth: toDateOnly(row.dateOfBirth),
   createdAt: row.createdAt.toISOString(),

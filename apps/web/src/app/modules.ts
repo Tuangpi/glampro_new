@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import type { ComponentType } from 'react';
 import type { Permission } from '@glampro/contracts';
+import { AppointmentsPage } from '../features/appointments/AppointmentsPage';
 import { CatalogPage } from '../features/catalog/CatalogPage';
 import { CustomersPage } from '../features/customers/CustomersPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
@@ -51,6 +52,7 @@ export const moduleRoutes: ModuleRoute[] = [
     permission: 'appointments.read',
     group: 'main',
     icon: CalendarDays,
+    element: AppointmentsPage,
   },
   {
     path: 'customers',

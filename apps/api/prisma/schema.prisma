@@ -81,6 +81,8 @@ model User {
   inventoryMovements  InventoryMovement[]
   customerNotes       CustomerNote[]
   staffTimeOffCreated StaffTimeOff[]
+  appointmentsCreated Appointment[]             @relation("AppointmentCreator")
+  appointmentStatusChanges AppointmentStatusHistory[] @relation("AppointmentStatusChanger")
 
   @@index([emailVerifiedAt])
 }
@@ -167,6 +169,9 @@ model Organization {
   staffServiceAssignments StaffServiceAssignment[]
   staffSchedules        StaffSchedule[]
   staffTimeOff          StaffTimeOff[]
+  appointments          Appointment[]
+  appointmentServices   AppointmentService[]
+  appointmentStatusHistory AppointmentStatusHistory[]
 
   @@index([status])
 }
@@ -234,6 +239,7 @@ model Location {
   businessHours     BusinessHour[]
   inventoryLevels   InventoryLevel[]
   inventoryMovements InventoryMovement[]
+  appointments      Appointment[]
 
   @@unique([organizationId, code])
   @@index([organizationId, isActive])
@@ -334,6 +340,7 @@ model Service {
     organization    Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   serviceCategory ServiceCategory @relation(fields: [serviceCategoryId], references: [id])
   staffAssignments StaffServiceAssignment[]
+  appointmentServices AppointmentService[]
 
   @@index([organizationId, sortOrder])
   @@index([organizationId, isAvailable])
@@ -444,6 +451,7 @@ model Customer {
   updatedAt      DateTime        @updatedAt
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   notes          CustomerNote[]
+  appointments   Appointment[]
 
   @@unique([organizationId, email])
   @@unique([organizationId, phone])
@@ -496,6 +504,7 @@ model StaffProfile {
   serviceAssignments StaffServiceAssignment[]
   schedules      StaffSchedule[]
   timeOff        StaffTimeOff[]
+  appointments   Appointment[]
 
   @@index([organizationId, isActive])
 }
@@ -548,6 +557,99 @@ model StaffTimeOff {
   createdBy      User?        @relation(fields: [createdById], references: [id])
 
   @@index([organizationId, staffProfileId, startsAt])
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  CHECKED_IN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+/**
+ * One visit: a customer, one staff member, one location, and one or more
+ * services. `startsAt`/`endsAt` are written by the API from the snapshotted
+ * service durations rather than from live catalog rows, so editing a service
+ * later cannot move an existing booking, and the staff overlap check can run
+ * against indexed columns. Appointments are never hard-deleted: a cancelled or
+ * no-show visit keeps its row and its status trail.
+ */
+model Appointment {
+  id                 String            @id @default(cuid())
+  organizationId     String
+  locationId         String
+  customerId         String
+  staffProfileId     String
+  status             AppointmentStatus @default(SCHEDULED)
+  startsAt           DateTime
+  endsAt             DateTime
+  notes              String?           @db.VarChar(1000)
+  cancelledAt        DateTime?
+  cancellationReason String?           @db.VarChar(255)
+  createdById        String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  organization       Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  location           Location          @relation(fields: [locationId], references: [id])
+  customer           Customer          @relation(fields: [customerId], references: [id])
+  staffProfile       StaffProfile      @relation(fields: [staffProfileId], references: [id])
+  createdBy          User?             @relation("AppointmentCreator", fields: [createdById], references: [id])
+  services           AppointmentService[]
+  statusHistory      AppointmentStatusHistory[]
+
+  @@index([organizationId, startsAt])
+  @@index([organizationId, status])
+  @@index([locationId, startsAt])
+  @@index([staffProfileId, startsAt, endsAt])
+  @@index([customerId, startsAt])
+}
+
+/**
+ * The service performed on an appointment, snapshotted at booking time. The name,
+ * duration, and price are copied so the appointment survives a catalog edit, and
+ * `serviceId` keeps the link back to the live row for reporting.
+ */
+model AppointmentService {
+  id              String      @id @default(cuid())
+  organizationId  String
+  appointmentId   String
+  serviceId       String
+  name            String      @db.VarChar(160)
+  durationMinutes Int
+  priceInCents    Int
+  sortOrder       Int         @default(0)
+  createdAt       DateTime    @default(now())
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointment     Appointment  @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  service         Service      @relation(fields: [serviceId], references: [id])
+
+  @@unique([appointmentId, sortOrder])
+  @@index([organizationId, serviceId])
+}
+
+/**
+ * Append-only status trail. The first row has no `fromStatus`, because the
+ * booking itself is the first state, and `changedById` is nullable so the trail
+ * survives the removal of the member who made the change.
+ */
+model AppointmentStatusHistory {
+  id             String             @id @default(cuid())
+  organizationId String
+  appointmentId  String
+  fromStatus     AppointmentStatus?
+  toStatus       AppointmentStatus
+  reason         String?            @db.VarChar(255)
+  changedById    String?
+  createdAt      DateTime           @default(now())
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  appointment    Appointment        @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  changedBy      User?              @relation("AppointmentStatusChanger", fields: [changedById], references: [id])
+
+  @@index([appointmentId, createdAt])
+  @@index([organizationId, createdAt])
 }
 
 

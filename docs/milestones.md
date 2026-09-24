@@ -11,7 +11,7 @@ update before the next one starts, and each builds on the foundations described 
 | 3   | Tenancy administration      | Done    |
 | 4   | Catalog and inventory       | Done    |
 | 5   | Customers and staff         | Done    |
-| 6   | Appointments                | Next    |
+| 6   | Appointments                | Done    |
 | 7   | Point of sale               | Planned |
 | 8   | Reports and dashboard       | Planned |
 | 9   | Billing and platform admin  | Planned |
@@ -111,11 +111,47 @@ the schedule replacement, and the time-off lifecycle;
 `packages/contracts/src/schemas/people.test.ts` covers the shared request and summary shapes; and
 `npm test`, `npm run lint`, and `npm run build` pass across all three workspaces.
 
-## 6. Appointments
+## 6. Appointments — done
 
-Calendar with status transitions (`SCHEDULED` to `COMPLETED`, `CANCELLED`, `NO_SHOW`),
-availability derived from business hours and staff schedules, snapshot pricing and duration on
-each appointment service, and a status history trail.
+- `Appointment`, `AppointmentService`, and `AppointmentStatusHistory`, tenant-scoped and
+  location-owned, behind `appointments.manage` and readable with `appointments.read`.
+- A booking snapshots the name, duration, and price of every service on the visit, and the visit's
+  end time and totals come from those snapshots, so a later catalog edit cannot move or reprice an
+  existing booking.
+- Availability for one stylist on one local day: the location's business hours intersected with the
+  staff member's week, minus recorded absences and visits that still hold their slot, offered in
+  fixed steps where the whole visit must fit. `GET /appointments/availability` echoes the resolved
+  window, and reports an empty list on a closed day or a day the stylist does not work.
+- Wall-clock hours are converted by `apps/api/src/shared/zoned-time.ts`, which reads the location's
+  IANA zone through `Intl` and resolves the offset twice so a daylight-saving change cannot shift a
+  booking. No date library was added.
+- Guards: a foreign appointment, location, customer, staff member, or service reads as `404`; two
+  overlapping visits for one stylist, a visit inside a recorded absence, an unavailable service, and
+  a service the stylist does not perform read as `409`; a booking with no duration reads as `422`.
+- Status moves follow the shared `appointmentStatusTransitions` map: steps may be skipped — a walk-in
+  goes straight from `SCHEDULED` to `COMPLETED` — nothing moves backwards, and a completed,
+  cancelled, or no-show visit accepts nothing further. Every move appends a row to the visit's own
+  trail, and cancelling also records when and why.
+- Calendar reads: `date` plus `locationId` returns one local day and echoes its window, `from`/`to`
+  returns an instant range, and neither returns the most recent visits, which is what the customer
+  screen reads as visit history.
+- Audit entries for booking, editing, replacing the services, and every status change.
+- Web `Calendar` module: the day's diary beside the booking form and the selected visit, with the day
+  read in the location's zone, the start time picked from the availability endpoint, status actions
+  limited to the moves the API allows, and the status trail on the visit.
+
+Deliberately not in this milestone: a week or month grid, drag-and-drop rescheduling, recurring
+visits, and any public booking page — Phase 1 is staff-operated, so the front desk books. Times
+outside business hours are accepted rather than refused, which [data-model.md](data-model.md)
+records: availability hides them, and a walk-in after closing can still be written down.
+
+Exit criteria met: `apps/api/tests/appointments.test.ts` covers the 401/403/cross-tenant-404 matrix
+for every endpoint, the snapshot stability, the double-booking and absence conflicts, the
+availability cases (a closed day, a non-working day, an existing visit, an absence, and a duration
+that no longer fits), the status matrix with its trail, and the reschedule guards;
+`apps/api/src/shared/zoned-time.test.ts` covers the zone arithmetic including a daylight-saving day;
+`packages/contracts/src/schemas/appointments.test.ts` covers the shared request, query, and read
+shapes; and `npm test`, `npm run lint`, and `npm run build` pass across all three workspaces.
 
 ## 7. Point of sale
 

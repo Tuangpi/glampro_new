@@ -1,4 +1,5 @@
 export * from './schemas/api.js';
+export * from './schemas/appointments.js';
 export * from './schemas/auth.js';
 export * from './schemas/health.js';
 export * from './schemas/organization.js';

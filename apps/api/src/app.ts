@@ -10,6 +10,7 @@ import { logger } from './config/logger.js';
 import { errorHandler, notFoundHandler } from './middleware/error-handler.js';
 import { globalRateLimit } from './middleware/rate-limits.js';
 import { requestContext } from './middleware/request-context.js';
+import { appointmentsRouter } from './modules/appointments/appointments.routes.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import {
   inventoryRouter,
@@ -77,6 +78,7 @@ export const createApp = () => {
   app.use('/api/v1/products', productsRouter);
   app.use('/api/v1/inventory', inventoryRouter);
   app.use('/api/v1/customers', customersRouter);
+  app.use('/api/v1/appointments', appointmentsRouter);
   app.use('/api/v1/staff', staffRouter);
 
   app.use(notFoundHandler);

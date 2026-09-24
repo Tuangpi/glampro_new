@@ -104,6 +104,27 @@ rotated row is superseded by its successor: its access token stops working immed
 is no longer listed as an active session. When a retired token is presented again outside a short
 grace window the whole family is revoked, and signing out revokes the family too.
 
+### Appointments
+
+| Model                      | Purpose                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| `Appointment`              | One visit: location, customer, staff member, status, and its start and end time |
+| `AppointmentService`       | Snapshot of a service on a visit: name, duration, and price at booking time     |
+| `AppointmentStatusHistory` | Append-only trail of status moves, the first row with no previous status        |
+
+`Appointment.endsAt` is written by the API from the summed snapshot durations rather than from live
+`Service` rows, so editing the catalog cannot move an existing booking, and the visit's duration and
+price totals come from the same snapshots. The end time is stored rather than computed so the staff
+overlap check runs against the `[staffProfileId, startsAt, endsAt]` index.
+
+A visit in `SCHEDULED`, `CONFIRMED`, `CHECKED_IN`, or `IN_PROGRESS` holds its window;
+`COMPLETED`, `CANCELLED`, and `NO_SHOW` release it. Two visits for one staff member may not overlap,
+and neither may a visit and a recorded absence; both rules are checked inside the write transaction.
+Times outside the location's business hours or the staff member's week are accepted — the
+availability endpoint simply does not offer them — so a walk-in after closing can still be recorded.
+The status trail is append-only, and a finished visit keeps its notes and its trail while refusing
+to be moved.
+
 ### Platform
 
 | Model      | Purpose                                                              |
@@ -121,7 +142,9 @@ Actions currently written: `auth.registered`, `auth.login`, `auth.login_failed`,
 `catalog.product_category_created`, `catalog.product_category_updated`, `catalog.product_created`,
 `catalog.product_updated`, `inventory.movement_recorded`, `customer.created`, `customer.updated`,
 `customer.note_added`, `staff.profile_created`, `staff.profile_updated`, `staff.services_replaced`,
-`staff.schedule_replaced`, `staff.time_off_recorded`, and `staff.time_off_removed`.
+`staff.schedule_replaced`, `staff.time_off_recorded`, `staff.time_off_removed`,
+`appointment.created`, `appointment.updated`, `appointment.services_replaced`, and
+`appointment.status_changed`.
 
 ## Enumerations
 
@@ -136,6 +159,7 @@ Actions currently written: `auth.registered`, `auth.login`, `auth.login_failed`,
 | `AuditActorType`        | `USER`, `PLATFORM_ADMIN`, `SYSTEM`, `WEBHOOK`                                                        |
 | `InventoryMovementType` | `ADJUST_IN`, `ADJUST_OUT`, `SALE`, `RETURN`, `STOCK_CORRECTION`, `DAMAGE`, `EXPIRY`, `INITIAL_STOCK` |
 | `CustomerGender`        | `FEMALE`, `MALE`, `OTHER`, `UNDISCLOSED`                                                             |
+| `AppointmentStatus`     | `SCHEDULED`, `CONFIRMED`, `CHECKED_IN`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`           |
 
 ## Relationship shape
 
@@ -159,6 +183,11 @@ Organization ──1:n── Customer ──1:n── CustomerNote ──n:1─�
 Organization ──1:n── StaffProfile ──1:1── OrganizationMembership ──n:1── User
 StaffProfile ──1:n── StaffServiceAssignment ──n:1── Service
 StaffProfile ──1:n── StaffSchedule, StaffTimeOff
+
+Organization ──1:n── Appointment ──n:1── Location, Customer, StaffProfile
+Appointment ──1:n── AppointmentService ──n:1── Service
+Appointment ──1:n── AppointmentStatusHistory ──n:1── User (changedBy)
+Appointment ──n:1── User (createdBy)
 ```
 
 Every tenant-owned model either holds `organizationId` directly or reaches it through a parent
@@ -167,31 +196,36 @@ subscriptions, categories, services, products, inventory rows, customers, notes,
 `AuditLog` relations use `SetNull` so history survives.
 
 `InventoryMovement` is never deleted or updated by the API, so the ledger is append-only even
-though the foreign key to `User` uses the default `Restrict` behaviour. `CustomerNote.authorUserId`
-and `StaffTimeOff.createdById` keep the same default for the same reason.
+though the foreign key to `User` uses the default `Restrict` behaviour. `CustomerNote.authorUserId`,
+`StaffTimeOff.createdById`, and the appointment trail's `changedById` keep the same default for the
+same reason.
+
+Appointments reach their location, customer, staff profile, and services through default `Restrict`
+foreign keys: a visit is history, so none of those rows can be deleted out from under it. The status
+trail cascades with its appointment, because a visit that never existed has no trail to keep.
 
 ## Planned models
 
 These are not in the schema yet. They are listed so the tenant columns, snapshotting rules, and
 money conventions are fixed before implementation.
 
-| Area         | Models                                                          |
-| ------------ | --------------------------------------------------------------- |
-| Appointments | `Appointment`, `AppointmentService`, `AppointmentStatusHistory` |
-| Sales        | `Sale`, `SaleLine`, `SalePayment`, `SaleRefund`                 |
+| Area  | Models                                          |
+| ----- | ----------------------------------------------- |
+| Sales | `Sale`, `SaleLine`, `SalePayment`, `SaleRefund` |
 
-Customer visit history is deliberately not a column on `Customer`: it is derived from `Appointment`
-(milestone 6) and `Sale` (milestone 7) once those exist, so the profile shows real activity instead
-of a counter that nothing maintains.
+Customer visit history is deliberately not a column on `Customer`: the profile reads it from
+`Appointment` rows today, and milestone 7 adds `Sale` rows to the same view, so the screen shows
+real activity instead of a counter that nothing maintains.
 
 Conventions that apply to all of them:
 
 1. `organizationId` on every model; `locationId` on the location-owned ones (inventory,
-   appointments, sales). — followed by `InventoryLevel` and `InventoryMovement`; staff schedules are
-   organization-level, so `StaffSchedule` carries no `locationId`.
+   appointments, sales). — followed by `InventoryLevel`, `InventoryMovement`, and `Appointment`;
+   staff schedules are organization-level, so `StaffSchedule` carries no `locationId`.
 2. Historical records snapshot what they need. A `SaleLine` stores the name, unit price, tax, and
-   discount applied at the time of sale, and an `AppointmentService` stores the duration and price
-   used for scheduling. Editing the catalog later must not rewrite history.
+   discount applied at the time of sale, and an `AppointmentService` stores the name, duration, and
+   price used for scheduling. Editing the catalog later must not rewrite history. — followed by
+   `AppointmentService`.
 3. Money is stored as integer minor units in an `Int` column, with the currency taken from the
    location's organization. — followed by `Service.priceInCents`, `Product.priceInCents`, and
    `Product.costInCents`.
@@ -201,4 +235,17 @@ Conventions that apply to all of them:
    across cash, PayNow, and card.
 6. Status fields use enums: appointment status (`SCHEDULED`, `CONFIRMED`, `CHECKED_IN`,
    `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`) and payment method (`CASH`, `PAYNOW`,
-   `CARD`, `OTHER`).
+   `CARD`, `OTHER`). — the appointment statuses are implemented as `AppointmentStatus`.
+7. Historical records snapshot what they need. A `SaleLine` stores the name, unit price, tax, and
+   discount applied at the time of sale, and an `AppointmentService` stores the duration and price
+   used for scheduling. Editing the catalog later must not rewrite history.
+8. Money is stored as integer minor units in an `Int` column, with the currency taken from the
+   location's organization. — followed by `Service.priceInCents`, `Product.priceInCents`, and
+   `Product.costInCents`.
+9. Inventory changes are recorded as movements rather than direct edits, so `InventoryLevel` is a
+   derived current quantity and `InventoryMovement` is the append-only ledger. — implemented.
+10. Sales and refunds carry an explicit `SalePayment` row per tender, allowing split payments
+    across cash, PayNow, and card.
+11. Status fields use enums: appointment status (`SCHEDULED`, `CONFIRMED`, `CHECKED_IN`,
+    `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`) and payment method (`CASH`, `PAYNOW`,
+    `CARD`, `OTHER`).

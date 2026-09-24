@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../src/generated/prisma/client.js';
+import { addDays, zonedPartsAt, zonedTimeToUtc } from '../src/shared/zoned-time.js';
 
 const databaseUrl = process.env.DATABASE_URL ?? 'mysql://glampro:glampro@127.0.0.1:3307/glampro';
 const parsed = new URL(databaseUrl);
@@ -91,6 +92,7 @@ const main = async () => {
   // Fixtures added after the catalog are keyed on natural identifiers and run on
   // every seed, so a database created by an earlier milestone still gains them.
   await seedPeople(organization.id, passwordHash);
+  await seedAppointments(organization.id);
 };
 
 /** The service menu, the retail catalog, and the opening stock count. */
@@ -365,6 +367,146 @@ const seedPeople = async (organizationId: string, passwordHash: string) => {
         },
       });
     }
+  }
+};
+
+/**
+ * A few visits for today and tomorrow, so the calendar opens with a day to look
+ * at. Appointments have no natural unique key, so the guard is a count: a
+ * database that already has visits keeps them.
+ */
+const seedAppointments = async (organizationId: string) => {
+  const existing = await prisma.appointment.count({ where: { organizationId } });
+
+  if (existing > 0) {
+    return;
+  }
+
+  const owner = await prisma.organizationMembership.findFirstOrThrow({
+    where: { organizationId, role: 'ORG_OWNER' },
+    select: { userId: true },
+  });
+
+  const [location, staff, customers, services] = await Promise.all([
+    prisma.location.findFirstOrThrow({
+      where: { organizationId },
+      select: { id: true, timezone: true },
+    }),
+    prisma.staffProfile.findMany({
+      where: { organizationId, isActive: true },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.customer.findMany({
+      where: { organizationId },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.service.findMany({
+      where: { organizationId, isAvailable: true },
+      select: { id: true, name: true, durationMinutes: true, priceInCents: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    }),
+  ]);
+
+  const [firstStaff, secondStaff] = staff;
+  const [firstCustomer, secondCustomer] = customers;
+  const [firstService, secondService] = services;
+
+  if (!firstStaff || !firstCustomer || !firstService) {
+    return;
+  }
+
+  const today = zonedPartsAt(new Date(), location.timezone).date;
+
+  const book = async (input: {
+    staffProfileId: string;
+    customerId: string;
+    status: 'SCHEDULED' | 'CONFIRMED';
+    date: string;
+    time: string;
+    serviceRows: typeof services;
+    notes?: string;
+  }) => {
+    const durationMinutes = input.serviceRows.reduce(
+      (total, service) => total + service.durationMinutes,
+      0,
+    );
+    const startsAt = zonedTimeToUtc(input.date, input.time, location.timezone);
+
+    await prisma.appointment.create({
+      data: {
+        organizationId,
+        locationId: location.id,
+        customerId: input.customerId,
+        staffProfileId: input.staffProfileId,
+        status: input.status,
+        startsAt,
+        endsAt: new Date(startsAt.getTime() + durationMinutes * 60_000),
+        notes: input.notes ?? null,
+        createdById: owner.userId,
+        services: {
+          create: input.serviceRows.map((service, sortOrder) => ({
+            organizationId,
+            serviceId: service.id,
+            name: service.name,
+            durationMinutes: service.durationMinutes,
+            priceInCents: service.priceInCents,
+            sortOrder,
+          })),
+        },
+        statusHistory: {
+          create: [
+            {
+              organizationId,
+              fromStatus: null,
+              toStatus: 'SCHEDULED',
+              changedById: owner.userId,
+            },
+            ...(input.status === 'SCHEDULED'
+              ? []
+              : [
+                  {
+                    organizationId,
+                    fromStatus: 'SCHEDULED' as const,
+                    toStatus: input.status,
+                    changedById: owner.userId,
+                  },
+                ]),
+          ],
+        },
+      },
+    });
+  };
+
+  await book({
+    staffProfileId: firstStaff.id,
+    customerId: firstCustomer.id,
+    status: 'SCHEDULED',
+    date: today,
+    time: '10:00',
+    serviceRows: [firstService],
+    notes: 'Prefers a quiet chair.',
+  });
+
+  if (secondStaff && secondCustomer && secondService) {
+    await book({
+      staffProfileId: secondStaff.id,
+      customerId: secondCustomer.id,
+      status: 'CONFIRMED',
+      date: today,
+      time: '14:00',
+      serviceRows: [firstService, secondService],
+    });
+
+    await book({
+      staffProfileId: secondStaff.id,
+      customerId: firstCustomer.id,
+      status: 'SCHEDULED',
+      date: addDays(today, 1),
+      time: '11:00',
+      serviceRows: [secondService],
+    });
   }
 };
 

@@ -1,8 +1,12 @@
 import {
   acceptedInvitationDataSchema,
   apiErrorSchema,
+  appointmentDataSchema,
+  appointmentServicesDataSchema,
+  appointmentsDataSchema,
   auditLogPageSchema,
   authenticatedSessionDataSchema,
+  availabilityDataSchema,
   businessHoursDataSchema,
   currentUserDataSchema,
   customerDataSchema,
@@ -45,11 +49,18 @@ import {
 } from '@glampro/contracts';
 import type {
   AcceptInvitationRequest,
+  AppointmentDetail,
+  AppointmentStatus,
+  AppointmentSummary,
+  AppointmentWindow,
   AuditLogPage,
   AuthenticatedSession,
+  AvailabilitySlot,
   BusinessHour,
+  ChangeAppointmentStatusRequest,
   ChangeMemberRoleRequest,
   ChangeMemberStatusRequest,
+  CreateAppointmentRequest,
   CreateCustomerNoteRequest,
   CreateLocationRequest,
   CustomerDetail,
@@ -72,6 +83,7 @@ import type {
   ProductRequest,
   ProductSummary,
   RegistrationRequest,
+  ReplaceAppointmentServicesRequest,
   ReplaceStaffServicesRequest,
   ResetPasswordRequest,
   ServiceCategoryRequest,
@@ -86,6 +98,7 @@ import type {
   StaffScheduleSummary,
   StaffTimeOffRequest,
   StaffTimeOffSummary,
+  UpdateAppointmentRequest,
   UpdateCustomerRequest,
   UpdateLocationRequest,
   UpdateOrganizationRequest,
@@ -633,5 +646,109 @@ export const removeStaffTimeOff = async (staffProfileId: string, timeOffId: stri
   staffTimeOffEntryDataSchema.parse(
     await apiRequest<unknown>(`/api/v1/staff/${staffProfileId}/time-off/${timeOffId}`, {
       method: 'DELETE',
+    }),
+  );
+
+type AppointmentListQuery = {
+  date?: string;
+  locationId?: string;
+  staffProfileId?: string;
+  customerId?: string;
+  status?: AppointmentStatus;
+  limit?: number;
+};
+
+type AvailabilityQuery = {
+  locationId: string;
+  staffProfileId: string;
+  date: string;
+  serviceIds?: string[];
+  durationMinutes?: number;
+  slotMinutes?: number;
+};
+
+/** Availability takes its ids as one comma-separated value, like the API reads. */
+const availabilityQueryOf = (query: AvailabilityQuery) => {
+  const search = new URLSearchParams({
+    locationId: query.locationId,
+    staffProfileId: query.staffProfileId,
+    date: query.date,
+  });
+
+  if (query.serviceIds && query.serviceIds.length > 0) {
+    search.set('serviceIds', query.serviceIds.join(','));
+  }
+
+  if (query.durationMinutes !== undefined) {
+    search.set('durationMinutes', String(query.durationMinutes));
+  }
+
+  if (query.slotMinutes !== undefined) {
+    search.set('slotMinutes', String(query.slotMinutes));
+  }
+
+  return search;
+};
+
+/** Appointments: the calendar, a day of slots, and the booking writes. */
+
+export const fetchAppointments = async (
+  query: AppointmentListQuery = {},
+): Promise<{ appointments: AppointmentSummary[]; window: AppointmentWindow | null }> =>
+  appointmentsDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/appointments${queryStringOf(query)}`),
+  );
+
+export const fetchAppointment = async (
+  appointmentId: string,
+): Promise<{ appointment: AppointmentDetail }> =>
+  appointmentDataSchema.parse(await apiRequest<unknown>(`/api/v1/appointments/${appointmentId}`));
+
+export const fetchAvailability = async (
+  query: AvailabilityQuery,
+): Promise<{
+  date: string;
+  timezone: string;
+  window: AppointmentWindow | null;
+  slots: AvailabilitySlot[];
+}> =>
+  availabilityDataSchema.parse(
+    await apiRequest<unknown>(
+      `/api/v1/appointments/availability?${availabilityQueryOf(query).toString()}`,
+    ),
+  );
+
+export const createAppointment = async (input: CreateAppointmentRequest) =>
+  appointmentDataSchema.parse(
+    await apiRequest<unknown>('/api/v1/appointments', { method: 'POST', body: input }),
+  );
+
+export const updateAppointment = async (appointmentId: string, input: UpdateAppointmentRequest) =>
+  appointmentDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/appointments/${appointmentId}`, {
+      method: 'PATCH',
+      body: input,
+    }),
+  );
+
+export const replaceAppointmentServices = async (
+  appointmentId: string,
+  input: ReplaceAppointmentServicesRequest,
+) =>
+  appointmentServicesDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/appointments/${appointmentId}/services`, {
+      method: 'PUT',
+      body: input,
+    }),
+  );
+
+export const changeAppointmentStatus = async (
+  appointmentId: string,
+  input: ChangeAppointmentStatusRequest,
+) =>
+  appointmentDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/appointments/${appointmentId}/status`, {
+      method: 'PATCH',
+      body: input,
     }),
   );

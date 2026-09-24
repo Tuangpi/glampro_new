@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import {
   createCustomerNoteRequestSchema,
@@ -6,13 +6,20 @@ import {
   updateCustomerRequestSchema,
 } from '@glampro/contracts';
 import type {
+  AppointmentSummary,
   CustomerDetail,
   CustomerGender,
   CustomerSummary,
   UpdateCustomerRequest,
 } from '@glampro/contracts';
-import { apiErrorMessage, createCustomerNote, updateCustomer } from '../../lib/api';
-import { formatDate, formatDateTime } from '../../lib/format';
+import {
+  apiErrorMessage,
+  createCustomerNote,
+  fetchAppointments,
+  updateCustomer,
+} from '../../lib/api';
+import { formatDate, formatDateTime, formatSgd } from '../../lib/format';
+import { useAuth } from '../auth/useAuth';
 import {
   Field,
   SectionCard,
@@ -20,6 +27,11 @@ import {
   inputClass,
   primaryButtonClass,
 } from '../shared/FormControls';
+import {
+  appointmentStatusLabels,
+  appointmentStatusTone,
+  staffNameOf,
+} from '../appointments/appointmentView';
 
 const genderLabels: Record<CustomerGender, string> = {
   FEMALE: 'Female',
@@ -81,9 +93,10 @@ const displayNameOf = (customer: CustomerDetail) =>
   [customer.firstName, customer.lastName].filter(Boolean).join(' ');
 
 /**
- * One customer in full: the editable profile on top, the append-only note
- * timeline underneath. A member without `customers.manage` reads both and edits
- * neither, so the same screen serves the front desk and a stylist.
+ * One customer in full: the editable profile on top, the visit history taken
+ * from their appointments, and the append-only note timeline underneath. A
+ * member without `customers.manage` reads all of it and edits none, so the same
+ * screen serves the front desk and a stylist.
  */
 export const CustomerDetailSection = ({
   customer,
@@ -94,7 +107,11 @@ export const CustomerDetailSection = ({
   canManage: boolean;
   onChanged: () => void;
 }) => {
+  const { hasPermission } = useAuth();
+  const canReadVisits = hasPermission('appointments.read');
+
   const [form, setForm] = useState(() => customerFormFrom(customer));
+  const [visits, setVisits] = useState<AppointmentSummary[] | null>(null);
   const [noteBody, setNoteBody] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [noteError, setNoteError] = useState<string | null>(null);
@@ -106,6 +123,32 @@ export const CustomerDetailSection = ({
     <K extends keyof CustomerForm>(key: K) =>
     (value: CustomerForm[K]) =>
       setForm((current) => ({ ...current, [key]: value }));
+
+  // Visit history is derived from appointments: the customer row only has notes.
+  useEffect(() => {
+    if (!canReadVisits) {
+      return;
+    }
+
+    let active = true;
+
+    fetchAppointments({ customerId: customer.id, limit: 20 })
+      .then((data) => {
+        if (active) {
+          setVisits(data.appointments);
+        }
+      })
+      .catch((loadError: unknown) => {
+        if (active) {
+          setVisits([]);
+          setError(apiErrorMessage(loadError));
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [canReadVisits, customer.id]);
 
   const handleSave = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -339,6 +382,48 @@ export const CustomerDetailSection = ({
                   {' · '}
                   {formatDateTime(note.createdAt)}
                 </p>
+              </li>
+            ))}
+          </ol>
+        )}
+      </SectionCard>
+      <SectionCard
+        title="Visit history"
+        description="Derived from appointments; the point-of-sale sales list joins this in a later milestone."
+      >
+        {!canReadVisits ? (
+          <p className="text-xs font-bold text-muted">
+            The appointments.read permission is needed to see visit history.
+          </p>
+        ) : visits === null ? (
+          <p className="text-xs font-bold text-muted">Loading visits…</p>
+        ) : visits.length === 0 ? (
+          <p className="text-xs font-bold text-muted">No visits recorded yet.</p>
+        ) : (
+          <ol className="flex flex-col gap-3">
+            {visits.map((visit) => (
+              <li
+                key={visit.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-line bg-white px-3 py-2.5"
+              >
+                <span className="flex min-w-0 flex-col">
+                  <span className="text-xs font-extrabold">
+                    {formatDateTime(visit.startsAt)} · {staffNameOf(visit.staff)}
+                  </span>
+                  <span className="text-[11px] font-bold text-muted">
+                    {visit.services.map((service) => service.name).join(' + ') || 'No services'}
+                  </span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="text-[11px] font-extrabold">
+                    {formatSgd(visit.priceInCents)}
+                  </span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${appointmentStatusTone(visit.status)}`}
+                  >
+                    {appointmentStatusLabels[visit.status]}
+                  </span>
+                </span>
               </li>
             ))}
           </ol>

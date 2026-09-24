@@ -8,13 +8,13 @@ reference for business rules and workflow; no code is shared.
 
 ## Status
 
-Milestones 1 to 5 are in place; see [docs/milestones.md](docs/milestones.md) for the plan.
+Milestones 1 to 6 are in place; see [docs/milestones.md](docs/milestones.md) for the plan.
 
 - npm workspaces monorepo with the web app, API, shared contracts, and shared tooling config
 - Express 5 + TypeScript API with security middleware, request correlation, and a standard
   response envelope
 - Prisma schema covering tenancy, identity, sessions, invitations, subscriptions, catalog,
-  inventory, customers, staff, and audit logs
+  inventory, customers, staff, appointments, and audit logs
 - Authentication: registration, login, refresh-token rotation with reuse detection, logout,
   session listing and revocation, password reset, and email verification
 - `authenticate`, `withTenant`, `requirePermission`, `validate`, and CSRF guards for every module
@@ -26,13 +26,15 @@ Milestones 1 to 5 are in place; see [docs/milestones.md](docs/milestones.md) for
 - Customers and staff: tenant-scoped customer profiles with an append-only note timeline, staff
   profiles attached to active memberships, staff-to-service assignments, weekly schedules, and time
   off
+- Appointments: a day calendar with per-visit service snapshots, availability derived from business
+  hours and the staff week, guarded status transitions, and a per-visit status trail
 - React 19 + TypeScript + Vite + Tailwind shell with a session provider, protected routes, and
   permission-aware navigation
 - Zod contracts shared between the API and the web client
 - Vitest suites for the API, the web app, and the contracts, including tenant-isolation tests
 
-The appointments, point-of-sale, and reports modules are intentionally not implemented yet. Their
-routes exist as placeholders and will be built against the foundations described in
+The point-of-sale and reports modules are intentionally not implemented yet. Their routes exist as
+placeholders and will be built against the foundations described in
 [docs/architecture.md](docs/architecture.md).
 
 ## Stack
@@ -272,26 +274,33 @@ way. `SALE` rows are reserved for the point of sale.
 
 ## Customers and staff
 
-| Method   | Endpoint                                | Purpose                                | Gate               |
-| -------- | --------------------------------------- | -------------------------------------- | ------------------ |
-| `GET`    | `/api/v1/customers`                     | Search the customer book               | `customers.read`   |
-| `POST`   | `/api/v1/customers`                     | Create a customer profile              | `customers.manage` |
-| `GET`    | `/api/v1/customers/:id`                 | Read one customer with their notes     | `customers.read`   |
-| `PATCH`  | `/api/v1/customers/:id`                 | Update a profile                       | `customers.manage` |
-| `GET`    | `/api/v1/customers/:id/notes`           | Read the note timeline                 | `customers.read`   |
-| `POST`   | `/api/v1/customers/:id/notes`           | Append a note                          | `customers.manage` |
-| `GET`    | `/api/v1/staff`                         | List the roster, optionally by service | `staff.read`       |
-| `POST`   | `/api/v1/staff`                         | Create a profile for an active member  | `staff.manage`     |
-| `GET`    | `/api/v1/staff/candidates`              | Active members without a profile       | `staff.manage`     |
-| `GET`    | `/api/v1/staff/:id`                     | Read a profile with services and week  | `staff.read`       |
-| `PATCH`  | `/api/v1/staff/:id`                     | Update job title, colour, or dates     | `staff.manage`     |
-| `GET`    | `/api/v1/staff/:id/services`            | Read the assigned services             | `staff.read`       |
-| `PUT`    | `/api/v1/staff/:id/services`            | Replace the assignment set             | `staff.manage`     |
-| `GET`    | `/api/v1/staff/:id/schedule`            | Read the weekly schedule               | `staff.read`       |
-| `PUT`    | `/api/v1/staff/:id/schedule`            | Replace the whole week                 | `staff.manage`     |
-| `GET`    | `/api/v1/staff/:id/time-off`            | List recorded absences                 | `staff.read`       |
-| `POST`   | `/api/v1/staff/:id/time-off`            | Record an absence                      | `staff.manage`     |
-| `DELETE` | `/api/v1/staff/:id/time-off/:timeOffId` | Remove an absence                      | `staff.manage`     |
+| Method   | Endpoint                                | Purpose                                | Gate                  |
+| -------- | --------------------------------------- | -------------------------------------- | --------------------- |
+| `GET`    | `/api/v1/customers`                     | Search the customer book               | `customers.read`      |
+| `POST`   | `/api/v1/customers`                     | Create a customer profile              | `customers.manage`    |
+| `GET`    | `/api/v1/customers/:id`                 | Read one customer with their notes     | `customers.read`      |
+| `PATCH`  | `/api/v1/customers/:id`                 | Update a profile                       | `customers.manage`    |
+| `GET`    | `/api/v1/customers/:id/notes`           | Read the note timeline                 | `customers.read`      |
+| `POST`   | `/api/v1/customers/:id/notes`           | Append a note                          | `customers.manage`    |
+| `GET`    | `/api/v1/staff`                         | List the roster, optionally by service | `staff.read`          |
+| `POST`   | `/api/v1/staff`                         | Create a profile for an active member  | `staff.manage`        |
+| `GET`    | `/api/v1/staff/candidates`              | Active members without a profile       | `staff.manage`        |
+| `GET`    | `/api/v1/staff/:id`                     | Read a profile with services and week  | `staff.read`          |
+| `PATCH`  | `/api/v1/staff/:id`                     | Update job title, colour, or dates     | `staff.manage`        |
+| `GET`    | `/api/v1/staff/:id/services`            | Read the assigned services             | `staff.read`          |
+| `PUT`    | `/api/v1/staff/:id/services`            | Replace the assignment set             | `staff.manage`        |
+| `GET`    | `/api/v1/staff/:id/schedule`            | Read the weekly schedule               | `staff.read`          |
+| `PUT`    | `/api/v1/staff/:id/schedule`            | Replace the whole week                 | `staff.manage`        |
+| `GET`    | `/api/v1/staff/:id/time-off`            | List recorded absences                 | `staff.read`          |
+| `POST`   | `/api/v1/staff/:id/time-off`            | Record an absence                      | `staff.manage`        |
+| `DELETE` | `/api/v1/staff/:id/time-off/:timeOffId` | Remove an absence                      | `staff.manage`        |
+| `GET`    | `/api/v1/appointments`                  | Read the calendar or visit history     | `appointments.read`   |
+| `GET`    | `/api/v1/appointments/availability`     | Free slots for one stylist and day     | `appointments.read`   |
+| `GET`    | `/api/v1/appointments/:id`              | Read one visit with its status trail   | `appointments.read`   |
+| `POST`   | `/api/v1/appointments`                  | Book a visit                           | `appointments.manage` |
+| `PATCH`  | `/api/v1/appointments/:id`              | Reschedule, change stylist, or note    | `appointments.manage` |
+| `PUT`    | `/api/v1/appointments/:id/services`     | Replace the visit's services           | `appointments.manage` |
+| `PATCH`  | `/api/v1/appointments/:id/status`       | Move the visit to another status       | `appointments.manage` |
 
 A customer's email, phone, and member number are each unique per organization when present, so the
 same person can be recorded by two tenants, while a duplicate inside one tenant reads as `409`.
@@ -301,6 +310,18 @@ staff profile is a 1:1 extension of an `ACTIVE` organization membership — crea
 `GET /staff/candidates` exists because `staff.manage` does not imply `members.manage`: a manager
 needs the member list to start a profile. Service assignments and the weekly schedule are replaced
 as whole sets, and a foreign profile, service, or membership ID reads as `404`.
+
+An appointment carries one stylist and one or more services, each snapshotted with the name,
+duration, and price used at booking time, so a later catalog edit cannot move or reprice it. The
+visit's end time comes from those snapshots. `GET /appointments/availability` intersects the
+location's business hours with the stylist's week, subtracts recorded absences and visits that still
+hold their slot, and offers the remainder in fixed steps where the whole visit fits. Two overlapping
+visits for one stylist, and a visit inside a recorded absence, read as `409`; times outside business
+hours are accepted, because a walk-in after closing still has to be written down. Status moves follow
+the transitions declared in `@glampro/contracts`, skipping ahead is allowed (a walk-in can be booked
+and completed in one step), and nothing moves backwards out of `COMPLETED`, `CANCELLED`, or
+`NO_SHOW`. Times are read and written in the location's zone rather than the caller's, using
+`apps/api/src/shared/zoned-time.ts`.
 
 ## Documentation
 
