@@ -21,6 +21,7 @@ import {
 } from './modules/catalog/catalog.routes.js';
 import { customersRouter } from './modules/customers/customers.routes.js';
 import { healthRouter } from './modules/health/health.routes.js';
+import { dashboardRouter, reportsRouter } from './modules/reports/reports.routes.js';
 import { staffRouter } from './modules/staff/staff.routes.js';
 import { salesRouter } from './modules/sales/sales.routes.js';
 import { auditRouter } from './modules/tenancy/audit.routes.js';
@@ -82,6 +83,8 @@ export const createApp = () => {
   app.use('/api/v1/appointments', appointmentsRouter);
   app.use('/api/v1/staff', staffRouter);
   app.use('/api/v1/sales', salesRouter);
+  app.use('/api/v1/dashboard', dashboardRouter);
+  app.use('/api/v1/reports', reportsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -5,14 +5,15 @@ import {
   formatDate,
   formatDateTime,
   formatDateTimeInZone,
-  formatSgd,
+  formatMoney,
   formatTimeInZone,
   zonedDateOnly,
 } from './format';
 
-describe('formatSgd', () => {
-  it('formats integer minor units as Singapore dollars', () => {
-    expect(formatSgd(14600)).toBe('$146');
+describe('formatMoney', () => {
+  it('formats the selected location currency', () => {
+    expect(formatMoney(14600, 'SGD')).toBe('$146');
+    expect(formatMoney(14600, 'USD')).toBe('US$146');
   });
 });
 

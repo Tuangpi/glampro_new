@@ -148,6 +148,14 @@ availability endpoint simply does not offer them — so a walk-in after closing 
 The status trail is append-only, and a finished visit keeps its notes and its trail while refusing
 to be moved.
 
+### Reporting read model
+
+Reports add no persisted model. Appointment, sale, payment, refund, and attributed service-line rows
+remain the source of truth, while the reports service projects them for one location and a bounded local
+date range. Composite indexes on `(organizationId, locationId, event time)` support the common reads;
+payment and refund indexes use `(organizationId, createdAt)` because each report follows its own event
+time. Historical staff with report activity stays visible even after leaving the active roster.
+
 ### Platform
 
 | Model      | Purpose                                                              |
@@ -243,6 +251,12 @@ earlier modules. A sale's `receiptNumber` is unique within an organization and l
 `receiptCode` freezes the prefix used at the time. Catalog edits never rewrite `SaleLine` snapshots.
 Payments are explicit rows, so a sale can be split across methods without storing payment credentials.
 Inventory movements may point back to the sale and line that caused them, but remain append-only.
+
+For reports, gross and net sales are derived from non-voided `Sale` rows. Net subtracts the current
+`refundedInCents`; the payment report instead uses `SalePayment.createdAt` and `SaleRefund.createdAt` so
+the two event streams are period-correct independently. Staff revenue is the gross total of service
+lines carrying that `staffProfileId`. Because `SaleRefundLine` records returned quantity but no monetary
+allocation, refund money is not assigned to a staff member.
 
 Customer visit history is derived from appointments and sales rather than copied onto `Customer`.
 A sale may be a walk-in with no customer or appointment; when either link is supplied, the API checks

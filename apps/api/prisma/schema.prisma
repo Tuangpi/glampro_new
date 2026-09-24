@@ -619,6 +619,7 @@ model Appointment {
   sales              Sale[]
 
   @@index([organizationId, startsAt])
+  @@index([organizationId, locationId, startsAt])
   @@index([organizationId, status])
   @@index([locationId, startsAt])
   @@index([staffProfileId, startsAt, endsAt])
@@ -727,6 +728,7 @@ model Sale {
 
   @@unique([organizationId, locationId, receiptNumber])
   @@index([organizationId, createdAt])
+  @@index([organizationId, locationId, createdAt])
   @@index([locationId, createdAt])
   @@index([customerId, createdAt])
   @@index([status])
@@ -762,6 +764,7 @@ model SaleLine {
   @@index([serviceId])
   @@index([productId])
   @@index([staffProfileId])
+  @@index([organizationId, staffProfileId])
 }
 
 /** One row per tender; a sale may be paid by more than one method. */
@@ -777,6 +780,7 @@ model SalePayment {
   sale           Sale         @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
   @@index([organizationId, saleId])
+  @@index([organizationId, createdAt])
   @@index([method])
 }
 
@@ -797,6 +801,7 @@ model SaleRefund {
   lines          SaleRefundLine[]
 
   @@index([organizationId, saleId])
+  @@index([organizationId, createdAt])
   @@index([saleId, createdAt])
 }
 

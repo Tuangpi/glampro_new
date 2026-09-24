@@ -2,6 +2,7 @@ import {
   acceptedInvitationDataSchema,
   apiErrorSchema,
   appointmentDataSchema,
+  appointmentReportResponseDataSchema,
   appointmentServicesDataSchema,
   appointmentsDataSchema,
   auditLogPageSchema,
@@ -14,6 +15,9 @@ import {
   customerNoteDataSchema,
   customerNotesDataSchema,
   customersDataSchema,
+  dashboardResponseDataSchema,
+  dashboardQuerySchema,
+  reportQuerySchema,
   emailVerifiedDataSchema,
   healthResponseSchema,
   inventoryLevelsDataSchema,
@@ -28,12 +32,14 @@ import {
   membersDataSchema,
   organizationSettingsSchema,
   passwordResetCompletedDataSchema,
+  paymentReportResponseDataSchema,
   passwordResetRequestedDataSchema,
   productCategoriesDataSchema,
   productCategoryDataSchema,
   productDataSchema,
   productsDataSchema,
   refreshSessionDataSchema,
+  revenueReportResponseDataSchema,
   saleDataSchema,
   salesDataSchema,
   serviceCategoriesDataSchema,
@@ -48,6 +54,7 @@ import {
   staffServicesDataSchema,
   staffTimeOffDataSchema,
   staffTimeOffEntryDataSchema,
+  staffReportResponseDataSchema,
 } from '@glampro/contracts';
 import type {
   AcceptInvitationRequest,
@@ -71,8 +78,15 @@ import type {
   CustomerNoteSummary,
   CustomerRequest,
   CustomerSummary,
+  DashboardData,
+  DashboardQuery,
   EmailVerificationRequest,
   ForgotPasswordRequest,
+  AppointmentReportData,
+  PaymentReportData,
+  ReportQuery,
+  RevenueReportData,
+  StaffReportData,
   HealthResponse,
   InventoryLevelSummary,
   InventoryMovementRequest,
@@ -790,3 +804,50 @@ export const refundSale = async (
       body: input,
     }),
   );
+
+/** Live management dashboard and location-scoped reports. */
+
+const validatedDashboardQuery = (query: DashboardQuery) => dashboardQuerySchema.parse(query);
+const validatedReportQuery = (query: ReportQuery) => reportQuerySchema.parse(query);
+
+export const fetchDashboard = async (query: DashboardQuery): Promise<DashboardData> => {
+  const parsed = validatedDashboardQuery(query);
+  const { dashboard } = dashboardResponseDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/dashboard${queryStringOf(parsed)}`),
+  );
+  return dashboard;
+};
+
+export const fetchRevenueReport = async (query: ReportQuery): Promise<RevenueReportData> => {
+  const parsed = validatedReportQuery(query);
+  const { revenue } = revenueReportResponseDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/reports/revenue${queryStringOf(parsed)}`),
+  );
+  return revenue;
+};
+
+export const fetchAppointmentReport = async (
+  query: ReportQuery,
+): Promise<AppointmentReportData> => {
+  const parsed = validatedReportQuery(query);
+  const { appointments } = appointmentReportResponseDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/reports/appointments${queryStringOf(parsed)}`),
+  );
+  return appointments;
+};
+
+export const fetchPaymentReport = async (query: ReportQuery): Promise<PaymentReportData> => {
+  const parsed = validatedReportQuery(query);
+  const { payments } = paymentReportResponseDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/reports/payments${queryStringOf(parsed)}`),
+  );
+  return payments;
+};
+
+export const fetchStaffReport = async (query: ReportQuery): Promise<StaffReportData> => {
+  const parsed = validatedReportQuery(query);
+  const { staff } = staffReportResponseDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/reports/staff${queryStringOf(parsed)}`),
+  );
+  return staff;
+};

@@ -1,7 +1,9 @@
-export const formatSgd = (amountInCents: number) =>
+export const formatSgd = (amountInCents: number) => formatMoney(amountInCents, 'SGD');
+
+export const formatMoney = (amountInCents: number, currency: string) =>
   new Intl.NumberFormat('en-SG', {
     style: 'currency',
-    currency: 'SGD',
+    currency,
     maximumFractionDigits: 0,
   }).format(amountInCents / 100);
 

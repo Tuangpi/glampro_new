@@ -12,6 +12,7 @@ import type { Permission } from '@glampro/contracts';
 import { AppointmentsPage } from '../features/appointments/AppointmentsPage';
 import { CatalogPage } from '../features/catalog/CatalogPage';
 import { CustomersPage } from '../features/customers/CustomersPage';
+import { ReportsPage } from '../features/reports/ReportsPage';
 import { SettingsPage } from '../features/settings/SettingsPage';
 import { StaffPage } from '../features/staff/StaffPage';
 import { SalesPage } from '../features/sales/SalesPage';
@@ -94,6 +95,7 @@ export const moduleRoutes: ModuleRoute[] = [
     permission: 'reports.view',
     group: 'main',
     icon: BarChart3,
+    element: ReportsPage,
   },
   {
     path: 'settings',

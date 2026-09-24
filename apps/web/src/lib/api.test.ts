@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiRequest, setSessionRefreshHandler } from './api';
+import {
+  ApiError,
+  apiRequest,
+  fetchDashboard,
+  fetchRevenueReport,
+  setSessionRefreshHandler,
+} from './api';
 
 const meta = { requestId: 'req_test', timestamp: '2026-09-23T02:00:00.000Z' };
 
@@ -20,6 +26,54 @@ const stubFetch = (...responses: Response[]) => {
 afterEach(() => {
   setSessionRefreshHandler(null);
   vi.unstubAllGlobals();
+});
+
+const DashboardPayload = {
+  period: {
+    location: {
+      id: 'loc_1',
+      organizationId: 'org_1',
+      name: 'Tanjong Pagar',
+      code: 'TPG',
+      timezone: 'Asia/Singapore',
+      currency: 'SGD',
+      isActive: true,
+    },
+    from: '2026-09-24',
+    to: '2026-09-24',
+    startsAt: '2026-09-23T16:00:00.000Z',
+    endsAt: '2026-09-24T16:00:00.000Z',
+  },
+  kpis: {
+    netSalesInCents: 8100,
+    appointmentCount: 1,
+    uniquePayingCustomers: 1,
+    averageTicketInCents: 8100,
+  },
+  appointments: [],
+  recentSales: [],
+  topItems: [],
+};
+
+describe('reporting API client', () => {
+  it('serializes and unwraps the named dashboard response', async () => {
+    const fetchMock = stubFetch(jsonResponse(200, { data: { dashboard: DashboardPayload }, meta }));
+
+    await expect(fetchDashboard({ locationId: 'loc_1', date: '2026-09-24' })).resolves.toEqual(
+      DashboardPayload,
+    );
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/v1/dashboard?locationId=loc_1&date=2026-09-24');
+  });
+
+  it('validates report ranges before making a request', async () => {
+    const fetchMock = stubFetch();
+
+    await expect(
+      fetchRevenueReport({ locationId: 'loc_1', from: '2026-09-25', to: '2026-09-24' }),
+    ).rejects.toThrow();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 describe('apiRequest', () => {

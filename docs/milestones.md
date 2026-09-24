@@ -13,7 +13,7 @@ update before the next one starts, and each builds on the foundations described 
 | 5   | Customers and staff         | Done    |
 | 6   | Appointments                | Done    |
 | 7   | Point of sale               | Done    |
-| 8   | Reports and dashboard       | Planned |
+| 8   | Reports and dashboard       | Done    |
 | 9   | Billing and platform admin  | Planned |
 
 ## 1. Foundation — done
@@ -170,10 +170,29 @@ receipt shapes; and `apps/web/src/features/sales/saleView.test.ts` covers cart t
 formatting. The POS intentionally records card/PayNow terminal events only and does not integrate a
 payment gateway.
 
-## 8. Reports and dashboard
+## 8. Reports and dashboard — done
 
-Live dashboard KPIs and revenue, appointment, payment, and staff reporting, replacing the sample
-figures currently shown on the dashboard.
+- Shared, bounded report queries and response contracts for a dashboard day and inclusive ranges of up
+  to 366 local calendar days.
+- Tenant- and location-scoped live dashboard KPIs, diary, receipts, and top items behind
+  `reports.view`, plus a reduced operational home for roles that do not hold that permission.
+- Revenue reporting for non-voided gross sales, current refunds, net sales, average ticket, daily trend,
+  and top snapshotted items.
+- Appointment outcomes, rates, service demand, booked/completed minutes, and peak local hours.
+- Event-time tender and refund movement by payment method, including negative method totals when refunds
+  exceed tenders in the selected period.
+- Staff appointment, customer, service-time, and explicitly attributed gross service-line reporting.
+- Responsive reports UI with location/date controls, Today/7/30/90-day presets, charts, tables, and
+  loading, error, and empty states. No chart dependency was added.
+
+Deliberately not in this milestone: exports, scheduled reports, forecasts, commission/payroll rules,
+persisted report snapshots, and aggregation across locations with different currencies.
+
+Exit criteria met: `apps/api/tests/reports.test.ts` covers the 401/403/cross-tenant-404 matrix,
+range validation, UTC-boundary handling, void and partial-refund revenue, split tenders and refund methods,
+appointment outcomes, and staff attribution; `packages/contracts/src/schemas/reports.test.ts` and
+`apps/web/src/features/reports/reportView.test.ts` cover shared shapes, presets, chart scaling, and
+duration formatting. The focused API/web/contracts suites and the repository quality gates pass.
 
 ## 9. Billing and platform admin
 

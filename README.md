@@ -8,13 +8,13 @@ reference for business rules and workflow; no code is shared.
 
 ## Status
 
-Milestones 1 to 7 are in place; see [docs/milestones.md](docs/milestones.md) for the plan.
+Milestones 1 to 8 are in place; see [docs/milestones.md](docs/milestones.md) for the plan.
 
 - npm workspaces monorepo with the web app, API, shared contracts, and shared tooling config
 - Express 5 + TypeScript API with security middleware, request correlation, and a standard
   response envelope
 - Prisma schema covering tenancy, identity, sessions, invitations, subscriptions, catalog,
-  inventory, customers, staff, appointments, and audit logs
+  inventory, customers, staff, appointments, sales, payments, refunds, and audit logs
 - Authentication: registration, login, refresh-token rotation with reuse detection, logout,
   session listing and revocation, password reset, and email verification
 - `authenticate`, `withTenant`, `requirePermission`, `validate`, and CSRF guards for every module
@@ -30,13 +30,12 @@ Milestones 1 to 7 are in place; see [docs/milestones.md](docs/milestones.md) for
   hours and the staff week, guarded status transitions, and a per-visit status trail
 - Point of sale: mixed service/product carts, optional customer and staff attribution, split cash,
   PayNow, card, and other payments, per-location receipts, inventory-backed sales, and refunds/voids
+- Reports and dashboard: live location-day KPIs plus revenue, appointment, payment, and staff reports,
+  all calculated from tenant-scoped transaction history in the location's time zone
 - React 19 + TypeScript + Vite + Tailwind shell with a session provider, protected routes, and
   permission-aware navigation
 - Zod contracts shared between the API and the web client
 - Vitest suites for the API, the web app, and the contracts, including tenant-isolation tests
-
-The reports module is intentionally not implemented yet. Its route remains a placeholder and will be
-built against the completed sales history described in [docs/architecture.md](docs/architecture.md).
 
 ## Stack
 
@@ -344,6 +343,34 @@ lets the API remain authoritative for prices, discounts, payment totals, stock, 
 Tracked products create `SALE` inventory movements when sold and `RETURN` movements when voided or
 refunded. Full refunds automatically return every remaining tracked product; partial refunds can
 return selected quantities through the API contract.
+
+## Reports and dashboard
+
+Reporting is live rather than snapshotted. Every read is scoped to one active location and a bounded
+inclusive local date range of at most 366 days; the API converts the range through that location's
+IANA time zone before querying UTC instants.
+
+| Method | Endpoint                       | Purpose                                              | Gate           |
+| ------ | ------------------------------ | ---------------------------------------------------- | -------------- |
+| `GET`  | `/api/v1/dashboard`            | Live KPIs, diary, receipts, and top items for a day  | `reports.view` |
+| `GET`  | `/api/v1/reports/revenue`      | Gross/net sales, refunds, average ticket, and trends | `reports.view` |
+| `GET`  | `/api/v1/reports/appointments` | Outcomes, rates, service demand, and peak hours      | `reports.view` |
+| `GET`  | `/api/v1/reports/payments`     | Tender and refund movement by payment method         | `reports.view` |
+| `GET`  | `/api/v1/reports/staff`        | Appointments, service time, customers, and sales     | `reports.view` |
+
+Voided sales are excluded. Gross sales are the recorded non-voided sale totals; net sales subtract each
+sale's currently recorded refunded amount, and average ticket divides net sales by the non-voided sale
+count. The payment report is event-based: tenders use `SalePayment.createdAt`, refunds use
+`SaleRefund.createdAt`, and a method can be negative when refunds in the period exceed its tenders.
+Staff sales count gross service lines explicitly attributed to a profile; refund money is not allocated
+to staff because the current refund ledger does not assign a monetary amount or employee to a line.
+
+Owners, administrators, and managers receive the full dashboard. Roles without `reports.view` keep an
+operational home containing the day's diary and recent receipts through their existing appointment and
+sales permissions, without salon-wide financial aggregates. The reports page has Today, 7-day, 30-day,
+and 90-day presets, manual dates, responsive charts, and explicit loading, empty, and error states.
+Exports, forecasting, persisted report snapshots, and cross-location currency aggregation are not part
+of this milestone.
 
 ## Documentation
 

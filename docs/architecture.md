@@ -87,6 +87,8 @@ Rules:
   rather than reading it from global state.
 - Services never import from another module's routes.
 - Prisma is used only inside services and the database layer, never in routes.
+- The reports service is a read model over the existing appointment, sale, payment, refund, and staff
+  ledgers. It introduces no report tables and recomputes each bounded range from transaction history.
 
 ## Data access
 
@@ -110,6 +112,19 @@ value fails at startup instead of on the first query.
 The database name is passed to the adapter as part of the pool config, not only as the adapter
 option: `@prisma/adapter-mariadb` uses the option for connection metadata, so a session without
 the pool-level value can run model queries but fails raw SQL with `No database selected`.
+
+## Reporting semantics
+
+Reports are location-scoped because locations own both the reporting time zone and currency. A requested
+inclusive date range is converted to `[start of the first local day, start of the day after the last
+local day)` with the existing zoned-time helpers. The shared contract caps the range at 366 days, and
+composite indexes lead with `organizationId` for tenant isolation before location and event time.
+
+Revenue is derived from non-voided sales. Gross is the sum of sale totals; net subtracts the current
+`refundedInCents` on those sales. Payment reporting instead follows event time independently for payment
+and refund rows, so a tender and its later refund can fall into different report periods. Staff sales
+use only service lines with an explicit `staffProfileId`; no commission or refund allocation is inferred.
+The report module is a read model and does not duplicate transactional history into aggregate tables.
 
 ## Security controls
 
