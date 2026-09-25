@@ -200,7 +200,8 @@ The visual direction follows the design handoff. Tokens live in `apps/web/tailwi
   `npm run db:migrate -- --name <migration-name>`.
 - Email delivery runs through a development log transport. A provider implementation behind
   `EmailTransport` is required before verification and reset links reach real inboxes.
-- Stripe Billing is modelled but not implemented; `STRIPE_*` variables are optional.
+- Stripe Billing is implemented behind the `STRIPE_*` configuration and a signed webhook endpoint; live
+  payment processing still requires a real Stripe account, price, and webhook registration.
 - Rate limiting is in-memory, so it must move to a shared store before running multiple API
   instances.
 - Integration tests need the `glampro_test` database and a reachable MySQL server; they are the

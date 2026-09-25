@@ -11,6 +11,7 @@ import {
   loginUser,
   refreshSession,
   registerOrganization,
+  setAccessTokenHandler,
   setSessionRefreshHandler,
   signOut,
 } from '../../lib/api';
@@ -70,8 +71,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     void loadSession();
   }, [loadSession]);
 
-  /** API calls that race the access token expiry renew it through this handler. */
+  /** API calls use the current bearer token; refresh renews it when necessary. */
   useEffect(() => {
+    setAccessTokenHandler(() => state.accessToken);
     setSessionRefreshHandler(async () => {
       try {
         const { accessToken } = await refreshSession();
@@ -84,9 +86,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => {
+      setAccessTokenHandler(null);
       setSessionRefreshHandler(null);
     };
-  }, []);
+  }, [state.accessToken]);
 
   const applySession = useCallback(async (session: AuthenticatedSession) => {
     const currentUser = await fetchCurrentUser({

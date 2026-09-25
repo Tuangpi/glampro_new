@@ -286,6 +286,13 @@ model Subscription {
 
   @@index([organizationId, status])
 }
+model StripeWebhookEvent {
+  id          String   @id @default(cuid())
+  eventId     String   @unique @db.VarChar(255)
+  type        String   @db.VarChar(120)
+  processedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
 
 model AuditLog {
   id             String         @id @default(cuid())

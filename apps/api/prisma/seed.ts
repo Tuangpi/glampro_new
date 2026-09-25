@@ -76,6 +76,19 @@ const main = async () => {
     },
   });
 
+  await prisma.user.upsert({
+    where: { email: 'platform-admin@glampro.local' },
+    update: { platformRole: 'PLATFORM_ADMIN' },
+    create: {
+      email: 'platform-admin@glampro.local',
+      firstName: 'GlamPro',
+      lastName: 'Platform',
+      platformRole: 'PLATFORM_ADMIN',
+      emailVerifiedAt: new Date(),
+      credential: { create: { passwordHash } },
+    },
+  });
+
   const location = await prisma.location.findFirstOrThrow({
     where: { organizationId: organization.id },
     orderBy: { createdAt: 'asc' },

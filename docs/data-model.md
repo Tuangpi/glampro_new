@@ -15,6 +15,7 @@ The Prisma schema lives at `apps/api/prisma/schema.prisma` and targets MySQL 8.4
 | `Location`               | Salon branch with address, timezone, currency, tax mode, and receipt numbering    |
 | `BusinessHour`           | Per-location opening hours, one row per weekday                                   |
 | `Subscription`           | Stripe-backed SaaS subscription state for an organization                         |
+| `StripeWebhookEvent`     | Unique Stripe event ids used to make webhook processing idempotent                |
 
 `Organization` defaults to `SGD` and `Asia/Singapore`. `Location.pricesIncludeTax` defaults to
 `true`, which matches Singapore practice where displayed prices include GST.
@@ -175,7 +176,9 @@ Actions currently written: `auth.registered`, `auth.login`, `auth.login_failed`,
 `customer.note_added`, `staff.profile_created`, `staff.profile_updated`, `staff.services_replaced`,
 `staff.schedule_replaced`, `staff.time_off_recorded`, `staff.time_off_removed`,
 `appointment.created`, `appointment.updated`, `appointment.services_replaced`,
-`appointment.status_changed`, `sale.created`, `sale.voided`, and `sale.refunded`.
+`appointment.status_changed`, `sale.created`, `sale.voided`, `sale.refunded`,
+`billing.checkout_created`, `billing.portal_session_created`, `billing.webhook_processed`,
+`platform.organization_status_changed`, and `platform.subscription_status_changed`.
 
 ## Enumerations
 

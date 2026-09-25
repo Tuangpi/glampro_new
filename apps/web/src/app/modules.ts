@@ -3,6 +3,7 @@ import {
   Boxes,
   CalendarDays,
   Settings,
+  ShieldCheck,
   ShoppingCart,
   UserRoundCog,
   Users,
@@ -107,10 +108,24 @@ export const moduleRoutes: ModuleRoute[] = [
     icon: Settings,
     element: SettingsPage,
   },
+  {
+    path: 'platform-admin',
+    label: 'Platform admin',
+    title: 'Platform administration',
+    description: 'Review organizations and manage subscription state across tenants.',
+    permission: null,
+    group: 'account',
+    icon: ShieldCheck,
+  },
 ];
 
 /** Navigation and route access both derive from the effective permission list. */
-export const visibleModuleRoutes = (permissions: readonly string[]): ModuleRoute[] =>
+export const visibleModuleRoutes = (
+  permissions: readonly string[],
+  platformRole: 'USER' | 'PLATFORM_ADMIN' = 'USER',
+): ModuleRoute[] =>
   moduleRoutes.filter(
-    (route) => route.permission === null || permissions.includes(route.permission),
+    (route) =>
+      (route.permission === null || permissions.includes(route.permission)) &&
+      (route.path !== 'platform-admin' || platformRole === 'PLATFORM_ADMIN'),
   );

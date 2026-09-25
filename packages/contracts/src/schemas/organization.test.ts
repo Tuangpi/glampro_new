@@ -5,6 +5,8 @@ import {
   membershipRoles,
   membershipSummarySchema,
   organizationStatusSchema,
+  platformOrganizationActionSchema,
+  platformSubscriptionActionSchema,
 } from './organization.js';
 
 describe('organization contracts', () => {
@@ -16,6 +18,12 @@ describe('organization contracts', () => {
 
   it('rejects an unknown organization status', () => {
     expect(() => organizationStatusSchema.parse('ARCHIVED')).toThrow();
+  });
+
+  it('defines platform-only action contracts', () => {
+    expect(platformOrganizationActionSchema.parse('SUSPEND')).toBe('SUSPEND');
+    expect(platformSubscriptionActionSchema.parse('RESUME')).toBe('RESUME');
+    expect(() => platformSubscriptionActionSchema.parse('ARCHIVE')).toThrow();
   });
 
   it('parses a membership summary with its organization', () => {

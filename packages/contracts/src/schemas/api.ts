@@ -28,6 +28,10 @@ export const apiErrorCodes = [
   'ORGANIZATION_INACTIVE',
   'PERMISSION_DENIED',
   'CONFLICT',
+  'BILLING_NOT_CONFIGURED',
+  'BILLING_ACTION_UNAVAILABLE',
+  'PLATFORM_ADMIN_REQUIRED',
+  'STRIPE_SIGNATURE_INVALID',
 ] as const;
 
 export type ApiErrorCode = (typeof apiErrorCodes)[number];

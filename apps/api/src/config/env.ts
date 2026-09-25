@@ -1,6 +1,15 @@
 import 'dotenv/config';
 import { z } from 'zod';
 
+const optionalNonEmptyString = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().min(1).optional(),
+);
+const optionalUrl = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  z.string().url().optional(),
+);
+
 const environmentSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   API_PORT: z.coerce.number().int().positive().max(65_535).default(4000),
@@ -16,8 +25,10 @@ const environmentSchema = z.object({
   INVITATION_TTL_HOURS: z.coerce.number().int().positive().max(8760).default(168),
   EMAIL_TRANSPORT: z.enum(['log', 'disabled']).default('log'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
-  STRIPE_SECRET_KEY: z.string().optional(),
-  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_SECRET_KEY: optionalNonEmptyString,
+  STRIPE_WEBHOOK_SECRET: optionalNonEmptyString,
+  STRIPE_STARTER_PRICE_ID: optionalNonEmptyString,
+  STRIPE_BILLING_RETURN_URL: optionalUrl,
 });
 
 const result = environmentSchema.safeParse(process.env);
@@ -43,6 +54,20 @@ if (result.data.NODE_ENV === 'production') {
 
 if (result.data.NODE_ENV === 'production' && result.data.EMAIL_TRANSPORT === 'log') {
   console.warn('EMAIL_TRANSPORT=log is ignored in production; outbound email is dropped');
+}
+
+const stripeVariables = [
+  result.data.STRIPE_SECRET_KEY,
+  result.data.STRIPE_WEBHOOK_SECRET,
+  result.data.STRIPE_STARTER_PRICE_ID,
+  result.data.STRIPE_BILLING_RETURN_URL,
+];
+if (
+  result.data.NODE_ENV === 'production' &&
+  stripeVariables.some(Boolean) &&
+  !stripeVariables.every(Boolean)
+) {
+  throw new Error('Production Stripe configuration must include all STRIPE_* billing variables');
 }
 
 export const env = result.data;

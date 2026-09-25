@@ -16,11 +16,25 @@ export const organizationStatuses = [
   'SUSPENDED',
   'CANCELLED',
 ] as const;
+export const subscriptionStatuses = [
+  'TRIALING',
+  'ACTIVE',
+  'PAST_DUE',
+  'PAUSED',
+  'CANCELLED',
+  'INCOMPLETE',
+] as const;
+
+export const platformOrganizationActions = ['SUSPEND', 'ACTIVATE', 'CANCEL'] as const;
+export const platformSubscriptionActions = ['PAUSE', 'RESUME', 'CANCEL'] as const;
 
 export const platformRoleSchema = z.enum(platformRoles);
 export const membershipRoleSchema = z.enum(membershipRoles);
 export const membershipStatusSchema = z.enum(membershipStatuses);
 export const organizationStatusSchema = z.enum(organizationStatuses);
+export const subscriptionStatusSchema = z.enum(subscriptionStatuses);
+export const platformOrganizationActionSchema = z.enum(platformOrganizationActions);
+export const platformSubscriptionActionSchema = z.enum(platformSubscriptionActions);
 
 export const organizationSummarySchema = z.object({
   id: z.string().min(1),
@@ -53,6 +67,9 @@ export type PlatformRole = z.infer<typeof platformRoleSchema>;
 export type MembershipRole = z.infer<typeof membershipRoleSchema>;
 export type MembershipStatus = z.infer<typeof membershipStatusSchema>;
 export type OrganizationStatus = z.infer<typeof organizationStatusSchema>;
+export type SubscriptionStatus = z.infer<typeof subscriptionStatusSchema>;
+export type PlatformOrganizationAction = z.infer<typeof platformOrganizationActionSchema>;
+export type PlatformSubscriptionAction = z.infer<typeof platformSubscriptionActionSchema>;
 export type OrganizationSummary = z.infer<typeof organizationSummarySchema>;
 export type MembershipSummary = z.infer<typeof membershipSummarySchema>;
 export type LocationSummary = z.infer<typeof locationSummarySchema>;

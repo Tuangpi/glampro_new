@@ -1,4 +1,4 @@
-import type { Request, RequestHandler } from 'express';
+import type { NextFunction, Request, RequestHandler } from 'express';
 import { prisma } from '../database/prisma.js';
 import { AppError } from '../shared/http/app-error.js';
 
@@ -6,13 +6,14 @@ export const organizationHeader = 'x-organization-id';
 
 /** Organizations that can no longer operate are refused at the tenant boundary. */
 const inactiveOrganizationStatuses = new Set(['SUSPENDED', 'CANCELLED']);
+const blockedSubscriptionStatuses = new Set(['PAUSED', 'CANCELLED', 'INCOMPLETE']);
 
 /**
  * Resolves the organization membership that scopes the request. The scope is
  * never taken from the request body; a client-supplied organization ID only
  * selects among memberships the authenticated user already holds.
  */
-export const withTenant: RequestHandler = async (request, _response, next) => {
+const resolveTenant = async (request: Request, next: NextFunction, allowInactive = false) => {
   if (!request.auth) {
     next(new AppError(401, 'AUTHENTICATION_REQUIRED', 'Authentication is required'));
     return;
@@ -34,6 +35,17 @@ export const withTenant: RequestHandler = async (request, _response, next) => {
         select: {
           status: true,
           locations: { where: { isActive: true }, select: { id: true }, orderBy: { name: 'asc' } },
+          subscriptions: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              status: true,
+              trialEndsAt: true,
+              currentPeriodStartsAt: true,
+              currentPeriodEndsAt: true,
+              cancelledAt: true,
+            },
+          },
         },
       },
     },
@@ -65,7 +77,12 @@ export const withTenant: RequestHandler = async (request, _response, next) => {
     return;
   }
 
-  if (inactiveOrganizationStatuses.has(membership.organization.status)) {
+  if (
+    !allowInactive &&
+    (inactiveOrganizationStatuses.has(membership.organization.status) ||
+      (membership.organization.subscriptions[0] &&
+        blockedSubscriptionStatuses.has(membership.organization.subscriptions[0].status)))
+  ) {
     next(
       new AppError(
         403,
@@ -84,6 +101,14 @@ export const withTenant: RequestHandler = async (request, _response, next) => {
   };
 
   next();
+};
+
+export const withTenant: RequestHandler = async (request, _response, next) => {
+  await resolveTenant(request, next);
+};
+
+export const withTenantForBilling: RequestHandler = async (request, _response, next) => {
+  await resolveTenant(request, next, true);
 };
 
 /**

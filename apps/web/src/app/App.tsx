@@ -9,6 +9,7 @@ import { VerifyEmailPage } from '../features/auth/VerifyEmailPage';
 import { DashboardPage } from '../features/dashboard/DashboardPage';
 import { InviteAcceptPage } from '../features/settings/InviteAcceptPage';
 import { ModulePlaceholderPage } from '../features/shared/ModulePlaceholderPage';
+import { PlatformAdminPage } from '../features/platform/PlatformAdminPage';
 import { moduleRoutes } from './modules';
 
 export const App = () => (
@@ -26,7 +27,9 @@ export const App = () => (
             key={route.path}
             path={route.path}
             element={
-              route.element ? (
+              route.path === 'platform-admin' ? (
+                <PlatformAdminPage />
+              ) : route.element ? (
                 <route.element />
               ) : (
                 <ModulePlaceholderPage title={route.title} description={route.description} />

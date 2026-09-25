@@ -4,17 +4,17 @@ Delivery order for GlamPro. Every milestone ships with integration tests and a d
 update before the next one starts, and each builds on the foundations described in
 [architecture.md](architecture.md).
 
-| #   | Milestone                   | State   |
-| --- | --------------------------- | ------- |
-| 1   | Foundation                  | Done    |
-| 2   | Authentication and sessions | Done    |
-| 3   | Tenancy administration      | Done    |
-| 4   | Catalog and inventory       | Done    |
-| 5   | Customers and staff         | Done    |
-| 6   | Appointments                | Done    |
-| 7   | Point of sale               | Done    |
-| 8   | Reports and dashboard       | Done    |
-| 9   | Billing and platform admin  | Planned |
+| #   | Milestone                   | State |
+| --- | --------------------------- | ----- |
+| 1   | Foundation                  | Done  |
+| 2   | Authentication and sessions | Done  |
+| 3   | Tenancy administration      | Done  |
+| 4   | Catalog and inventory       | Done  |
+| 5   | Customers and staff         | Done  |
+| 6   | Appointments                | Done  |
+| 7   | Point of sale               | Done  |
+| 8   | Reports and dashboard       | Done  |
+| 9   | Billing and platform admin  | Done  |
 
 ## 1. Foundation — done
 
@@ -194,10 +194,34 @@ appointment outcomes, and staff attribution; `packages/contracts/src/schemas/rep
 `apps/web/src/features/reports/reportView.test.ts` cover shared shapes, presets, chart scaling, and
 duration formatting. The focused API/web/contracts suites and the repository quality gates pass.
 
-## 9. Billing and platform admin
+## 9. Billing and platform admin — done
 
 Stripe Billing for the salon's GlamPro subscription, subscription-status gating of the API, and a
 separate platform-admin surface for GlamPro staff.
+
+Implemented in this milestone:
+
+- Shared billing and platform contracts for hosted Checkout/Customer Portal URLs, subscription
+  summaries, bounded organization queries, and audited organization/subscription actions.
+- Stripe Checkout and Billing Portal session creation behind `billing.manage`, with tenant ownership
+  derived from the authenticated membership rather than request input.
+- A raw-body, signature-verified, idempotent Stripe webhook endpoint. Subscription, Checkout, and
+  invoice events synchronize `Subscription` and `Organization` state and write an audit entry.
+- Tenant access gating for paused or cancelled subscriptions, while trial, active, and past-due
+  organizations retain the expected grace behavior.
+- A separate `PLATFORM_ADMIN` boundary that never requires organization membership, exposes overview
+  and organization queries, and records every action with a required reason.
+- A web Billing settings tab and a role-gated platform administration screen. The local seed creates
+  `platform-admin@glampro.local` with the same development password as the owner account.
+
+Configuration is explicit through `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`,
+`STRIPE_STARTER_PRICE_ID`, and `STRIPE_BILLING_RETURN_URL`; production startup requires all four when
+any Stripe setting is present. A real Stripe account, webhook endpoint, and price are still required
+for live payment processing; local development intentionally leaves them blank.
+
+Exit criteria met: shared billing/platform contract tests, the API authorization/status integration
+suite, the web role-navigation test, and the repository typecheck/build/lint gates are the required
+release checks for this milestone.
 
 ## Cross-cutting work
 

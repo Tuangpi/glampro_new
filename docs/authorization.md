@@ -105,15 +105,16 @@ router.post(
 away with `401 SESSION_REVOKED`, or an expired one with `401 SESSION_EXPIRED`. `withTenant` then
 resolves the membership:
 
-| Situation                                                     | Result                          |
-| ------------------------------------------------------------- | ------------------------------- |
-| Missing or invalid token                                      | `401 AUTHENTICATION_REQUIRED`   |
-| No active membership in any organization                      | `403 TENANT_REQUIRED`           |
-| Several memberships and no `x-organization-id` header         | `400 TENANT_REQUIRED`           |
-| `x-organization-id` naming an organization the user is not in | `404 NOT_FOUND`                 |
-| Membership suspended, removed, or still invited               | `403 TENANT_REQUIRED`           |
-| Membership active but the organization is suspended/cancelled | `403 ORGANIZATION_INACTIVE`     |
-| Active membership resolved                                    | continues with `request.tenant` |
+| Situation                                                       | Result                          |
+| --------------------------------------------------------------- | ------------------------------- |
+| Missing or invalid token                                        | `401 AUTHENTICATION_REQUIRED`   |
+| No active membership in any organization                        | `403 TENANT_REQUIRED`           |
+| Several memberships and no `x-organization-id` header           | `400 TENANT_REQUIRED`           |
+| `x-organization-id` naming an organization the user is not in   | `404 NOT_FOUND`                 |
+| Membership suspended, removed, or still invited                 | `403 TENANT_REQUIRED`           |
+| Membership active but the organization/subscription is inactive | `403 ORGANIZATION_INACTIVE`     |
+| Billing route with an inactive organization                     | resolves tenant and continues   |
+| Active membership resolved                                      | continues with `request.tenant` |
 
 Cookie-authenticated writes add `requireCsrf` before the handler, which compares the readable
 `glampro_csrf` cookie with the `x-csrf-token` header.
@@ -147,9 +148,10 @@ payload. `actorType` distinguishes `USER`, `PLATFORM_ADMIN`, `SYSTEM`, and `WEBH
 Stripe-driven changes are attributable.
 
 Events that must be audited include authentication outcomes, membership and role changes,
-invitation lifecycle, subscription changes, catalog price changes, inventory adjustments, customer
-profile and note changes, staff profile, assignment, schedule, and time-off changes, appointment
-bookings, edits, service replacements, and status changes, sale creation, voids, and refunds.
+invitation lifecycle, subscription and platform status changes, Stripe checkout/portal sessions and
+webhook processing, catalog price changes, inventory adjustments, customer profile and note changes,
+staff profile, assignment, schedule, and time-off changes, appointment bookings, edits, service
+replacements, and status changes, sale creation, voids, and refunds.
 
 ## Testing requirements
 
@@ -169,6 +171,7 @@ Any new module ships with integration tests covering:
 and the roster, `apps/api/tests/appointments.test.ts` covers the calendar, availability, and
 the status trail, `apps/api/tests/sales.test.ts` covers checkout, receipts, inventory, and
 reversals, and `apps/api/tests/reports.test.ts` covers report permissions, local time boundaries,
-void/refund semantics, payment methods, appointment outcomes, and staff attribution. All of them run
-against the dedicated `glampro_test` database, which the suites truncate between cases; see the README
+void/refund semantics, payment methods, appointment outcomes, and staff attribution. `apps/api/tests/billing-platform.test.ts` covers the billing/platform authorization matrix, inactive-subscription
+exception, local platform actions, and audit rows. All of them run against the dedicated
+`glampro_test` database, which the suites truncate between cases; see the README
 for creating it. New modules extend the same file pattern rather than inventing their own harness.

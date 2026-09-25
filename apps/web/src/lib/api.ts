@@ -9,6 +9,9 @@ import {
   authenticatedSessionDataSchema,
   availabilityDataSchema,
   businessHoursDataSchema,
+  billingSummarySchema,
+  checkoutDataSchema,
+  customerPortalDataSchema,
   currentUserDataSchema,
   customerDataSchema,
   customerDetailDataSchema,
@@ -34,6 +37,10 @@ import {
   passwordResetCompletedDataSchema,
   paymentReportResponseDataSchema,
   passwordResetRequestedDataSchema,
+  platformOverviewSchema,
+  platformOrganizationActionDataSchema,
+  platformOrganizationPageSchema,
+  platformSubscriptionActionDataSchema,
   productCategoriesDataSchema,
   productCategoryDataSchema,
   productDataSchema,
@@ -66,6 +73,9 @@ import type {
   AuthenticatedSession,
   AvailabilitySlot,
   BusinessHour,
+  BillingSummary,
+  CheckoutData,
+  CustomerPortalData,
   ChangeAppointmentStatusRequest,
   ChangeMemberRoleRequest,
   ChangeMemberStatusRequest,
@@ -84,6 +94,11 @@ import type {
   ForgotPasswordRequest,
   AppointmentReportData,
   PaymentReportData,
+  PlatformOrganizationActionRequest,
+  PlatformOrganizationPage,
+  PlatformOrganizationQuery,
+  PlatformOverview,
+  PlatformSubscriptionActionRequest,
   ReportQuery,
   RevenueReportData,
   StaffReportData,
@@ -164,8 +179,10 @@ type RequestOutcome<TData> =
   { ok: true; data: TData } | { ok: false; status: number; error: ApiError };
 
 type SessionRefreshHandler = () => Promise<string | null>;
+type AccessTokenHandler = () => string | null;
 
 let sessionRefreshHandler: SessionRefreshHandler | null = null;
+let accessTokenHandler: AccessTokenHandler | null = null;
 
 /**
  * Lets the auth provider hand a fresh access token to API calls that raced the
@@ -175,11 +192,18 @@ export const setSessionRefreshHandler = (handler: SessionRefreshHandler | null) 
   sessionRefreshHandler = handler;
 };
 
+/** Supplies the current bearer token to feature API helpers without storing it globally. */
+export const setAccessTokenHandler = (handler: AccessTokenHandler | null) => {
+  accessTokenHandler = handler;
+};
+
 const sendRequest = async <TData>(
   path: string,
   options: ApiRequestOptions,
 ): Promise<RequestOutcome<TData>> => {
-  const { method = 'GET', body, accessToken, organizationId } = options;
+  const { method = 'GET', body, accessToken: explicitAccessToken, organizationId } = options;
+  const accessToken =
+    explicitAccessToken === undefined ? (accessTokenHandler?.() ?? null) : explicitAccessToken;
   const csrfToken = method === 'GET' ? null : readCookie(csrfCookieName);
 
   let response: Response;
@@ -241,6 +265,10 @@ export const apiRequest = async <TData>(
   options: ApiRequestOptions = {},
 ): Promise<TData> => {
   const attempt = await sendRequest<TData>(path, options);
+  const hasAccessToken =
+    options.accessToken !== undefined
+      ? Boolean(options.accessToken)
+      : Boolean(accessTokenHandler?.());
 
   if (attempt.ok) {
     return attempt.data;
@@ -249,7 +277,7 @@ export const apiRequest = async <TData>(
   if (
     attempt.status === 401 &&
     attempt.error.code === 'SESSION_EXPIRED' &&
-    options.accessToken &&
+    hasAccessToken &&
     sessionRefreshHandler
   ) {
     const renewedToken = await sessionRefreshHandler();
@@ -324,6 +352,51 @@ export const verifyEmailAddress = async (input: EmailVerificationRequest) =>
 
 export const fetchOrganizationSettings = async (): Promise<OrganizationSettings> =>
   organizationSettingsSchema.parse(await apiRequest<unknown>('/api/v1/settings/organization'));
+export const fetchBillingSummary = async (): Promise<BillingSummary> =>
+  billingSummarySchema.parse(await apiRequest<unknown>('/api/v1/billing'));
+
+export const createCheckoutSession = async (): Promise<CheckoutData> =>
+  checkoutDataSchema.parse(
+    await apiRequest<unknown>('/api/v1/billing/checkout', { method: 'POST' }),
+  );
+
+export const createCustomerPortalSession = async (): Promise<CustomerPortalData> =>
+  customerPortalDataSchema.parse(
+    await apiRequest<unknown>('/api/v1/billing/portal', { method: 'POST' }),
+  );
+
+/** Platform administration: cross-tenant subscription and organization controls. */
+export const fetchPlatformOverview = async (): Promise<PlatformOverview> =>
+  platformOverviewSchema.parse(await apiRequest<unknown>('/api/v1/platform/overview'));
+
+export const fetchPlatformOrganizations = async (
+  query: Partial<PlatformOrganizationQuery> = {},
+): Promise<PlatformOrganizationPage> =>
+  platformOrganizationPageSchema.parse(
+    await apiRequest<unknown>(`/api/v1/platform/organizations${queryStringOf(query)}`),
+  );
+
+export const changePlatformOrganizationStatus = async (
+  organizationId: string,
+  input: PlatformOrganizationActionRequest,
+) =>
+  platformOrganizationActionDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/platform/organizations/${organizationId}/status`, {
+      method: 'PATCH',
+      body: input,
+    }),
+  );
+
+export const changePlatformSubscriptionStatus = async (
+  organizationId: string,
+  input: PlatformSubscriptionActionRequest,
+) =>
+  platformSubscriptionActionDataSchema.parse(
+    await apiRequest<unknown>(`/api/v1/platform/organizations/${organizationId}/subscription`, {
+      method: 'PATCH',
+      body: input,
+    }),
+  );
 
 export const updateOrganizationSettings = async (
   input: UpdateOrganizationRequest,

@@ -27,6 +27,7 @@ const tablesInDeleteOrder = [
   'BusinessHour',
   'Location',
   'Subscription',
+  'StripeWebhookEvent',
   'OrganizationMembership',
   'OrganizationInvitation',
   'EmailVerificationToken',

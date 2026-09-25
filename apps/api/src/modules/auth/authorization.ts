@@ -72,3 +72,18 @@ export const requirePermission =
 
     next();
   };
+
+/** Platform routes are intentionally independent from organization membership. */
+export const requirePlatformAdmin = (request: Request, _response: Response, next: NextFunction) => {
+  if (!request.auth) {
+    next(new AppError(401, 'AUTHENTICATION_REQUIRED', 'Authentication is required'));
+    return;
+  }
+
+  if (request.auth.platformRole !== 'PLATFORM_ADMIN') {
+    next(new AppError(403, 'PLATFORM_ADMIN_REQUIRED', 'Platform administrator access is required'));
+    return;
+  }
+
+  next();
+};

@@ -41,10 +41,10 @@ const NavigationItem = ({ item }: { item: ShellNavItem }) => {
 };
 
 export const AppShell = () => {
-  const { permissions, signOutUser } = useAuth();
+  const { permissions, user, signOutUser } = useAuth();
   const navigate = useNavigate();
 
-  const allowedRoutes = visibleModuleRoutes(permissions);
+  const allowedRoutes = visibleModuleRoutes(permissions, user?.platformRole);
   const mainItems: ShellNavItem[] = [
     homeItem,
     ...allowedRoutes

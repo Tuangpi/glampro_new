@@ -8,7 +8,7 @@ reference for business rules and workflow; no code is shared.
 
 ## Status
 
-Milestones 1 to 8 are in place; see [docs/milestones.md](docs/milestones.md) for the plan.
+Milestones 1 to 9 are in place; see [docs/milestones.md](docs/milestones.md) for the delivery record.
 
 - npm workspaces monorepo with the web app, API, shared contracts, and shared tooling config
 - Express 5 + TypeScript API with security middleware, request correlation, and a standard
@@ -32,6 +32,9 @@ Milestones 1 to 8 are in place; see [docs/milestones.md](docs/milestones.md) for
   PayNow, card, and other payments, per-location receipts, inventory-backed sales, and refunds/voids
 - Reports and dashboard: live location-day KPIs plus revenue, appointment, payment, and staff reports,
   all calculated from tenant-scoped transaction history in the location's time zone
+- Billing and platform administration: Stripe Checkout and Customer Portal sessions for the salon
+  subscription, signed and idempotent Stripe webhooks, subscription-status tenant gating, audited
+  cross-tenant organization controls, and a role-gated platform-admin screen
 - React 19 + TypeScript + Vite + Tailwind shell with a session provider, protected routes, and
   permission-aware navigation
 - Zod contracts shared between the API and the web client
@@ -241,6 +244,30 @@ hash is stored, links expire after `INVITATION_TTL_HOURS` (seven days by default
 requires the signed-in account's email to match the invited address. Acceptance is the single
 tenant write that runs without `withTenant`, because the acceptor cannot hold an active membership
 yet.
+
+## Billing and platform administration
+
+| Method  | Endpoint                                          | Purpose                                             | Gate             |
+| ------- | ------------------------------------------------- | --------------------------------------------------- | ---------------- |
+| `GET`   | `/api/v1/billing`                                 | Read the tenant-safe subscription summary           | `billing.manage` |
+| `POST`  | `/api/v1/billing/checkout`                        | Create a Stripe subscription Checkout session       | `billing.manage` |
+| `POST`  | `/api/v1/billing/portal`                          | Create a Stripe Customer Portal session             | `billing.manage` |
+| `POST`  | `/api/v1/billing/webhook`                         | Verify and process a signed Stripe event            | Stripe signature |
+| `GET`   | `/api/v1/platform/overview`                       | Read cross-tenant organization and billing totals   | `PLATFORM_ADMIN` |
+| `GET`   | `/api/v1/platform/organizations`                  | Search organizations and their latest subscriptions | `PLATFORM_ADMIN` |
+| `PATCH` | `/api/v1/platform/organizations/:id/status`       | Suspend, activate, or cancel an organization        | `PLATFORM_ADMIN` |
+| `PATCH` | `/api/v1/platform/organizations/:id/subscription` | Pause, resume, or cancel its subscription           | `PLATFORM_ADMIN` |
+
+Tenant billing routes use the authenticated membership as their scope and remain reachable while an
+organization is paused or cancelled, so the owner can recover through Stripe. Other tenant routes
+are refused by `withTenant` for `PAUSED`, `CANCELLED`, or `INCOMPLETE` subscriptions. Platform routes
+are authenticated independently and require `User.platformRole = PLATFORM_ADMIN`; every platform
+action requires a reason and is audited.
+
+The webhook is mounted before JSON parsing, records each unique Stripe event before applying side
+effects, and retries are safe. Stripe identifiers are never included in the tenant-facing summary;
+the web client only sees plan/status, dates, and booleans indicating whether provider identifiers
+exist.
 
 ## Catalog and inventory
 

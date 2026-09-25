@@ -1,14 +1,16 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { Permission } from '@glampro/contracts';
 import { PageHeader } from '../../components/layout/PageHeader';
 import { useAuth } from '../auth/useAuth';
 import { AuditSection } from './AuditSection';
+import { BillingSection } from './BillingSection';
 import { LocationsSection } from './LocationsSection';
 import { MembersSection } from './MembersSection';
 import { OrganizationSettingsSection } from './OrganizationSettingsSection';
 import { PermissionNotice } from './SettingsCommon';
 
-type SectionKey = 'organization' | 'locations' | 'members' | 'audit';
+type SectionKey = 'organization' | 'locations' | 'members' | 'billing' | 'audit';
 
 type SettingsTab = { key: SectionKey; label: string; permission: Permission };
 
@@ -16,17 +18,22 @@ const tabs: SettingsTab[] = [
   { key: 'organization', label: 'Organization', permission: 'settings.manage' },
   { key: 'locations', label: 'Locations', permission: 'settings.manage' },
   { key: 'members', label: 'Members', permission: 'members.manage' },
+  { key: 'billing', label: 'Billing', permission: 'billing.manage' },
   { key: 'audit', label: 'Audit log', permission: 'audit.read' },
 ];
 
 /**
- * Settings shell: permission-aware tabs over the four tenancy sections. The
- * module itself is only navigable with `settings.manage`, so an empty tab list
- * means the URL was reached directly without that permission.
+ * Settings shell: permission-aware tabs over the tenancy sections. The module
+ * itself is only navigable with `settings.manage`, so an empty tab list means the
+ * URL was reached directly without that permission.
  */
 export const SettingsPage = () => {
   const { hasPermission, activeMembership } = useAuth();
-  const [activeTab, setActiveTab] = useState<SectionKey>('organization');
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<SectionKey>(() =>
+    tabs.some((tab) => tab.key === requestedTab) ? (requestedTab as SectionKey) : 'organization',
+  );
 
   const visibleTabs = tabs.filter((tab) => hasPermission(tab.permission));
   const current = visibleTabs.some((tab) => tab.key === activeTab)
@@ -59,6 +66,7 @@ export const SettingsPage = () => {
         {current === 'organization' ? <OrganizationSettingsSection /> : null}
         {current === 'locations' ? <LocationsSection /> : null}
         {current === 'members' ? <MembersSection /> : null}
+        {current === 'billing' ? <BillingSection /> : null}
         {current === 'audit' ? <AuditSection /> : null}
         {current === undefined ? <PermissionNotice permission="settings.manage" /> : null}
       </div>

@@ -9,8 +9,14 @@ describe('visibleModuleRoutes', () => {
     expect(visible.map((route) => route.path)).toEqual(['sales', 'appointments']);
   });
 
-  it('exposes every module to a member holding every permission', () => {
-    expect(visibleModuleRoutes(permissions)).toHaveLength(moduleRoutes.length);
+  it('exposes every module to a platform admin holding every permission', () => {
+    expect(visibleModuleRoutes(permissions, 'PLATFORM_ADMIN')).toHaveLength(moduleRoutes.length);
+  });
+
+  it('keeps platform administration hidden from a normal user', () => {
+    expect(visibleModuleRoutes(permissions).some((route) => route.path === 'platform-admin')).toBe(
+      false,
+    );
   });
 
   it('only references permission names declared in the shared contracts', () => {

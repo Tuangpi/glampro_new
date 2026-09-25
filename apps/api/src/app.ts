@@ -12,6 +12,7 @@ import { globalRateLimit } from './middleware/rate-limits.js';
 import { requestContext } from './middleware/request-context.js';
 import { appointmentsRouter } from './modules/appointments/appointments.routes.js';
 import { authRouter } from './modules/auth/auth.routes.js';
+import { billingRouter, stripeWebhookHandler } from './modules/billing/billing.routes.js';
 import {
   inventoryRouter,
   productCategoriesRouter,
@@ -27,6 +28,7 @@ import { salesRouter } from './modules/sales/sales.routes.js';
 import { auditRouter } from './modules/tenancy/audit.routes.js';
 import { invitationsRouter, membersRouter } from './modules/tenancy/members.routes.js';
 import { locationsRouter, settingsRouter } from './modules/tenancy/settings.routes.js';
+import { platformRouter } from './modules/platform/platform.routes.js';
 
 /**
  * Reads the request ID set by the preceding requestContext middleware.
@@ -57,18 +59,31 @@ export const createApp = () => {
       origin: env.WEB_ORIGIN,
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['content-type', 'x-csrf-token', 'x-request-id'],
+      allowedHeaders: [
+        'content-type',
+        'authorization',
+        'x-csrf-token',
+        'x-organization-id',
+        'x-request-id',
+      ],
       exposedHeaders: ['x-request-id'],
       maxAge: 600,
     }),
   );
   app.use(globalRateLimit);
+  app.post(
+    '/api/v1/billing/webhook',
+    express.raw({ type: 'application/json' }),
+    stripeWebhookHandler,
+  );
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: false, limit: '100kb' }));
   app.use(cookieParser());
 
   app.use('/api/v1', healthRouter);
   app.use('/api/v1/auth', authRouter);
+  app.use('/api/v1/billing', billingRouter);
+  app.use('/api/v1/platform', platformRouter);
   app.use('/api/v1/settings', settingsRouter);
   app.use('/api/v1/locations', locationsRouter);
   app.use('/api/v1/members', membersRouter);
