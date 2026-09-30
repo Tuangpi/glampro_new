@@ -1,5 +1,4 @@
-import { FiAlertCircle, FiCheckCircle, FiRefreshCw } from "react-icons/fi";
-
+import { AlertTriangle, CheckCircle, Eye } from "@/components/icons";
 import { useSystemStatus } from "@/hooks/useSystemStatus";
 import { cn } from "@/lib/utils";
 
@@ -34,7 +33,7 @@ export default function Dashboard() {
             onClick={() => void refetch()}
             className="flex h-control items-center gap-2 rounded-md border border-line px-4 text-sm font-medium text-ink-body transition hover:bg-surface-muted"
           >
-            <FiRefreshCw className={cn(isFetching && "animate-spin")} aria-hidden />
+            <Eye className={cn(isFetching && "animate-spin")} aria-hidden />
             Re-check status
           </button>
         </div>
@@ -57,7 +56,7 @@ export default function Dashboard() {
 
         {isError ? (
           <div className="flex items-start gap-3 rounded-md bg-danger/5 p-4 text-sm text-danger">
-            <FiAlertCircle className="mt-0.5 shrink-0" aria-hidden />
+            <AlertTriangle className="mt-0.5 shrink-0" aria-hidden />
             <div>
               <p className="font-semibold">The API is unreachable.</p>
               <p className="mt-1 text-ink-muted">
@@ -101,13 +100,13 @@ function StatusPill({ tone, label }: { tone: "neutral" | "success" | "danger"; l
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-[999px] px-3 py-1 text-xs font-semibold",
+        "inline-flex items-center gap-1.5 rounded-pill px-3 py-1 text-xs font-semibold",
         tone === "success" && "bg-success-soft text-success-text",
         tone === "danger" && "bg-danger/10 text-danger",
         tone === "neutral" && "bg-surface-2 text-ink-muted",
       )}
     >
-      {tone === "success" ? <FiCheckCircle aria-hidden /> : <FiAlertCircle aria-hidden />}
+      {tone === "success" ? <CheckCircle aria-hidden /> : <AlertTriangle aria-hidden />}
       {label}
     </span>
   );

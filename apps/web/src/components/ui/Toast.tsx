@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { FiAlertCircle, FiCheckCircle, FiInfo, FiX } from "react-icons/fi";
 
+import { AlertTriangle, Bell, CheckCircle, X } from "@/components/icons";
 import { subscribeToToasts, type ToastKind, type ToastMessage } from "./toast-store";
 
 const AUTO_DISMISS_MS = 5000;
@@ -11,10 +11,10 @@ const STYLES: Record<ToastKind, string> = {
   info: "border-line bg-white text-ink",
 };
 
-const ICONS: Record<ToastKind, typeof FiCheckCircle> = {
-  success: FiCheckCircle,
-  error: FiAlertCircle,
-  info: FiInfo,
+const ICONS: Record<ToastKind, typeof CheckCircle> = {
+  success: CheckCircle,
+  error: AlertTriangle,
+  info: Bell,
 };
 
 /**
@@ -42,7 +42,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
 
       <div
-        className="pointer-events-none fixed bottom-6 right-6 z-[100] flex w-[340px] flex-col gap-3"
+        className="pointer-events-none fixed bottom-6 right-6 z-[100] flex w-[var(--app-toast-w)] flex-col gap-3"
         role="status"
         aria-live="polite"
       >
@@ -61,7 +61,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 className="shrink-0 rounded-sm p-1 opacity-60 transition hover:opacity-100"
                 aria-label="Dismiss notification"
               >
-                <FiX />
+                <X />
               </button>
             </div>
           );

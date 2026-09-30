@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { FiBell, FiLogOut, FiPlus, FiSearch } from "react-icons/fi";
 import { NavLink, Outlet, useLocation } from "react-router";
 
+import { Bell, LogOut, Plus, Search } from "@/components/icons";
 import { activeNavItem, visibleNavItems } from "@/constants/navigation";
 import { cn, getInitials } from "@/lib/utils";
 
@@ -21,7 +21,7 @@ export default function AppShell() {
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <aside className="fixed inset-y-0 left-0 z-40 flex w-[84px] flex-col items-center bg-navy py-5">
+      <aside className="fixed inset-y-0 left-0 z-40 flex w-rail flex-col items-center bg-navy py-5">
         <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-md bg-gradient-to-br from-[var(--sp-purple-grad-a)] to-[var(--sp-purple-grad-b)] text-base font-extrabold text-white">
           G
         </div>
@@ -34,15 +34,15 @@ export default function AppShell() {
               end={item.path === "/"}
               className={({ isActive }) =>
                 cn(
-                  "group relative flex w-[66px] flex-col items-center gap-1.5 rounded-md py-2.5 transition",
+                  "group relative flex w-[var(--app-rail-item-w)] flex-col items-center gap-1.5 rounded-md py-2.5 transition",
                   isActive
                     ? "bg-[var(--sp-navy-tint-14)] text-white"
                     : "text-ink-on-dark hover:bg-[var(--sp-navy-tint-10)] hover:text-white",
                 )
               }
             >
-              <item.icon className="text-[19px]" aria-hidden />
-              <span className="text-[10px] font-semibold tracking-wide">{item.label}</span>
+              <item.icon className="text-[length:var(--app-rail-icon)]" aria-hidden />
+              <span className="text-2xs font-semibold tracking-wide">{item.label}</span>
             </NavLink>
           ))}
         </nav>
@@ -52,20 +52,20 @@ export default function AppShell() {
           className="mt-4 flex h-9 w-9 items-center justify-center rounded-full bg-[var(--sp-navy-tint-10)] text-ink-on-dark transition hover:text-white"
           aria-label="Sign out"
         >
-          <FiLogOut />
+          <LogOut />
         </button>
       </aside>
 
-      <div className="flex min-h-screen flex-1 flex-col pl-[84px]">
-        <header className="sticky top-0 z-30 flex h-[76px] items-center gap-5 border-b border-line bg-surface px-7">
+      <div className="flex min-h-screen flex-1 flex-col pl-rail">
+        <header className="sticky top-0 z-30 flex h-topbar items-center gap-5 border-b border-line bg-surface px-7">
           <div className="min-w-0">
             <h1 className="truncate text-lg leading-tight">{current?.label ?? "Glampro"}</h1>
             <p className="text-xs text-ink-muted">Glampro Salon — {weekdayToday()}</p>
           </div>
 
           <div className="ml-auto flex items-center gap-3">
-            <label className="hidden h-control w-[260px] items-center gap-2 rounded-md bg-surface-2 px-3.5 lg:flex">
-              <FiSearch className="shrink-0 text-ink-muted" aria-hidden />
+            <label className="hidden h-control w-[var(--app-search-w)] items-center gap-2 rounded-md bg-surface-2 px-3.5 lg:flex">
+              <Search className="shrink-0 text-ink-muted" aria-hidden />
               <input
                 type="search"
                 value={search}
@@ -81,14 +81,14 @@ export default function AppShell() {
               className="flex h-control w-control items-center justify-center rounded-md bg-surface-2 text-ink-body transition hover:bg-line-soft"
               aria-label="Notifications"
             >
-              <FiBell />
+              <Bell />
             </button>
 
             <button
               type="button"
               className="flex h-control items-center gap-2 rounded-md bg-purple px-4 text-sm font-semibold text-white shadow-purple-btn transition hover:bg-purple-dark"
             >
-              <FiPlus aria-hidden />
+              <Plus aria-hidden />
               New sale
             </button>
 

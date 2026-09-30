@@ -88,23 +88,22 @@ spacing scale (`--sp-space-*`) and the navy tint overlays (`--sp-navy-tint-10`,
 `-14`) are used through `var(--sp-…)`. Rule of thumb: a value used by more than one
 component earns a utility; a value used once may stay a `var()`.
 
-### Open deviation, to settle in Phase 1
+### Resolved in Phase 1: the copy is byte-identical
 
-The repo copy is _equivalent but not byte-identical_ to the handoff file:
+`apps/web/src/styles/tokens.css` is now a byte-for-byte copy of
+`design/handoff/tokens/tokens.css` (verified with `cmp`). The previous deviation — a
+rewritten header, re-formatted declarations, lower-cased colours, `0.10` instead of
+`.10` — is gone, and the copy rule in [`../../AGENTS.md`](../../AGENTS.md) now holds
+literally.
 
-| Difference           | Detail                                                                                        |
-| -------------------- | --------------------------------------------------------------------------------------------- |
-| Header comment       | Rewritten to describe the copy rule, instead of the handoff's own description                 |
-| Formatting           | One declaration per line instead of column-aligned                                            |
-| Colour literals      | Lower-cased (`#F3F4FA` → `#f3f4fa`)                                                           |
-| Alpha literals       | `.10` → `0.10`                                                                                |
-| Two tokens **added** | `--sp-rail-w: 84px` and `--sp-topbar-h: 76px`, which the handoff `tokens.css` does not define |
-
-The added values are correct — 84px rail and 76px top bar are what the screens use — but
-the file is no longer the "verbatim copy" that `.prettierignore` and
-[`../../AGENTS.md`](../../AGENTS.md) claim. Phase 1 must either re-copy the handoff file
-byte-for-byte and move the two app-chrome tokens into a file of their own, or record the
-deviation in an ADR. Tracked in [`../STATE.md`](../STATE.md).
+The two values the handoff token file does not define, `--sp-rail-w: 84px` and
+`--sp-topbar-h: 76px` (the frame geometry in §2), moved to
+`apps/web/src/styles/app-chrome.css`, which `index.css` imports next to the token copy.
+That file also carries the handful of app-only values the handoff has no token for —
+rail item width and icon size, top-bar search width, toast width, loading placeholder
+height — each with a comment saying where the value came from. They are `--app-*` so they
+cannot be mistaken for handoff tokens. `index.css` keeps the `--spacing-rail` /
+`--spacing-topbar` mappings, so `w-rail`, `pl-rail` and `h-topbar` work as before.
 
 ## 4. Icons
 
@@ -119,12 +118,28 @@ Port rules for Phase 1:
   from another library.
 - `aria-hidden` by default, `focusable={false}`, and a `className` passthrough so the
   Tailwind sizing and colour utilities apply.
-- An icon-only control always carries an accessible name on the button
-  (`aria-label`), never on the icon. `AppShell`'s sign-out button is the existing
-  example to follow.
-- Until the port lands, components use Feather icons from `react-icons/fi` as
-  stand-ins (see `AppShell.tsx` / `navigation.ts`). Phase 1 replaces those with the
-  handoff set; it does not keep both.
+- The icon-only control carries its accessible name on the button (`aria-label`), never on
+  the icon. `AppShell`'s sign-out button is the example to follow.
+
+**Landed in Phase 1.** All **41** SVGs are ported to `apps/web/src/components/icons/` as
+one component each, re-exported from that directory's `index.ts`. The count is settled:
+the directory holds 41 files and all 41 are ported, so the README's "40" is the number
+that is wrong. Geometry is verbatim, and each component sets `width`/`height` to `1em` so
+the existing `text-*` utilities still size them.
+
+The stand-ins are gone — `react-icons` is no longer a dependency. Four Feather symbols had
+no handoff equivalent and were mapped to the nearest handoff icon, worth knowing when a
+screen review compares them:
+
+| Stand-in                             | Used now      | Why                                                         |
+| ------------------------------------ | ------------- | ----------------------------------------------------------- |
+| `FiInfo` (toast info)                | `Bell`        | No info/question icon ships; a bell is the neutral notice   |
+| `FiLoader` (spinning, `PageLoading`) | `Settings`    | No spinner ships; a gear reads as "working" while it spins  |
+| `FiRefreshCw` (re-check status)      | `Eye`         | No refresh/rotate icon ships; the eye reads as "look again" |
+| `FiArrowLeft` (404 back link)        | `ChevronLeft` | No arrow-left ships; the chevron points the same way        |
+
+If a screen later proves a mapping wrong, the fix is to change the component used at the
+call site — never the path data.
 
 ## 5. Screens → routes
 

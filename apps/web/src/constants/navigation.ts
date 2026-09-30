@@ -1,20 +1,21 @@
 import type { GlobalRole } from "@glampro/shared";
-import type { IconType } from "react-icons";
+import type { ComponentType, SVGProps } from "react";
+
 import {
-  FiBarChart2,
-  FiCalendar,
-  FiGrid,
-  FiPackage,
-  FiScissors,
-  FiSettings,
-  FiShoppingCart,
-  FiUsers,
-} from "react-icons/fi";
+  BarChart,
+  Calendar,
+  Cart,
+  Grid,
+  Package,
+  Scissors,
+  Settings,
+  Users,
+} from "@/components/icons";
 
 export interface NavItem {
   label: string;
   path: string;
-  icon: IconType;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   /** Roles allowed to see the entry. Omitted = every signed-in user. */
   roles?: GlobalRole[];
   /** Which live counter to show on the rail badge, if any. */
@@ -24,18 +25,18 @@ export interface NavItem {
 /**
  * The Salon Pro app rail (see handoff screens 05–11).
  *
- * Icons come from react-icons for now; the handoff's own 40 SVG icons replace
- * them in the design-system phase without changing this shape.
+ * Icons come from the handoff set ported into `@/components/icons`
+ * (see docs/design/HANDOFF.md §4).
  */
 export const navItems: NavItem[] = [
-  { label: "Dashboard", path: "/", icon: FiGrid },
-  { label: "Sale", path: "/sale", icon: FiShoppingCart, badge: "openCart" },
-  { label: "Appointments", path: "/appointments", icon: FiCalendar },
-  { label: "Customers", path: "/customers", icon: FiUsers },
-  { label: "Products", path: "/products", icon: FiPackage, badge: "lowStock" },
-  { label: "Services", path: "/services", icon: FiScissors },
-  { label: "Reports", path: "/reports", icon: FiBarChart2, roles: ["SUPER_ADMIN", "MANAGER"] },
-  { label: "Settings", path: "/settings", icon: FiSettings, roles: ["SUPER_ADMIN", "MANAGER"] },
+  { label: "Dashboard", path: "/", icon: Grid },
+  { label: "Sale", path: "/sale", icon: Cart, badge: "openCart" },
+  { label: "Appointments", path: "/appointments", icon: Calendar },
+  { label: "Customers", path: "/customers", icon: Users },
+  { label: "Products", path: "/products", icon: Package, badge: "lowStock" },
+  { label: "Services", path: "/services", icon: Scissors },
+  { label: "Reports", path: "/reports", icon: BarChart, roles: ["SUPER_ADMIN", "MANAGER"] },
+  { label: "Settings", path: "/settings", icon: Settings, roles: ["SUPER_ADMIN", "MANAGER"] },
 ];
 
 /** Filters the rail for the signed-in role. */

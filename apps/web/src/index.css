@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "./styles/tokens.css";
+@import "./styles/app-chrome.css";
 
 /*
  * Tailwind 4 theme.
@@ -58,6 +59,7 @@
   --radius-lg: var(--sp-radius-lg);
   --radius-card: var(--sp-radius-xl);
   --radius-2xl: var(--sp-radius-2xl);
+  --radius-pill: var(--sp-radius-pill);
 
   /* Control heights (44px minimum tap target) */
   --spacing-control-sm: var(--sp-control-h-sm);

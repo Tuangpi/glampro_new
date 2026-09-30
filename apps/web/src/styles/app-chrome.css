@@ -1,0 +1,28 @@
+/*
+  App-chrome values the handoff tokens.css does not define.
+  The copy in styles/tokens.css stays byte-identical to
+  design/handoff/tokens/tokens.css (AGENTS.md rule 2); geometry the app
+  frame needs but the handoff token file omits lives here instead of as
+  literals inside components. Sources are noted per token.
+*/
+
+:root {
+  /* Frame geometry — named in docs/design/HANDOFF.md §2 (rail / topbar). */
+  --sp-rail-w: 84px; /* navy icon rail */
+  --sp-topbar-h: 76px; /* white top bar */
+
+  /* AppShell rail — the screens draw 54px items with 8.5px labels; the app
+     keeps 66px so the 10px labels fit on one line. Rechecked in Phase 1's
+     screen pass. */
+  --app-rail-item-w: 66px;
+  --app-rail-icon: 19px; /* rail icon size — screens 05–11 draw 19×19 nav icons */
+
+  /* Top-bar search field — screens 01/08 draw a 260px search box. */
+  --app-search-w: 260px;
+
+  /* Toast stack width — Phase 0 scaffold; the Phase 1 Toast primitive rechecks it. */
+  --app-toast-w: 340px;
+
+  /* Route-loading placeholder height — PageLoading scaffold, no handoff source. */
+  --app-loading-min-h: 320px;
+}

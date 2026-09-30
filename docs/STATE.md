@@ -13,45 +13,45 @@ Facts below were read out of the tree, not copied from a plan.
 
 ## 1. Snapshot
 
-|                  |                                                                                                                                                                                                                                                                                     |
-| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current phase    | **1 — Design system** (Phase 0 complete) — nothing from Phase 1 is started yet                                                                                                                                                                                                      |
-| Last commit      | `53ba176` _docs: align documented ports with the defaults used on this workstation_ (2026-09-30)                                                                                                                                                                                    |
-| Working tree     | `.prettierignore` is modified; everything else in `docs/` plus `AGENTS.md`, `.clinerules/` and `design/` is **new and untracked**. `architecture.md` and `README.Docker.md` are the only documentation files Git is tracking, so the whole documentation set is one pending commit. |
-| `npm run verify` | See §5                                                                                                                                                                                                                                                                              |
-| Dev stack        | `make up-d` → API `:9100`, web `:5173`, Postgres `:5433` (`compose.yaml`, ports documented in `README.Docker.md`)                                                                                                                                                                   |
-| Runtime          | Node 24, npm workspaces (no pnpm), Postgres 17, Prisma 7                                                                                                                                                                                                                            |
+|                  |                                                                                                                                                                                                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Current phase    | **1 — Design system.** Phase 1's foundation is landed: token pipeline settled, icon set ported, hardcoded geometry removed. The UI primitives are the rest of the phase and have not been started.                                                           |
+| Last commit      | `9f58c7d` _docs: commit the Phase 0 documentation and design-handoff set_ (2026-09-30)                                                                                                                                                                       |
+| Working tree     | The Phase 1 foundation change is uncommitted: `tokens.css` re-copied byte-identically, new `styles/app-chrome.css` and `components/icons/` (41 components + barrel), `react-icons` dropped, `index.css` extended, `HANDOFF.md` updated, this file rewritten. |
+| `npm run verify` | See §5                                                                                                                                                                                                                                                       |
+| Dev stack        | `make up-d` → API `:9100`, web `:5173`, Postgres `:5433` (`compose.yaml`, ports documented in `README.Docker.md`)                                                                                                                                            |
+| Runtime          | Node 24, npm workspaces (no pnpm), Postgres 17, Prisma 7                                                                                                                                                                                                     |
 
 ## 2. What actually exists today
 
-| Area                | State of the tree                                                                                                                                                                              |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| API routes          | Four: `GET /health`, `GET /health/ready`, `GET /api/health`, `GET /api/auth/me`. Everything else in the product is still to be built.                                                          |
-| API structure       | `createApp()` factory (no port binding, so tests run over real HTTP), Zod validation middleware, error handler, rate limiting, JWT helpers                                                     |
-| Schema              | Exactly two models: `User` and `RefreshToken`. `GlobalRole` = `SUPER_ADMIN · MANAGER · STAFF · CASHIER`; `AuthRealm` = `web · pos · mobile`                                                    |
-| Tenancy in the code | **Nothing yet.** No `Tenant`, no `tenantId` column, no tenant claim in a token. Phase 2 is where the tenant plane lands.                                                                       |
-| Web pages           | `Dashboard` and `NotFound`. No login screen, no data screens.                                                                                                                                  |
-| Web shell           | `AppShell` (rail and top bar, hard-coded 84px / 76px rather than the `--sp-rail-w` / `--sp-topbar-h` tokens), `RouteWrapper`, `ErrorBoundary`, `PageLoading`, `Toast`                          |
-| Web nav             | 8 entries from `constants/navigation.ts`: Dashboard, Sale, Appointments, Customers, Products, Services, Reports\*, Settings\* (\* admin roles only)                                            |
-| Web styling         | `index.css` maps the handoff tokens onto Tailwind namespaces in one `@theme` block; icons are Feather stand-ins from `react-icons/fi`                                                          |
-| Shared package      | `@glampro/shared` — Zod schemas, constants and types consumed by both the API and the web app                                                                                                  |
-| Design package      | `design/handoff/` — 11 screens (+ PNGs for 01–04), `tokens.css` / `tokens.json`, 41 SVG icons                                                                                                  |
-| Legacy application  | **Not in this repository.** `docs/legacy/` is the transcription of it: the API surface (154 registrations, 151 live routes) and the schema, plus the gaps worth knowing before migrating       |
-| Docs                | `architecture.md`, `CONTEXT.md`, `roadmap.md`, `STATE.md`, `decisions/` (0002 + index), `legacy/` (LEGACY-MAP, API-INVENTORY, reference/legacy-schema), `saas/TENANCY.md`, `design/HANDOFF.md` |
+| Area                | State of the tree                                                                                                                                                                                                                                                                        |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| API routes          | Four: `GET /health`, `GET /health/ready`, `GET /api/health`, `GET /api/auth/me`. Everything else in the product is still to be built.                                                                                                                                                    |
+| API structure       | `createApp()` factory (no port binding, so tests run over real HTTP), Zod validation middleware, error handler, rate limiting, JWT helpers                                                                                                                                               |
+| Schema              | Exactly two models: `User` and `RefreshToken`. `GlobalRole` = `SUPER_ADMIN · MANAGER · STAFF · CASHIER`; `AuthRealm` = `web · pos · mobile`                                                                                                                                              |
+| Tenancy in the code | **Nothing yet.** No `Tenant`, no `tenantId` column, no tenant claim in a token. Phase 2 is where the tenant plane lands.                                                                                                                                                                 |
+| Web pages           | `Dashboard` and `NotFound`. No login screen, no data screens.                                                                                                                                                                                                                            |
+| Web shell           | `AppShell` (rail and top bar drawn from `--sp-rail-w` / `--sp-topbar-h` via the `w-rail` / `pl-rail` / `h-topbar` utilities), `RouteWrapper`, `ErrorBoundary`, `PageLoading`, `Toast`                                                                                                    |
+| Web nav             | 8 entries from `constants/navigation.ts`: Dashboard, Sale, Appointments, Customers, Products, Services, Reports\*, Settings\* (\* admin roles only)                                                                                                                                      |
+| Web styling         | `index.css` maps the handoff tokens onto Tailwind namespaces in one `@theme` block; `styles/tokens.css` is a byte-identical copy of the handoff file; app-only values live in `styles/app-chrome.css`; icons are 41 ported SVG components in `components/icons/` — `react-icons` is gone |
+| Shared package      | `@glampro/shared` — Zod schemas, constants and types consumed by both the API and the web app                                                                                                                                                                                            |
+| Design package      | `design/handoff/` — 11 screens (+ PNGs for 01–04), `tokens.css` / `tokens.json`, 41 SVG icons                                                                                                                                                                                            |
+| Legacy application  | **Not in this repository.** `docs/legacy/` is the transcription of it: the API surface (154 registrations, 151 live routes) and the schema, plus the gaps worth knowing before migrating                                                                                                 |
+| Docs                | `architecture.md`, `CONTEXT.md`, `roadmap.md`, `STATE.md`, `decisions/` (0002 + index), `legacy/` (LEGACY-MAP, API-INVENTORY, reference/legacy-schema), `saas/TENANCY.md`, `design/HANDOFF.md`                                                                                           |
 
 ## 3. Next up — Phase 1, in order
 
-1. **Settle the token-copy deviation** (§4 item 1) — it is a 10-minute decision that
-   otherwise sits in the middle of every later styling review.
-2. Port the icon set from `design/handoff/icons/` into
-   `apps/web/src/components/icons/` and delete the Feather stand-ins.
-3. Build the UI primitives listed in [`roadmap.md`](roadmap.md) Phase 1, each with its
+1. **Build the UI primitives** listed in [`roadmap.md`](roadmap.md) Phase 1, each with its
    keyboard/disabled test.
-4. Repoint `AppShell` at the `rail` / `topbar` tokens instead of the literals.
-5. Re-check every primitive against screens 01–11 at the 1280×900 frame.
+2. **Re-check every primitive against screens 01–11 at the 1280×900 frame** — this is also
+   where the 66px rail item width and the four stand-in icon mappings recorded in
+   [`design/HANDOFF.md`](design/HANDOFF.md) §4 get confirmed or corrected.
 
-Phase 1 adds no routes and no data. Do not start Phase 2 models before it is finished:
-the screens are what fix the field names those models will carry.
+The two settled items are done: the token copy is byte-identical to the handoff file with
+the app-only values moved to `styles/app-chrome.css`, and all 41 handoff icons are ported
+with `react-icons` deleted. The remaining Phase 1 work adds no routes and no data. Do not
+start Phase 2 models before it is finished: the screens are what fix the field names those
+models will carry.
 
 ## 4. Open questions
 
@@ -94,7 +94,7 @@ These are ours to decide; none of them needs production data.
 ## 5. Verify status
 
 `npm run verify` is `format:check` → `lint` → `typecheck` → `test`. Last full run:
-**exit 0**, 2026-09-30.
+**exit 0**, 2026-09-30, after the Phase 1 foundation change.
 
 | Step           | Result                                                           |
 | -------------- | ---------------------------------------------------------------- |
@@ -103,7 +103,11 @@ These are ours to decide; none of them needs production data.
 | `typecheck`    | Pass — `@glampro/shared`, `@glampro/api`, `@glampro/web`         |
 | API tests      | **16 passed, 0 failed** (7 suites, `node --test` over real HTTP) |
 | Shared tests   | **6 passed, 0 failed** (3 suites)                                |
-| Web tests      | **4 files passed** (Vitest)                                      |
+| Web tests      | **4 files, 25 tests passed** (Vitest)                            |
+
+`npm run build:web` was also run once to confirm the new utilities compile — `w-rail`,
+`pl-rail`, `h-topbar`, `rounded-pill`, `text-2xs` and `text-[length:var(--app-rail-icon)]`
+all emit CSS, and each resolves to the token it should. `dist/` was deleted afterwards.
 
 Two things to know when you run it yourself:
 

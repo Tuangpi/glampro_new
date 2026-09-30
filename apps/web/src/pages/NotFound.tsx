@@ -1,4 +1,4 @@
-import { FiArrowLeft } from "react-icons/fi";
+import { ChevronLeft } from "@/components/icons";
 import { Link } from "react-router";
 
 export default function NotFound() {
@@ -15,7 +15,7 @@ export default function NotFound() {
           to="/"
           className="mt-6 inline-flex h-control items-center gap-2 rounded-md bg-purple px-5 text-sm font-semibold text-white shadow-purple-btn transition hover:bg-purple-dark"
         >
-          <FiArrowLeft aria-hidden />
+          <ChevronLeft aria-hidden />
           Back to dashboard
         </Link>
       </div>

@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { FiAlertTriangle } from "react-icons/fi";
+
+import { AlertTriangle } from "@/components/icons";
 
 interface Props {
   children: ReactNode;
@@ -37,7 +38,7 @@ export default class ErrorBoundary extends Component<Props, State> {
       <div className="flex min-h-screen items-center justify-center bg-bg p-6">
         <div className="w-full max-w-lg rounded-card border border-line bg-surface p-8 text-center shadow-menu">
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-danger/10 text-danger">
-            <FiAlertTriangle className="text-2xl" aria-hidden />
+            <AlertTriangle className="text-2xl" aria-hidden />
           </div>
 
           <h1 className="text-xl">Something went wrong</h1>
