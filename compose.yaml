@@ -1,0 +1,112 @@
+# Glampro — local development stack.
+#
+#   cp .env.docker.example .env.docker     # then edit the secrets
+#   docker compose --env-file .env.docker up --build
+#
+# Source is bind-mounted into both app containers, so edits reload live:
+#   web  → Vite HMR on http://localhost:5173
+#   api  → nodemon + tsx restart on http://localhost:9000
+#
+# node_modules and the generated Prisma client live in named volumes seeded from
+# the images, so host-installed binaries never leak into the containers.
+# After changing any package.json:  docker compose --env-file .env.docker up --build -V
+
+name: glampro
+
+services:
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-glampro}
+      POSTGRES_USER: ${POSTGRES_USER:-glampro}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.docker}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      # Published on 5433 by default so it never collides with a host PostgreSQL.
+      - "${POSTGRES_PORT:-5433}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+      target: development
+    environment:
+      NODE_ENV: development
+      PORT: 9000
+      LOG_LEVEL: ${LOG_LEVEL:-debug}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-glampro}:${POSTGRES_PASSWORD}@database:5432/${POSTGRES_DB:-glampro}
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.docker}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-10}
+      UPLOADS_DIR: uploads
+      SEED_MODE: ${SEED_MODE:-development}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@glampro.test}
+      ADMIN_NAME: ${ADMIN_NAME:-Glampro Administrator}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-ChangeMe123!}
+      # The repository may live on a mount where inotify does not fire, so
+      # polling is on by default for the dev servers.
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - .:/app
+      - api_node_modules:/app/node_modules
+      - api_workspace_modules:/app/apps/api/node_modules
+      - shared_workspace_modules:/app/packages/shared/node_modules
+      - api_generated:/app/apps/api/generated
+      - api_uploads:/app/apps/api/uploads
+    ports:
+      - "${API_PORT:-9000}:9000"
+    depends_on:
+      database:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:9000/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      # Migrations, Prisma client generation and the shared build run first.
+      start_period: 60s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+      target: development
+    environment:
+      VITE_API_URL: /api
+      VITE_PROXY_TARGET: http://api:9000
+      VITE_USE_POLLING: "true"
+    volumes:
+      - .:/app
+      - web_node_modules:/app/node_modules
+      - web_workspace_modules:/app/apps/web/node_modules
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  api_node_modules:
+  api_workspace_modules:
+  shared_workspace_modules:
+  api_generated:
+  api_uploads:
+  web_node_modules:
+  web_workspace_modules:

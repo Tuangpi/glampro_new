@@ -1,0 +1,53 @@
+{
+  "name": "glampro",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Glampro — salon management platform. React + TypeScript web app, Express + TypeScript API, PostgreSQL.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n shared,api,web -c blue,green,magenta \"npm:dev:shared\" \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:shared": "npm run dev --workspace @glampro/shared",
+    "dev:api": "npm run dev --workspace @glampro/api",
+    "dev:web": "npm run dev --workspace @glampro/web",
+    "dev:docker:api": "npm run db:migrate && npm run build:shared && npm run db:generate && concurrently -k -n shared,api -c blue,green \"npm:dev:shared\" \"npm:dev:api\"",
+    "dev:docker:web": "npm run build:shared && npm run dev:web",
+    "build": "npm run build:shared && npm run db:generate && npm run build:api && npm run build:web",
+    "build:shared": "npm run build --workspace @glampro/shared",
+    "build:api": "npm run build --workspace @glampro/api",
+    "build:web": "npm run build --workspace @glampro/web",
+    "clean": "npm run clean --workspaces --if-present",
+    "db:generate": "npm run db:generate --workspace @glampro/api",
+    "db:migrate": "npm run db:migrate --workspace @glampro/api",
+    "db:migrate:dev": "npm run db:migrate:dev --workspace @glampro/api",
+    "db:migrate:status": "npm run db:migrate:status --workspace @glampro/api",
+    "db:seed": "npm run db:seed --workspace @glampro/api",
+    "db:seed:prod": "npm run db:seed:prod --workspace @glampro/api",
+    "db:reset": "npm run db:reset --workspace @glampro/api",
+    "db:studio": "npm run db:studio --workspace @glampro/api",
+    "lint": "npm run lint --workspaces --if-present",
+    "lint:fix": "npm run lint:fix --workspaces --if-present",
+    "typecheck": "npm run build:shared && npm run db:generate && npm run typecheck --workspaces --if-present",
+    "test": "npm run build:shared && npm run test --workspaces --if-present",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test",
+    "docker:dev": "docker compose --env-file .env.docker up --build",
+    "docker:dev:down": "docker compose --env-file .env.docker down",
+    "docker:dev:reset": "docker compose --env-file .env.docker down --volumes",
+    "docker:dev:logs": "docker compose --env-file .env.docker logs -f api web",
+    "docker:dev:seed": "docker compose --env-file .env.docker exec -T api npm run db:seed",
+    "docker:prod": "docker compose -f compose.production.yaml --env-file .env.production up --build -d",
+    "docker:prod:down": "docker compose -f compose.production.yaml --env-file .env.production down"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5",
+    "prettier": "^3.9.9"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "watch": ["src", "prisma", "../../packages/shared/dist"],
+  "ext": "ts,json",
+  "ignore": ["src/**/*.test.ts", "dist", "generated", "node_modules"],
+  "exec": "tsx src/index.ts",
+  "signal": "SIGTERM",
+  "delay": "300"
+}

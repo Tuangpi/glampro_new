@@ -1,0 +1,8 @@
+node_modules
+dist
+coverage
+package-lock.json
+apps/api/generated
+apps/api/prisma/migrations
+# Verbatim copy of the Salon Pro handoff tokens — keep byte-identical.
+apps/web/src/styles/tokens.css

@@ -1,0 +1,108 @@
+@import "tailwindcss";
+@import "./styles/tokens.css";
+
+/*
+ * Tailwind 4 theme.
+ *
+ * The handoff tokens (`--sp-*`) stay untouched in styles/tokens.css; this block
+ * maps the useful ones onto Tailwind's namespaces so components can write
+ * `bg-surface`, `text-navy`, `rounded-card`, `h-control` instead of repeating
+ * `bg-[var(--sp-surface)]` everywhere.
+ */
+@theme {
+  /* Surfaces & structure */
+  --color-bg: var(--sp-bg);
+  --color-surface: var(--sp-surface);
+  --color-surface-muted: var(--sp-surface-muted);
+  --color-surface-2: var(--sp-surface-2);
+  --color-line: var(--sp-border);
+  --color-line-soft: var(--sp-border-soft);
+
+  /* Text */
+  --color-ink: var(--sp-text-primary);
+  --color-ink-body: var(--sp-text-body);
+  --color-ink-muted: var(--sp-text-muted);
+  --color-ink-faint: var(--sp-text-faint);
+  --color-ink-disabled: var(--sp-text-disabled);
+  --color-ink-on-dark: var(--sp-text-on-dark-muted);
+  --color-ink-on-dark-accent: var(--sp-text-on-dark-accent);
+
+  /* Brand */
+  --color-navy: var(--sp-navy);
+  --color-purple: var(--sp-purple);
+  --color-purple-dark: var(--sp-purple-dark);
+  --color-purple-soft: var(--sp-purple-bg);
+  --color-purple-softer: var(--sp-purple-bg-soft);
+
+  /* Semantic */
+  --color-success: var(--sp-green);
+  --color-success-soft: var(--sp-green-bg);
+  --color-success-text: var(--sp-green-text);
+  --color-danger: var(--sp-red);
+
+  /* Typography */
+  --font-sans: var(--sp-font-family);
+  --text-2xs: var(--sp-text-2xs);
+  --text-xs: var(--sp-text-xs);
+  --text-sm: var(--sp-text-sm);
+  --text-base: var(--sp-text-base);
+  --text-md: var(--sp-text-md);
+  --text-lg: var(--sp-text-lg);
+  --text-xl: var(--sp-text-xl);
+  --text-2xl: var(--sp-text-2xl);
+  --text-display: var(--sp-text-display);
+
+  /* Radii */
+  --radius-sm: var(--sp-radius-sm);
+  --radius-md: var(--sp-radius-md);
+  --radius-lg: var(--sp-radius-lg);
+  --radius-card: var(--sp-radius-xl);
+  --radius-2xl: var(--sp-radius-2xl);
+
+  /* Control heights (44px minimum tap target) */
+  --spacing-control-sm: var(--sp-control-h-sm);
+  --spacing-control: var(--sp-control-h-md);
+  --spacing-control-lg: var(--sp-control-h-lg);
+  --spacing-rail: var(--sp-rail-w);
+  --spacing-topbar: var(--sp-topbar-h);
+
+  /* Elevation */
+  --shadow-purple-btn: var(--sp-shadow-purple-btn);
+  --shadow-green-btn: var(--sp-shadow-green-btn);
+  --shadow-menu: var(--sp-shadow-menu);
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--sp-bg);
+    color: var(--sp-text-body);
+    font-family: var(--sp-font-family);
+    font-size: var(--sp-text-base);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    color: var(--sp-text-primary);
+    font-weight: var(--sp-weight-bold);
+  }
+}
+
+/* Hide scrollbars on the horizontal chip/tab rows used across the screens. */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

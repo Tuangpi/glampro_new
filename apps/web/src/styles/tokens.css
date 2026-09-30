@@ -1,0 +1,102 @@
+/*
+  Salon Pro redesign — design tokens
+  Copied verbatim from the developer handoff (`tokens/tokens.css`) so the
+  original values stay the single source of truth. Do not edit the values here;
+  update them in the handoff package and re-copy.
+*/
+
+:root {
+  /* ---- color: surfaces & structure ---- */
+  --sp-bg: #f3f4fa; /* page / app background */
+  --sp-surface: #ffffff; /* cards, panels, inputs-on-white */
+  --sp-surface-muted: #f8f9fc; /* recessed panels (e.g. receipt box) */
+  --sp-surface-2: #f3f4fa; /* input / pill fill on white cards */
+  --sp-border: #e3e6f2; /* default hairline border */
+  --sp-border-soft: #eef0f7; /* dividers, dashed separators */
+
+  /* ---- color: text ---- */
+  --sp-text-primary: #1b2350; /* headings, primary labels, dark surfaces */
+  --sp-text-body: #4b5271; /* body copy, secondary values */
+  --sp-text-muted: #8a90aa; /* captions, placeholders, meta */
+  --sp-text-faint: #a0a5bd; /* timestamps, disabled-ish meta */
+  --sp-text-disabled: #d3d6e6; /* disabled slot labels */
+  --sp-text-on-dark-muted: #9fa6d9; /* labels on navy surfaces */
+  --sp-text-on-dark-accent: #c6bbff; /* icon accents on navy surfaces */
+
+  /* ---- color: brand / accent ---- */
+  --sp-purple: #6144e4; /* primary accent — active tab, links, icons */
+  --sp-purple-dark: #4b32c3; /* hover/pressed state for purple */
+  --sp-purple-bg: #f1ecff; /* tinted icon backgrounds */
+  --sp-purple-bg-soft: #f8f6ff; /* selected card / chip fill */
+  --sp-purple-grad-a: #6144e4;
+  --sp-purple-grad-b: #8b6bff; /* brand-mark gradient end */
+
+  /* ---- color: semantic ---- */
+  --sp-green: #22a76d; /* success, cash payment, positive */
+  --sp-green-bg: #e7f8ef; /* success tint background */
+  --sp-green-text: #1b8a57; /* text/icons on green tint */
+  --sp-red: #e14b4b; /* destructive actions, badges */
+  --sp-amber-grad-a: #ffc94d; /* dashboard income tile gradient start */
+  --sp-amber-grad-b: #ffb020; /* dashboard income tile gradient end */
+
+  /* ---- color: navy surface (cart summary ticket, sidebar) ---- */
+  --sp-navy: #1b2350;
+  --sp-navy-tint-10: rgba(255, 255, 255, 0.1);
+  --sp-navy-tint-14: rgba(255, 255, 255, 0.14);
+
+  /* ---- typography ---- */
+  --sp-font-family:
+    "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --sp-text-2xs: 10px;
+  --sp-text-xs: 11px;
+  --sp-text-sm: 12.5px;
+  --sp-text-base: 14px;
+  --sp-text-md: 15.5px;
+  --sp-text-lg: 17px;
+  --sp-text-xl: 21px;
+  --sp-text-2xl: 26px;
+  --sp-text-display: 40px;
+
+  --sp-weight-regular: 400;
+  --sp-weight-medium: 600;
+  --sp-weight-bold: 700;
+  --sp-weight-heavy: 800;
+
+  /* ---- radius ---- */
+  --sp-radius-sm: 8px; /* small icon buttons, overflow menu items */
+  --sp-radius-md: 12px; /* inputs, buttons, date/duration pickers */
+  --sp-radius-lg: 16px; /* item tiles */
+  --sp-radius-xl: 20px; /* cart panel, section cards */
+  --sp-radius-2xl: 22px; /* confirmation card */
+  --sp-radius-pill: 999px; /* chips, avatars, segmented tabs, badges */
+
+  /* ---- spacing scale ---- */
+  --sp-space-1: 4px;
+  --sp-space-2: 6px;
+  --sp-space-3: 8px;
+  --sp-space-4: 10px;
+  --sp-space-5: 12px;
+  --sp-space-6: 14px;
+  --sp-space-7: 16px;
+  --sp-space-8: 18px;
+  --sp-space-9: 20px;
+  --sp-space-10: 22px;
+  --sp-space-11: 24px;
+  --sp-space-12: 28px;
+
+  /* ---- shadows ---- */
+  --sp-shadow-purple-btn: 0 4px 10px rgba(97, 68, 228, 0.28);
+  --sp-shadow-purple-tile:
+    0 10px 22px rgba(97, 68, 228, 0.16), 0 0 0 2px rgba(97, 68, 228, 0.18) inset;
+  --sp-shadow-green-btn: 0 8px 16px rgba(34, 167, 109, 0.28);
+  --sp-shadow-menu: 0 10px 24px rgba(27, 35, 80, 0.14);
+
+  /* ---- control sizing ---- */
+  --sp-control-h-sm: 30px; /* stepper buttons, small icon buttons */
+  --sp-control-h-md: 44px; /* standard buttons, inputs — meets 44px min tap target */
+  --sp-control-h-lg: 52px; /* primary payment / submit buttons */
+
+  /* ---- app chrome (screens 05–11 use a fixed app frame) ---- */
+  --sp-rail-w: 84px; /* navy icon rail */
+  --sp-topbar-h: 76px; /* white top bar */
+}

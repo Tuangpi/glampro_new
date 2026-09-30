@@ -1,0 +1,74 @@
+// Glampro data model.
+//
+// This is the greenfield schema for the Postgres rebuild. Tables are mapped to
+// snake_case names (`@@map`) so hand-written reporting SQL stays readable,
+// while the Prisma models keep PascalCase like the rest of the codebase.
+//
+// Phase 0 ships only the session tables needed to boot and authenticate.
+// Catalogue, POS, appointments, staff and reporting models land in the phases
+// that own them.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Salon-scoped role. Order is intentional: highest privilege first.
+enum GlobalRole {
+  SUPER_ADMIN
+  MANAGER
+  STAFF
+  CASHIER
+}
+
+/// Which client surface a session belongs to.
+enum AuthRealm {
+  web
+  pos
+  mobile
+}
+
+model User {
+  id           String     @id @default(cuid())
+  email        String     @unique
+  name         String
+  passwordHash String
+  globalRole   GlobalRole @default(STAFF)
+  phone        String?
+  avatar       String?
+  disabled     Boolean    @default(false)
+  disabledAt   DateTime?
+  lastLoginAt  DateTime?
+  /// Bumped on logout and password change to invalidate outstanding tokens.
+  tokenVersion Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  refreshTokens RefreshToken[]
+
+  @@index([globalRole])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  /// SHA-256 of the opaque refresh token — the raw value is never stored.
+  tokenHash String    @unique
+  realm     AuthRealm @default(web)
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+  ipAddress String?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}

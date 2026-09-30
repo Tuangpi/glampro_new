@@ -1,0 +1,29 @@
+# Files and folders that must never enter a build context.
+**/node_modules
+**/dist
+**/coverage
+**/*.tsbuildinfo
+**/generated
+
+.git
+.gitignore
+.github
+
+# Environment files: compose injects these at runtime, images must stay generic.
+.env
+.env.*
+!.env.example
+!.env.docker.example
+!.env.production.example
+
+**/*.log
+.DS_Store
+Thumbs.db
+.idea
+.vscode
+
+# Docs and local tooling are not needed inside the images.
+docs
+README.md
+README.Docker.md
+Makefile
