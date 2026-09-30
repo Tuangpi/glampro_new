@@ -1,0 +1,97 @@
+/*
+  Salon Pro redesign — design tokens
+  Extracted from the four recommended screens (Sale, Confirmation,
+  New Appointment, Quick-win fixes). Drop this file in alongside your
+  existing stylesheet, or copy the values into your own token system
+  (Tailwind theme, CSS-in-JS, SCSS vars, etc).
+*/
+
+:root {
+  /* ---- color: surfaces & structure ---- */
+  --sp-bg:            #F3F4FA;  /* page / app background */
+  --sp-surface:       #FFFFFF;  /* cards, panels, inputs-on-white */
+  --sp-surface-muted: #F8F9FC;  /* recessed panels (e.g. receipt box) */
+  --sp-surface-2:     #F3F4FA;  /* input / pill fill on white cards */
+  --sp-border:        #E3E6F2;  /* default hairline border */
+  --sp-border-soft:   #EEF0F7;  /* dividers, dashed separators */
+
+  /* ---- color: text ---- */
+  --sp-text-primary:  #1B2350;  /* headings, primary labels, dark surfaces */
+  --sp-text-body:     #4B5271;  /* body copy, secondary values */
+  --sp-text-muted:    #8A90AA;  /* captions, placeholders, meta */
+  --sp-text-faint:    #A0A5BD;  /* timestamps, disabled-ish meta */
+  --sp-text-disabled: #D3D6E6;  /* disabled slot labels */
+  --sp-text-on-dark-muted:  #9FA6D9; /* labels on navy surfaces */
+  --sp-text-on-dark-accent: #C6BBFF; /* icon accents on navy surfaces */
+
+  /* ---- color: brand / accent ---- */
+  --sp-purple:        #6144E4;  /* primary accent — active tab, links, icons */
+  --sp-purple-dark:    #4B32C3;  /* hover/pressed state for purple */
+  --sp-purple-bg:      #F1ECFF; /* tinted icon backgrounds */
+  --sp-purple-bg-soft: #F8F6FF; /* selected card / chip fill */
+  --sp-purple-grad-a:  #6144E4;
+  --sp-purple-grad-b:  #8B6BFF; /* brand-mark gradient end */
+
+  /* ---- color: semantic ---- */
+  --sp-green:          #22A76D; /* success, cash payment, positive */
+  --sp-green-bg:       #E7F8EF; /* success tint background */
+  --sp-green-text:     #1B8A57; /* text/icons on green tint */
+  --sp-red:            #E14B4B; /* destructive actions, badges */
+  --sp-amber-grad-a:   #FFC94D; /* dashboard income tile gradient start */
+  --sp-amber-grad-b:   #FFB020; /* dashboard income tile gradient end */
+
+  /* ---- color: navy surface (cart summary ticket, sidebar) ---- */
+  --sp-navy:           #1B2350;
+  --sp-navy-tint-10:   rgba(255,255,255,.10);
+  --sp-navy-tint-14:   rgba(255,255,255,.14);
+
+  /* ---- typography ---- */
+  --sp-font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --sp-text-2xs:  10px;
+  --sp-text-xs:   11px;
+  --sp-text-sm:   12.5px;
+  --sp-text-base: 14px;
+  --sp-text-md:   15.5px;
+  --sp-text-lg:   17px;
+  --sp-text-xl:   21px;
+  --sp-text-2xl:  26px;
+  --sp-text-display: 40px;
+
+  --sp-weight-regular:  400;
+  --sp-weight-medium:   600;
+  --sp-weight-bold:     700;
+  --sp-weight-heavy:    800;
+
+  /* ---- radius ---- */
+  --sp-radius-sm:   8px;   /* small icon buttons, overflow menu items */
+  --sp-radius-md:   12px;  /* inputs, buttons, date/duration pickers */
+  --sp-radius-lg:   16px;  /* item tiles */
+  --sp-radius-xl:   20px;  /* cart panel, section cards */
+  --sp-radius-2xl:  22px;  /* confirmation card */
+  --sp-radius-pill: 999px; /* chips, avatars, segmented tabs, badges */
+
+  /* ---- spacing scale ---- */
+  --sp-space-1: 4px;
+  --sp-space-2: 6px;
+  --sp-space-3: 8px;
+  --sp-space-4: 10px;
+  --sp-space-5: 12px;
+  --sp-space-6: 14px;
+  --sp-space-7: 16px;
+  --sp-space-8: 18px;
+  --sp-space-9: 20px;
+  --sp-space-10: 22px;
+  --sp-space-11: 24px;
+  --sp-space-12: 28px;
+
+  /* ---- shadows ---- */
+  --sp-shadow-purple-btn: 0 4px 10px rgba(97,68,228,.28);
+  --sp-shadow-purple-tile: 0 10px 22px rgba(97,68,228,.16), 0 0 0 2px rgba(97,68,228,.18) inset;
+  --sp-shadow-green-btn:  0 8px 16px rgba(34,167,109,.28);
+  --sp-shadow-menu:       0 10px 24px rgba(27,35,80,.14);
+
+  /* ---- control sizing ---- */
+  --sp-control-h-sm: 30px;   /* stepper buttons, small icon buttons */
+  --sp-control-h-md: 44px;   /* standard buttons, inputs — meets 44px min tap target */
+  --sp-control-h-lg: 52px;   /* primary payment / submit buttons */
+}

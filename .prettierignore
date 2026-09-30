@@ -6,3 +6,6 @@ apps/api/generated
 apps/api/prisma/migrations
 # Verbatim copy of the Salon Pro handoff tokens — keep byte-identical.
 apps/web/src/styles/tokens.css
+# Vendored Salon Pro redesign package (screens, tokens, icons) — reference
+# material, kept exactly as delivered. See docs/design/HANDOFF.md.
+design/handoff

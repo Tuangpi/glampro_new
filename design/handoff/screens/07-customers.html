@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salon Pro — Customers</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: #F3F4FA; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .app { width: 1280px; height: 900px; background: #F3F4FA; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1B2350; display: flex; overflow: hidden; }
+  a { color: #6144E4; text-decoration: none; }
+
+  .sidebar { width: 84px; flex-shrink: 0; background: #1B2350; display: flex; flex-direction: column; align-items: center; padding: 20px 0 16px; }
+  .side-logo { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg,#6144E4,#8B6BFF); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 17px; flex-shrink: 0; margin-bottom: 22px; }
+  .side-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; width: 100%; align-items: center; }
+  .nav-item { width: 54px; height: 50px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #8890C4; position: relative; }
+  .nav-item .lbl { font-size: 8.5px; font-weight: 700; letter-spacing: .01em; }
+  .nav-item.active { background: #6144E4; color: #fff; box-shadow: 0 4px 10px rgba(97,68,228,.35); }
+  .nav-badge { position: absolute; top: 2px; right: 10px; width: 16px; height: 16px; border-radius: 999px; background: #E14B4B; color: #fff; font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 2px solid #1B2350; }
+  .side-foot { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+  .topbar { height: 76px; background: #FFFFFF; border-bottom: 1px solid #E3E6F2; display: flex; align-items: center; gap: 16px; padding: 0 28px; flex-shrink: 0; }
+  .page-head { display: flex; flex-direction: column; line-height: 1.25; }
+  .page-title { font-weight: 800; font-size: 18px; }
+  .page-sub { font-size: 12px; color: #8A90AA; }
+  .search-box { display: flex; align-items: center; gap: 8px; background: #F3F4FA; border: 1px solid #E3E6F2; border-radius: 10px; padding: 9px 14px; color: #8A90AA; width: 280px; margin-left: 18px; }
+  .search-box span { font-size: 13px; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 12px; font-weight: 700; font-size: 13.5px; padding: 11px 18px; border: none; cursor: pointer; white-space: nowrap; }
+  .btn-primary { background: #6144E4; color: #fff; box-shadow: 0 4px 10px rgba(97,68,228,.28); }
+  .avatar { width: 38px; height: 38px; border-radius: 999px; background: #1B2350; color: #fff; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .divider-v { width: 1px; height: 28px; background: #E3E6F2; }
+
+  .content { flex: 1; overflow: hidden; padding: 20px 28px; display: flex; gap: 18px; min-height: 0; }
+
+  /* list */
+  .list-card { flex: 1.4; background: #fff; border: 1px solid #E3E6F2; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+  .list-head { padding: 14px 18px; border-bottom: 1px solid #EEF0F7; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .list-count { font-size: 12.5px; color: #8A90AA; }
+  .filter-chip { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #6E7390; border: 1px solid #E3E6F2; border-radius: 999px; padding: 6px 12px; }
+  .tbl { flex: 1; overflow: auto; }
+  .t-head-row { display: grid; grid-template-columns: 2fr 1.2fr 1fr 1fr 0.9fr; padding: 9px 18px; font-size: 10.5px; font-weight: 800; color: #A0A5BD; text-transform: uppercase; letter-spacing: .02em; }
+  .t-row { display: grid; grid-template-columns: 2fr 1.2fr 1fr 1fr 0.9fr; align-items: center; padding: 11px 18px; border-top: 1px solid #F3F4FA; cursor: pointer; }
+  .t-row:hover, .t-row.selected { background: #F8F6FF; }
+  .cust-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .cust-avatar { width: 34px; height: 34px; border-radius: 999px; background: #E7F8EF; color: #1B8A57; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12px; flex-shrink: 0; }
+  .cust-name { font-size: 13.5px; font-weight: 700; }
+  .cust-since { font-size: 11px; color: #8A90AA; }
+  .t-cell { font-size: 12.5px; color: #4B5271; }
+  .tier { font-size: 10.5px; font-weight: 800; padding: 4px 9px; border-radius: 999px; width: fit-content; }
+  .tier.gold { background: #FFF4DE; color: #B9740A; }
+  .tier.silver { background: #F3F4FA; color: #6E7390; }
+  .tier.new { background: #F1ECFF; color: #6144E4; }
+  .t-spend { font-weight: 800; font-size: 13px; }
+
+  /* detail panel */
+  .detail-col { width: 380px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+  .profile-card { background: #1B2350; border-radius: 20px; padding: 22px; color: #fff; flex-shrink: 0; }
+  .profile-top { display: flex; align-items: center; gap: 14px; }
+  .profile-avatar { width: 56px; height: 56px; border-radius: 999px; background: #6144E4; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 19px; flex-shrink: 0; }
+  .profile-name { font-size: 17px; font-weight: 800; }
+  .profile-tier { font-size: 11px; font-weight: 700; color: #C6BBFF; margin-top: 2px; }
+  .profile-rows { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.14); }
+  .profile-row { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: #C7CBEE; }
+  .profile-row svg { color: #9FA6D9; flex-shrink: 0; }
+  .profile-stats { display: flex; gap: 10px; margin-top: 18px; }
+  .pstat { flex: 1; background: rgba(255,255,255,.08); border-radius: 12px; padding: 10px; text-align: center; }
+  .pstat .v { font-size: 15px; font-weight: 800; }
+  .pstat .k { font-size: 10px; color: #9FA6D9; margin-top: 2px; }
+
+  .tabs-card { flex: 1; background: #fff; border: 1px solid #E3E6F2; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+  .tabs-row { display: flex; border-bottom: 1px solid #EEF0F7; flex-shrink: 0; }
+  .tab-opt { flex: 1; text-align: center; padding: 13px 0; font-size: 12.5px; font-weight: 700; color: #8A90AA; }
+  .tab-opt.active { color: #6144E4; box-shadow: inset 0 -2px 0 #6144E4; }
+  .visit-list { flex: 1; overflow: auto; padding: 6px 16px 16px; }
+  .visit-item { padding: 12px 4px; border-bottom: 1px dashed #EEF0F7; }
+  .visit-top { display: flex; align-items: center; justify-content: space-between; }
+  .visit-date { font-size: 12.5px; font-weight: 800; }
+  .visit-amt { font-size: 12.5px; font-weight: 800; }
+  .visit-desc { font-size: 11.5px; color: #8A90AA; margin-top: 3px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="sidebar">
+    <div class="side-logo">S</div>
+    <div class="side-nav">
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg><div class="lbl">Home</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"></path></svg><div class="lbl">Sale</div><div class="nav-badge">1</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg><div class="lbl">Calendar</div></div>
+      <div class="nav-item active"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><div class="lbl">Customers</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><line x1="12" y1="13" x2="12" y2="21"></line></svg><div class="lbl">Products</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg><div class="lbl">Staff</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><div class="lbl">Reports</div></div>
+    </div>
+    <div class="side-foot">
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg><div class="lbl">Settings</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><div class="lbl">Log out</div></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="page-head">
+        <div class="page-title">Customers</div>
+        <div class="page-sub">412 total</div>
+      </div>
+      <div class="search-box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <span>Search name or phone&hellip;</span>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-primary">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Add customer
+        </button>
+        <div class="divider-v"></div>
+        <div class="avatar">K</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="list-card">
+        <div class="list-head">
+          <div class="list-count">412 customers</div>
+          <div class="filter-chip">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
+            All tiers
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </div>
+        </div>
+        <div class="t-head-row"><span>Customer</span><span>Phone</span><span>Last visit</span><span>Total spend</span><span>Tier</span></div>
+        <div class="tbl">
+          <div class="t-row selected">
+            <div class="cust-cell"><div class="cust-avatar">ML</div><div><div class="cust-name">Mrs Loi</div><div class="cust-since">Since Mar 2021</div></div></div>
+            <div class="t-cell">9030 9386</div>
+            <div class="t-cell">Today</div>
+            <div class="t-spend">S$3,240</div>
+            <div class="tier gold">Gold</div>
+          </div>
+          <div class="t-row">
+            <div class="cust-cell"><div class="cust-avatar">IF</div><div><div class="cust-name">Irene Foo</div><div class="cust-since">Since Jan 2023</div></div></div>
+            <div class="t-cell">8123 4021</div>
+            <div class="t-cell">Today</div>
+            <div class="t-spend">S$1,860</div>
+            <div class="tier silver">Silver</div>
+          </div>
+          <div class="t-row">
+            <div class="cust-cell"><div class="cust-avatar">DL</div><div><div class="cust-name">David Lim</div><div class="cust-since">Since Jun 2020</div></div></div>
+            <div class="t-cell">9611 2288</div>
+            <div class="t-cell">Today</div>
+            <div class="t-spend">S$4,910</div>
+            <div class="tier gold">Gold</div>
+          </div>
+          <div class="t-row">
+            <div class="cust-cell"><div class="cust-avatar">PY</div><div><div class="cust-name">Priya Y.</div><div class="cust-since">Since Nov 2024</div></div></div>
+            <div class="t-cell">9822 7734</div>
+            <div class="t-cell">Today</div>
+            <div class="t-spend">S$420</div>
+            <div class="tier new">New</div>
+          </div>
+          <div class="t-row">
+            <div class="cust-cell"><div class="cust-avatar">RT</div><div><div class="cust-name">Ryan Tan</div><div class="cust-since">Since Aug 2022</div></div></div>
+            <div class="t-cell">8899 0012</div>
+            <div class="t-cell">2 days ago</div>
+            <div class="t-spend">S$980</div>
+            <div class="tier silver">Silver</div>
+          </div>
+          <div class="t-row">
+            <div class="cust-cell"><div class="cust-avatar">SH</div><div><div class="cust-name">Sarah Ho</div><div class="cust-since">Since Feb 2025</div></div></div>
+            <div class="t-cell">9077 5544</div>
+            <div class="t-cell">4 days ago</div>
+            <div class="t-spend">S$210</div>
+            <div class="tier new">New</div>
+          </div>
+          <div class="t-row">
+            <div class="cust-cell"><div class="cust-avatar">WX</div><div><div class="cust-name">Wen Xin</div><div class="cust-since">Since Jul 2019</div></div></div>
+            <div class="t-cell">9345 6612</div>
+            <div class="t-cell">1 week ago</div>
+            <div class="t-spend">S$6,120</div>
+            <div class="tier gold">Gold</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-col">
+        <div class="profile-card">
+          <div class="profile-top">
+            <div class="profile-avatar">ML</div>
+            <div>
+              <div class="profile-name">Mrs Loi</div>
+              <div class="profile-tier">Gold member &middot; since Mar 2021</div>
+            </div>
+          </div>
+          <div class="profile-rows">
+            <div class="profile-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.362 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.338 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>9030 9386</div>
+            <div class="profile-row"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><polyline points="2 7 12 13 22 7"></polyline></svg>mrsloi88@gmail.com</div>
+          </div>
+          <div class="profile-stats">
+            <div class="pstat"><div class="v">27</div><div class="k">Visits</div></div>
+            <div class="pstat"><div class="v">S$3,240</div><div class="k">Total spend</div></div>
+            <div class="pstat"><div class="v">S$120</div><div class="k">Avg ticket</div></div>
+          </div>
+        </div>
+
+        <div class="tabs-card">
+          <div class="tabs-row">
+            <div class="tab-opt active">Visit history</div>
+            <div class="tab-opt">Packages</div>
+            <div class="tab-opt">Notes</div>
+          </div>
+          <div class="visit-list">
+            <div class="visit-item">
+              <div class="visit-top"><span class="visit-date">Today, 11:15 AM</span><span class="visit-amt">S$88.00</span></div>
+              <div class="visit-desc">Magken Shampoo, Signature Haircut &middot; with Sam</div>
+            </div>
+            <div class="visit-item">
+              <div class="visit-top"><span class="visit-date">2 Sep 2026</span><span class="visit-amt">S$186.00</span></div>
+              <div class="visit-desc">Colour Retouch, Blow Dry &amp; Style &middot; with Jia Ting</div>
+            </div>
+            <div class="visit-item">
+              <div class="visit-top"><span class="visit-date">14 Aug 2026</span><span class="visit-amt">S$58.00</span></div>
+              <div class="visit-desc">Signature Haircut &middot; with Sam</div>
+            </div>
+            <div class="visit-item">
+              <div class="visit-top"><span class="visit-date">2 Jul 2026</span><span class="visit-amt">S$228.00</span></div>
+              <div class="visit-desc">Keratin Treatment &middot; with Jia Ting</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

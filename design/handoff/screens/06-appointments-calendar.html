@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salon Pro — Appointments Calendar</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: #F3F4FA; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .app { width: 1280px; height: 900px; background: #F3F4FA; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1B2350; display: flex; overflow: hidden; }
+  a { color: #6144E4; text-decoration: none; }
+
+  .sidebar { width: 84px; flex-shrink: 0; background: #1B2350; display: flex; flex-direction: column; align-items: center; padding: 20px 0 16px; }
+  .side-logo { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg,#6144E4,#8B6BFF); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 17px; flex-shrink: 0; margin-bottom: 22px; }
+  .side-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; width: 100%; align-items: center; }
+  .nav-item { width: 54px; height: 50px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #8890C4; position: relative; }
+  .nav-item .lbl { font-size: 8.5px; font-weight: 700; letter-spacing: .01em; }
+  .nav-item.active { background: #6144E4; color: #fff; box-shadow: 0 4px 10px rgba(97,68,228,.35); }
+  .nav-badge { position: absolute; top: 2px; right: 10px; width: 16px; height: 16px; border-radius: 999px; background: #E14B4B; color: #fff; font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 2px solid #1B2350; }
+  .side-foot { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+  .topbar { height: 76px; background: #FFFFFF; border-bottom: 1px solid #E3E6F2; display: flex; align-items: center; gap: 16px; padding: 0 28px; flex-shrink: 0; }
+  .page-head { display: flex; flex-direction: column; line-height: 1.25; }
+  .page-title { font-weight: 800; font-size: 18px; }
+  .page-sub { font-size: 12px; color: #8A90AA; }
+  .date-nav { display: flex; align-items: center; gap: 4px; margin-left: 10px; }
+  .date-nav button { width: 30px; height: 30px; border-radius: 999px; border: 1px solid #E3E6F2; background: #fff; color: #6E7390; display: flex; align-items: center; justify-content: center; }
+  .date-today { font-size: 12.5px; font-weight: 700; color: #6144E4; background: #F1ECFF; padding: 6px 12px; border-radius: 999px; margin: 0 4px; }
+  .view-toggle { display: flex; align-items: center; gap: 3px; background: #F3F4FA; padding: 4px; border-radius: 999px; margin-left: 6px; }
+  .view-opt { padding: 7px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 700; color: #6E7390; }
+  .view-opt.active { background: #fff; color: #1B2350; box-shadow: 0 2px 6px rgba(27,35,80,.1); }
+  .topbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 12px; font-weight: 700; font-size: 13.5px; padding: 11px 18px; border: none; cursor: pointer; white-space: nowrap; }
+  .btn-primary { background: #6144E4; color: #fff; box-shadow: 0 4px 10px rgba(97,68,228,.28); }
+  .avatar { width: 38px; height: 38px; border-radius: 999px; background: #1B2350; color: #fff; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .divider-v { width: 1px; height: 28px; background: #E3E6F2; }
+
+  .content { flex: 1; overflow: hidden; padding: 20px 28px; display: flex; flex-direction: column; min-height: 0; }
+  .cal-card { flex: 1; background: #fff; border: 1px solid #E3E6F2; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+  .cal-header { display: grid; grid-template-columns: 68px repeat(4, 1fr); border-bottom: 1px solid #EEF0F7; flex-shrink: 0; }
+  .cal-header-cell { padding: 14px 12px; display: flex; align-items: center; gap: 9px; }
+  .staff-avatar-lg { width: 30px; height: 30px; border-radius: 999px; background: #1B2350; color: #fff; font-size: 11.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .staff-avatar-lg.a2 { background: #6144E4; }
+  .staff-avatar-lg.a3 { background: #22A76D; }
+  .staff-avatar-lg.a4 { background: #E14B4B; }
+  .staff-col-name { font-size: 13px; font-weight: 800; line-height: 1.2; }
+  .staff-col-role { font-size: 10.5px; color: #8A90AA; }
+
+  .cal-body { flex: 1; overflow-y: auto; display: grid; grid-template-columns: 68px repeat(4, 1fr); position: relative; }
+  .time-col { position: relative; border-right: 1px solid #EEF0F7; padding-top: 18px; }
+  .time-label { position: absolute; left: 0; right: 8px; text-align: right; font-size: 10.5px; font-weight: 700; color: #A0A5BD; transform: translateY(-50%); }
+  .staff-track { position: relative; border-right: 1px solid #EEF0F7; height: 772px; padding-top: 18px; background-image: repeating-linear-gradient(to bottom, transparent, transparent 71px, #F5F6FB 71px, #F5F6FB 72px); }
+  .now-line { position: absolute; left: 0; right: 0; height: 2px; background: #E14B4B; z-index: 3; }
+  .now-line::before { content: ""; position: absolute; left: -4px; top: -4px; width: 10px; height: 10px; border-radius: 999px; background: #E14B4B; }
+
+  .appt-block { position: absolute; left: 6px; right: 6px; border-radius: 10px; padding: 7px 9px; overflow: hidden; box-shadow: 0 2px 6px rgba(27,35,80,.08); border-left: 3px solid #6144E4; background: #F1ECFF; }
+  .appt-block .nm { font-size: 11.5px; font-weight: 800; color: #2B3160; line-height: 1.2; }
+  .appt-block .sv { font-size: 10.5px; color: #6144E4; margin-top: 1px; }
+  .appt-block.done { border-left-color: #22A76D; background: #E7F8EF; }
+  .appt-block.done .sv { color: #1B8A57; }
+  .appt-block.pending { border-left-color: #FFB020; background: #FFF4DE; }
+  .appt-block.pending .sv { color: #B9740A; }
+  .appt-block.break { border-left-color: #C3C7DA; background: #F3F4FA; }
+  .appt-block.break .sv { color: #8A90AA; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="sidebar">
+    <div class="side-logo">S</div>
+    <div class="side-nav">
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg><div class="lbl">Home</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"></path></svg><div class="lbl">Sale</div><div class="nav-badge">1</div></div>
+      <div class="nav-item active"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg><div class="lbl">Calendar</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><div class="lbl">Customers</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><line x1="12" y1="13" x2="12" y2="21"></line></svg><div class="lbl">Products</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg><div class="lbl">Staff</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><div class="lbl">Reports</div></div>
+    </div>
+    <div class="side-foot">
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg><div class="lbl">Settings</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><div class="lbl">Log out</div></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="page-head">
+        <div class="page-title">Appointments</div>
+        <div class="page-sub">Eurosense Hair Studio</div>
+      </div>
+      <div class="date-nav">
+        <button><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+        <div class="date-today">Fri, 18 Sep 2026</div>
+        <button><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+      </div>
+      <div class="view-toggle">
+        <div class="view-opt active">Day</div>
+        <div class="view-opt">Week</div>
+        <div class="view-opt">Month</div>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-primary">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          New appointment
+        </button>
+        <div class="divider-v"></div>
+        <div class="avatar">K</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="cal-card">
+        <div class="cal-header">
+          <div class="cal-header-cell"></div>
+          <div class="cal-header-cell"><div class="staff-avatar-lg">SL</div><div><div class="staff-col-name">Sam Liang</div><div class="staff-col-role">Senior Stylist</div></div></div>
+          <div class="cal-header-cell"><div class="staff-avatar-lg a2">JT</div><div><div class="staff-col-name">Jia Ting</div><div class="staff-col-role">Colourist</div></div></div>
+          <div class="cal-header-cell"><div class="staff-avatar-lg a3">RK</div><div><div class="staff-col-name">Ravi K.</div><div class="staff-col-role">Nail Technician</div></div></div>
+          <div class="cal-header-cell"><div class="staff-avatar-lg a4">MC</div><div><div class="staff-col-name">Mei Chen</div><div class="staff-col-role">Stylist</div></div></div>
+        </div>
+
+        <div class="cal-body">
+          <div class="time-col" style="height:760px">
+            <div class="time-label" style="top:0px">9:00</div>
+            <div class="time-label" style="top:72px">10:00</div>
+            <div class="time-label" style="top:144px">11:00</div>
+            <div class="time-label" style="top:216px">12:00</div>
+            <div class="time-label" style="top:288px">1:00</div>
+            <div class="time-label" style="top:360px">2:00</div>
+            <div class="time-label" style="top:432px">3:00</div>
+            <div class="time-label" style="top:504px">4:00</div>
+            <div class="time-label" style="top:576px">5:00</div>
+            <div class="time-label" style="top:648px">6:00</div>
+            <div class="time-label" style="top:720px">7:00</div>
+          </div>
+
+          <div class="staff-track">
+            <div class="now-line" style="top:192px"></div>
+            <div class="appt-block" style="top:0px; height:54px;"><div class="nm">Mrs Loi</div><div class="sv">Signature Haircut</div></div>
+            <div class="appt-block pending" style="top:162px; height:54px;"><div class="nm">Sarah Ho</div><div class="sv">Blow Dry &amp; Style</div></div>
+            <div class="appt-block pending" style="top:360px; height:54px;"><div class="nm">Ryan Tan</div><div class="sv">Beard Trim</div></div>
+          </div>
+
+          <div class="staff-track">
+            <div class="now-line" style="top:192px"></div>
+            <div class="appt-block done" style="top:0px; height:65px;"><div class="nm">David Lim</div><div class="sv">Keratin Treatment</div></div>
+            <div class="appt-block" style="top:72px; height:108px;"><div class="nm">Irene Foo</div><div class="sv">Colour Retouch</div></div>
+            <div class="appt-block pending" style="top:324px; height:36px;"><div class="nm">Wen Xin</div><div class="sv">Deep Conditioning</div></div>
+          </div>
+
+          <div class="staff-track">
+            <div class="now-line" style="top:192px"></div>
+            <div class="appt-block done" style="top:36px; height:48px;"><div class="nm">Priya Y.</div><div class="sv">Classic Manicure</div></div>
+            <div class="appt-block pending" style="top:432px; height:144px;"><div class="nm">Devi K.</div><div class="sv">Gel Extension</div></div>
+          </div>
+
+          <div class="staff-track">
+            <div class="now-line" style="top:192px"></div>
+            <div class="appt-block break" style="top:216px; height:54px;"><div class="nm">Lunch break</div><div class="sv">12:00 &ndash; 12:45</div></div>
+            <div class="appt-block pending" style="top:288px; height:48px;"><div class="nm">Anita Rao</div><div class="sv">Classic Manicure</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

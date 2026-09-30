@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salon Pro — Sale: Confirmation</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: #F3F4FA; }
+* { box-sizing: border-box; }
+  body { margin: 0; }
+  .root {
+    width: 900px; height: 832px; background: #F3F4FA;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    color: #1B2350; display: flex; flex-direction: column; overflow: hidden;
+  }
+  .topbar { height: 76px; background: #FFFFFF; border-bottom: 1px solid #E3E6F2; display: flex; align-items: center; gap: 12px; padding: 0 28px; flex-shrink: 0; }
+  .back { display: flex; align-items: center; gap: 6px; color: #6E7390; font-weight: 700; font-size: 13.5px; }
+  .topbar-title { font-weight: 800; font-size: 16px; margin-left: 6px; }
+
+  .stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
+  .card { width: 460px; background: #fff; border: 1px solid #E3E6F2; border-radius: 22px; padding: 32px 30px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .check-wrap { width: 84px; height: 84px; border-radius: 999px; background: #E7F8EF; color: #22A76D; display: flex; align-items: center; justify-content: center; margin-bottom: 18px; }
+  .headline { font-size: 21px; font-weight: 800; margin-bottom: 4px; }
+  .sub { font-size: 13.5px; color: #8A90AA; margin-bottom: 22px; }
+  .amount { font-size: 40px; font-weight: 800; margin-bottom: 22px; }
+  .amount span { font-size: 18px; font-weight: 700; color: #8A90AA; vertical-align: top; margin-right: 2px; }
+
+  .receipt { width: 100%; background: #F8F9FC; border: 1px solid #EEF0F7; border-radius: 14px; padding: 16px 18px; text-align: left; margin-bottom: 22px; }
+  .receipt-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; padding: 5px 0; color: #4B5271; }
+  .receipt-row.total { border-top: 1px dashed #E3E6F2; margin-top: 4px; padding-top: 10px; font-weight: 800; color: #1B2350; font-size: 14px; }
+  .receipt-meta { display: flex; justify-content: space-between; font-size: 11.5px; color: #A0A5BD; margin-bottom: 10px; }
+
+  .actions-row { display: flex; gap: 10px; width: 100%; margin-bottom: 12px; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 12px; font-weight: 700; font-size: 13.5px; padding: 13px; border: 1.5px solid #E3E6F2; background: #fff; color: #2B3160; flex: 1; cursor: pointer; }
+  .btn-primary { width: 100%; background: #1B2350; color: #fff; border: none; padding: 15px; border-radius: 12px; font-weight: 700; font-size: 14.5px; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; }
+
+  .side-note { margin-top: 22px; font-size: 12px; color: #A0A5BD; max-width: 300px; }
+</style>
+</head>
+<body>
+<div class="root">
+  <div class="topbar">
+    <div class="back">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+      Back to sale
+    </div>
+    <div class="topbar-title">Confirmation</div>
+  </div>
+
+  <div class="stage">
+    <div class="card">
+      <div class="check-wrap">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="8 12 11 15 16 9"></polyline></svg>
+      </div>
+      <div class="headline">Payment received</div>
+      <div class="sub">Cash / PayNow &middot; Mrs Loi</div>
+      <div class="amount"><span>S$</span>146.00</div>
+
+      <div class="receipt">
+        <div class="receipt-meta"><span>Receipt #24418</span><span>18 Sep, 11:42 AM</span></div>
+        <div class="receipt-row"><span>Magken Shampoo &times;1</span><span>S$88.00</span></div>
+        <div class="receipt-row"><span>Signature Haircut &times;1</span><span>S$58.00</span></div>
+        <div class="receipt-row total"><span>Total paid</span><span>S$146.00</span></div>
+      </div>
+
+      <div class="actions-row">
+        <div class="btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+          Print
+        </div>
+        <div class="btn">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><polyline points="2 7 12 13 22 7"></polyline></svg>
+          Email / SMS
+        </div>
+      </div>
+
+      <button class="btn-primary">
+        Start next sale
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+      </button>
+
+      <div class="side-note">Receipt auto-printed (toggle was on). This screen replaces the old separate Payment page + Receipt page with one confirmation step.</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

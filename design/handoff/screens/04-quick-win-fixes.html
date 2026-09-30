@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salon Pro — Quick-win Fixes (reference sheet)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: #F3F4FA; }
+* { box-sizing: border-box; }
+  body { margin: 0; }
+  .root {
+    width: 1280px; height: 620px; background: #F3F4FA;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    color: #1B2350; padding: 30px 28px; display: flex; flex-direction: column; gap: 20px;
+  }
+  .head { font-size: 12px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #8A90AA; }
+  .head-title { font-size: 19px; font-weight: 800; margin-top: 2px; }
+
+  .row { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 20px; }
+  .col { background: #fff; border: 1px solid #E3E6F2; border-radius: 20px; padding: 20px; display: flex; flex-direction: column; }
+  .col-title { font-weight: 800; font-size: 14.5px; margin-bottom: 4px; }
+  .col-desc { font-size: 12px; color: #8A90AA; margin-bottom: 18px; line-height: 1.5; }
+  .mock-stage { flex: 1; display: flex; align-items: center; justify-content: center; background: #F8F9FC; border-radius: 14px; padding: 20px; }
+
+  /* col 1: dashboard tile */
+  .tile-mock { width: 100%; background: linear-gradient(135deg,#FFC94D,#FFB020); border-radius: 16px; padding: 18px; color: #fff; position: relative; }
+  .tile-mock-label { font-size: 12px; opacity: .9; margin-bottom: 6px; }
+  .tile-mock-value { font-size: 26px; font-weight: 800; }
+  .live-row { display: flex; align-items: center; gap: 6px; margin-top: 12px; }
+  .pulse { width: 8px; height: 8px; border-radius: 999px; background: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,.4); }
+  .live-row span { font-size: 10.5px; font-weight: 700; opacity: .92; }
+
+  /* col 2: today sale row */
+  .table-mock { width: 100%; }
+  .t-head { display: grid; grid-template-columns: 1.2fr 1fr 0.8fr 1.1fr; font-size: 10px; font-weight: 800; color: #A0A5BD; text-transform: uppercase; padding: 0 4px 8px; }
+  .t-row { display: grid; grid-template-columns: 1.2fr 1fr 0.8fr 1.1fr; align-items: center; background: #fff; border: 1px solid #EEF0F7; border-radius: 12px; padding: 10px 12px; font-size: 12px; }
+  .t-status { display: inline-flex; align-items: center; gap: 5px; background: #E7F8EF; color: #1B8A57; font-weight: 700; font-size: 11px; padding: 3px 8px; border-radius: 999px; width: fit-content; }
+  .t-actions { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+  .t-print { background: #1B2350; color: #fff; font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 8px; }
+  .t-more { width: 26px; height: 26px; border-radius: 8px; border: 1px solid #E3E6F2; display: flex; align-items: center; justify-content: center; color: #8A90AA; }
+  .menu-pop { margin-top: 8px; background: #fff; border: 1px solid #E3E6F2; border-radius: 10px; padding: 6px; width: 150px; box-shadow: 0 10px 24px rgba(27,35,80,.14); }
+  .menu-item { font-size: 11.5px; font-weight: 700; padding: 7px 9px; border-radius: 7px; color: #E14B4B; display: flex; align-items: center; gap: 7px; }
+  .menu-item.detail { color: #2B3160; }
+  .menu-caption { font-size: 9.5px; color: #A0A5BD; padding: 4px 9px 2px; }
+
+  /* col 3: nav badge */
+  .nav-mock { width: 84px; background: #1B2350; border-radius: 18px; padding: 14px 0; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .nav-item { width: 48px; height: 48px; border-radius: 13px; display: flex; align-items: center; justify-content: center; color: #A6ABD9; position: relative; }
+  .nav-item.active { background: #6144E4; color: #fff; }
+  .nav-badge { position: absolute; top: -5px; right: -5px; width: 18px; height: 18px; border-radius: 999px; background: #E14B4B; color: #fff; font-size: 9.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 2px solid #1B2350; }
+  .nav-label { font-size: 8.5px; color: #A6ABD9; margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="root">
+  <div>
+    <div class="head">Quick-win fixes &middot; low effort, ship first</div>
+    <div class="head-title">Supporting screen changes</div>
+  </div>
+
+  <div class="row">
+
+    <div class="col">
+      <div class="col-title">Dashboard tiles stay live</div>
+      <div class="col-desc">A small live indicator + timestamp replaces a silent stale S$0 until the page is manually re-visited.</div>
+      <div class="mock-stage">
+        <div class="tile-mock">
+          <div class="tile-mock-label">Income Total</div>
+          <div class="tile-mock-value">S$88.00</div>
+          <div class="live-row"><div class="pulse"></div><span>Updated just now</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="col-title">Today Sale row actions</div>
+      <div class="col-desc">Print stays one tap; Delete moves behind an overflow menu with a confirm step so it can't be mis-tapped.</div>
+      <div class="mock-stage">
+        <div class="table-mock">
+          <div class="t-row" style="margin-bottom:10px">
+            <span style="font-weight:700">#242722</span>
+            <span>Mrs Loi</span>
+            <span style="font-weight:800">S$88</span>
+            <div class="t-actions"><span class="t-status"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Finished</span></div>
+          </div>
+          <div class="t-row">
+            <span style="font-weight:700">#242723</span>
+            <span>Irene Foo</span>
+            <span style="font-weight:800">S$146</span>
+            <div class="t-actions">
+              <div class="t-print">Print</div>
+              <div class="t-more"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg></div>
+            </div>
+          </div>
+          <div class="menu-pop" style="margin-left:auto">
+            <div class="menu-item detail"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path></svg>View detail</div>
+            <div class="menu-item"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>Delete&hellip;</div>
+            <div class="menu-caption">Delete asks to confirm</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="col-title">Open-cart badge on Sale icon</div>
+      <div class="col-desc">A red count badge on the sidebar Sale icon warns staff a cart is already in progress, before they can walk into a stale one by accident.</div>
+      <div class="mock-stage">
+        <div class="nav-mock">
+          <div class="nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg></div>
+          <div class="nav-item active">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"></path></svg>
+            <div class="nav-badge">1</div>
+          </div>
+          <div class="nav-item"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

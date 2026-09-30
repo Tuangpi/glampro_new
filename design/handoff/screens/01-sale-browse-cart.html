@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salon Pro — Sale: Browse & Cart</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: #F3F4FA; }
+* { box-sizing: border-box; }
+  body { margin: 0; }
+  .root {
+    width: 1280px; height: 832px; background: #F3F4FA;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    color: #1B2350; display: flex; flex-direction: column; overflow: hidden;
+  }
+  a { color: #6144E4; text-decoration: none; }
+  a:hover { color: #4B32C3; }
+
+  /* top bar */
+  .topbar { height: 76px; background: #FFFFFF; border-bottom: 1px solid #E3E6F2; display: flex; align-items: center; gap: 24px; padding: 0 28px; flex-shrink: 0; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg,#6144E4,#8B6BFF); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 17px; flex-shrink: 0; }
+  .brand-text { display: flex; flex-direction: column; line-height: 1.2; }
+  .brand-title { font-weight: 800; font-size: 16px; color: #1B2350; }
+  .brand-sub { font-size: 12px; color: #8A90AA; }
+
+  .customer-search { flex: 1; max-width: 420px; display: flex; align-items: center; gap: 10px; background: #F3F4FA; border: 1px solid #E3E6F2; border-radius: 999px; padding: 10px 16px; color: #8A90AA; }
+  .customer-search svg { flex-shrink: 0; color: #8A90AA; }
+  .customer-search span { font-size: 14px; }
+
+  .topbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .chip { display: flex; align-items: center; gap: 6px; background: #F3F4FA; border: 1px solid #E3E6F2; border-radius: 999px; padding: 8px 14px; font-size: 13px; font-weight: 600; color: #2B3160; }
+  .chip svg { color: #8A90AA; }
+  .divider-v { width: 1px; height: 28px; background: #E3E6F2; }
+  .avatar { width: 38px; height: 38px; border-radius: 999px; background: #1B2350; color: #fff; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+
+  /* sub header: category tabs + item search */
+  .subheader { height: 68px; background: #FFFFFF; border-bottom: 1px solid #E3E6F2; display: flex; align-items: center; padding: 0 28px; gap: 20px; flex-shrink: 0; }
+  .tabs { display: flex; align-items: center; gap: 6px; background: #F3F4FA; padding: 5px; border-radius: 999px; }
+  .tab { display: flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 999px; font-size: 13.5px; font-weight: 700; color: #6E7390; }
+  .tab svg { opacity: .85; }
+  .tab.active { background: #6144E4; color: #fff; box-shadow: 0 4px 10px rgba(97,68,228,.28); }
+  .tab.active svg { color: #fff; }
+  .item-search { margin-left: auto; display: flex; align-items: center; gap: 8px; background: #F3F4FA; border: 1px solid #E3E6F2; border-radius: 10px; padding: 9px 14px; width: 260px; color: #8A90AA; }
+  .item-search svg { flex-shrink: 0; }
+  .item-search span { font-size: 13.5px; }
+
+  /* main content */
+  .content { flex: 1; display: flex; gap: 22px; padding: 20px 28px; overflow: hidden; }
+  .catalog { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .catalog-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+  .catalog-title { font-size: 13px; font-weight: 700; color: #8A90AA; letter-spacing: .02em; text-transform: uppercase; }
+  .catalog-count { font-size: 12.5px; color: #8A90AA; }
+  .grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 16px; align-content: start; }
+  .tile { background: #fff; border: 1px solid #E3E6F2; border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; }
+  .tile.pressed { border-color: #6144E4; box-shadow: 0 10px 22px rgba(97,68,228,.16), 0 0 0 2px rgba(97,68,228,.18) inset; }
+  .tile-icon { width: 40px; height: 40px; border-radius: 11px; background: #F1ECFF; color: #6144E4; display: flex; align-items: center; justify-content: center; }
+  .tile-name { font-size: 14.5px; font-weight: 700; line-height: 1.25; }
+  .tile-dept { font-size: 11.5px; color: #8A90AA; margin-top: -6px; }
+  .tile-bottom { margin-top: auto; display: flex; align-items: center; justify-content: space-between; }
+  .tile-price { font-size: 14.5px; font-weight: 800; color: #1B2350; }
+  .tile-price small { font-size: 11px; font-weight: 600; color: #8A90AA; }
+  .tile-add { width: 30px; height: 30px; border-radius: 999px; background: #6144E4; color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+
+  /* cart */
+  .cart { width: 372px; flex-shrink: 0; background: #fff; border: 1px solid #E3E6F2; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; }
+  .cart-head { padding: 18px 20px 14px; border-bottom: 1px solid #EEF0F7; }
+  .cart-head-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .cart-title { font-weight: 800; font-size: 15.5px; }
+  .pill-new { font-size: 11px; font-weight: 700; color: #6144E4; background: #F1ECFF; padding: 4px 10px; border-radius: 999px; }
+  .customer-row { display: flex; align-items: center; gap: 10px; }
+  .customer-avatar { width: 34px; height: 34px; border-radius: 999px; background: #E7F8EF; color: #1B8A57; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 12.5px; flex-shrink: 0; }
+  .customer-info { display: flex; flex-direction: column; line-height: 1.25; flex: 1; min-width: 0; }
+  .customer-name { font-size: 14px; font-weight: 700; }
+  .customer-phone { font-size: 11.5px; color: #8A90AA; }
+  .customer-edit { font-size: 12px; font-weight: 700; color: #6144E4; }
+
+  .cart-lines { flex: 1; overflow: hidden; padding: 8px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .line { display: flex; flex-direction: column; gap: 8px; padding-bottom: 14px; border-bottom: 1px dashed #EEF0F7; }
+  .line-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .line-name { font-size: 13.5px; font-weight: 700; }
+  .line-dept { font-size: 11px; color: #8A90AA; }
+  .line-price { font-size: 13.5px; font-weight: 800; white-space: nowrap; }
+  .line-bottom { display: flex; align-items: center; justify-content: space-between; }
+  .stepper { display: flex; align-items: center; gap: 10px; background: #F3F4FA; border-radius: 999px; padding: 4px 6px; }
+  .stepper button { width: 22px; height: 22px; border-radius: 999px; background: #fff; border: 1px solid #E3E6F2; display: flex; align-items: center; justify-content: center; color: #2B3160; }
+  .stepper .qty { font-size: 12.5px; font-weight: 700; min-width: 14px; text-align: center; }
+  .line-actions { display: flex; align-items: center; gap: 10px; }
+  .employee-chip { display: flex; align-items: center; gap: 6px; background: #F3F4FA; border-radius: 999px; padding: 3px 10px 3px 3px; }
+  .employee-avatar { width: 18px; height: 18px; border-radius: 999px; background: #6144E4; color: #fff; font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .employee-chip span { font-size: 11px; font-weight: 700; color: #2B3160; }
+  .trash-btn { color: #C3C7DA; }
+
+  .cart-totals { padding: 14px 20px; border-top: 1px solid #EEF0F7; display: flex; flex-direction: column; gap: 8px; }
+  .totals-row { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #6E7390; }
+  .totals-row.grand { font-size: 17px; font-weight: 800; color: #1B2350; padding-top: 6px; border-top: 1px solid #EEF0F7; margin-top: 2px; }
+
+  .pay-block { padding: 4px 20px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .pay-label { font-size: 11.5px; font-weight: 700; color: #8A90AA; text-transform: uppercase; letter-spacing: .03em; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 12px; font-weight: 700; font-size: 14px; padding: 13px; border: none; cursor: pointer; }
+  .btn-cash { background: #22A76D; color: #fff; box-shadow: 0 8px 16px rgba(34,167,109,.28); }
+  .pay-row-2 { display: flex; gap: 10px; }
+  .btn-outline { flex: 1; background: #fff; border: 1.5px solid #E3E6F2; color: #2B3160; }
+  .autoprint { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }
+  .autoprint span { font-size: 12px; color: #6E7390; }
+  .switch { width: 36px; height: 20px; border-radius: 999px; background: #22A76D; position: relative; }
+  .switch::after { content: ""; position: absolute; width: 16px; height: 16px; border-radius: 999px; background: #fff; top: 2px; right: 2px; }
+</style>
+</head>
+<body>
+<div class="root">
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">S</div>
+      <div class="brand-text">
+        <div class="brand-title">Salon Pro</div>
+        <div class="brand-sub">Eurosense Hair Studio</div>
+      </div>
+    </div>
+
+    <div class="customer-search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <span>Search or add a customer&hellip;</span>
+    </div>
+
+    <div class="topbar-right">
+      <div class="chip">Hair <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
+      <div class="chip">Walk-in <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg></div>
+      <div class="divider-v"></div>
+      <div class="avatar">K</div>
+    </div>
+  </div>
+
+  <div class="subheader">
+    <div class="tabs">
+      <div class="tab active">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8"></path><path d="M9 2v5.2c0 .5-.2 1-.6 1.4L6 11.8A4 4 0 0 0 5 14.6V20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.4a4 4 0 0 0-1-2.8l-2.4-3.2A2 2 0 0 1 15 7.2V2"></path></svg>
+        Product
+      </div>
+      <div class="tab">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg>
+        Service
+      </div>
+      <div class="tab">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><line x1="12" y1="13" x2="12" y2="21"></line></svg>
+        Package
+      </div>
+      <div class="tab">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 9.5 17 14.5 18.5 22 12 18 5.5 22 7 14.5 2 9.5 9 9 12 2"></polygon></svg>
+        Value Pkg
+      </div>
+      <div class="tab">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="1"></rect><path d="M12 8v13"></path><path d="M3 12h18"></path><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"></path></svg>
+        Gift Card
+      </div>
+    </div>
+
+    <div class="item-search">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <span>Search products&hellip;</span>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <div class="catalog">
+      <div class="catalog-head">
+        <div class="catalog-title">Product &middot; Hair department</div>
+        <div class="catalog-count">8 items</div>
+      </div>
+
+      <div class="grid">
+
+        <div class="tile pressed">
+          <div class="tile-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8"></path><path d="M9 2v5.2c0 .5-.2 1-.6 1.4L6 11.8A4 4 0 0 0 5 14.6V20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.4a4 4 0 0 0-1-2.8l-2.4-3.2A2 2 0 0 1 15 7.2V2"></path></svg></div>
+          <div class="tile-name">Magken Shampoo</div>
+          <div class="tile-dept">Hair</div>
+          <div class="tile-bottom">
+            <div class="tile-price">S$88 <small>/ 78 mbr</small></div>
+            <div class="tile-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
+          </div>
+        </div>
+
+        <div class="tile">
+          <div class="tile-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8"></path><path d="M9 2v5.2c0 .5-.2 1-.6 1.4L6 11.8A4 4 0 0 0 5 14.6V20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.4a4 4 0 0 0-1-2.8l-2.4-3.2A2 2 0 0 1 15 7.2V2"></path></svg></div>
+          <div class="tile-name">Argan Oil Treatment</div>
+          <div class="tile-dept">Hair</div>
+          <div class="tile-bottom">
+            <div class="tile-price">S$52 <small>/ 45 mbr</small></div>
+            <div class="tile-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
+          </div>
+        </div>
+
+        <div class="tile">
+          <div class="tile-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8"></path><path d="M9 2v5.2c0 .5-.2 1-.6 1.4L6 11.8A4 4 0 0 0 5 14.6V20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.4a4 4 0 0 0-1-2.8l-2.4-3.2A2 2 0 0 1 15 7.2V2"></path></svg></div>
+          <div class="tile-name">Styling Gel</div>
+          <div class="tile-dept">Hair</div>
+          <div class="tile-bottom">
+            <div class="tile-price">S$28 <small>/ 24 mbr</small></div>
+            <div class="tile-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
+          </div>
+        </div>
+
+        <div class="tile">
+          <div class="tile-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8"></path><path d="M9 2v5.2c0 .5-.2 1-.6 1.4L6 11.8A4 4 0 0 0 5 14.6V20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.4a4 4 0 0 0-1-2.8l-2.4-3.2A2 2 0 0 1 15 7.2V2"></path></svg></div>
+          <div class="tile-name">Heat Protectant</div>
+          <div class="tile-dept">Hair</div>
+          <div class="tile-bottom">
+            <div class="tile-price">S$34 <small>/ 30 mbr</small></div>
+            <div class="tile-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
+          </div>
+        </div>
+
+        <div class="tile">
+          <div class="tile-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8"></path><path d="M9 2v5.2c0 .5-.2 1-.6 1.4L6 11.8A4 4 0 0 0 5 14.6V20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.4a4 4 0 0 0-1-2.8l-2.4-3.2A2 2 0 0 1 15 7.2V2"></path></svg></div>
+          <div class="tile-name">Hair Serum</div>
+          <div class="tile-dept">Hair</div>
+          <div class="tile-bottom">
+            <div class="tile-price">S$46 <small>/ 40 mbr</small></div>
+            <div class="tile-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
+          </div>
+        </div>
+
+        <div class="tile">
+          <div class="tile-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8"></path><path d="M9 2v5.2c0 .5-.2 1-.6 1.4L6 11.8A4 4 0 0 0 5 14.6V20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.4a4 4 0 0 0-1-2.8l-2.4-3.2A2 2 0 0 1 15 7.2V2"></path></svg></div>
+          <div class="tile-name">Volumising Mousse</div>
+          <div class="tile-dept">Hair</div>
+          <div class="tile-bottom">
+            <div class="tile-price">S$31 <small>/ 27 mbr</small></div>
+            <div class="tile-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
+          </div>
+        </div>
+
+        <div class="tile">
+          <div class="tile-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8"></path><path d="M9 2v5.2c0 .5-.2 1-.6 1.4L6 11.8A4 4 0 0 0 5 14.6V20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.4a4 4 0 0 0-1-2.8l-2.4-3.2A2 2 0 0 1 15 7.2V2"></path></svg></div>
+          <div class="tile-name">Keratin Mask</div>
+          <div class="tile-dept">Hair</div>
+          <div class="tile-bottom">
+            <div class="tile-price">S$68 <small>/ 60 mbr</small></div>
+            <div class="tile-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
+          </div>
+        </div>
+
+        <div class="tile">
+          <div class="tile-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8"></path><path d="M9 2v5.2c0 .5-.2 1-.6 1.4L6 11.8A4 4 0 0 0 5 14.6V20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.4a4 4 0 0 0-1-2.8l-2.4-3.2A2 2 0 0 1 15 7.2V2"></path></svg></div>
+          <div class="tile-name">Gift Set &ndash; Deluxe</div>
+          <div class="tile-dept">Hair</div>
+          <div class="tile-bottom">
+            <div class="tile-price">S$120 <small>/ 105 mbr</small></div>
+            <div class="tile-add"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="cart">
+      <div class="cart-head">
+        <div class="cart-head-top">
+          <div class="cart-title">Current Sale</div>
+          <div class="pill-new">New customer</div>
+        </div>
+        <div class="customer-row">
+          <div class="customer-avatar">ML</div>
+          <div class="customer-info">
+            <div class="customer-name">Mrs Loi</div>
+            <div class="customer-phone">9030 9386</div>
+          </div>
+          <div class="customer-edit">Change</div>
+        </div>
+      </div>
+
+      <div class="cart-lines">
+        <div class="line">
+          <div class="line-top">
+            <div>
+              <div class="line-name">Magken Shampoo</div>
+              <div class="line-dept">Product &middot; Hair</div>
+            </div>
+            <div class="line-price">S$88.00</div>
+          </div>
+          <div class="line-bottom">
+            <div class="stepper">
+              <button><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+              <div class="qty">1</div>
+              <button><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+            </div>
+            <div class="line-actions">
+              <div class="employee-chip"><div class="employee-avatar">SL</div><span>Sam</span></div>
+              <div class="trash-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="line">
+          <div class="line-top">
+            <div>
+              <div class="line-name">Signature Haircut</div>
+              <div class="line-dept">Service &middot; Hair</div>
+            </div>
+            <div class="line-price">S$58.00</div>
+          </div>
+          <div class="line-bottom">
+            <div class="stepper">
+              <button><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+              <div class="qty">1</div>
+              <button><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
+            </div>
+            <div class="line-actions">
+              <div class="employee-chip"><div class="employee-avatar">+</div><span>Assign</span></div>
+              <div class="trash-btn"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cart-totals">
+        <div class="totals-row"><span>Subtotal</span><span>S$146.00</span></div>
+        <div class="totals-row"><span>Discount</span><span>&ndash; S$0.00</span></div>
+        <div class="totals-row grand"><span>Total payable</span><span>S$146.00</span></div>
+      </div>
+
+      <div class="pay-block">
+        <div class="pay-label">Pay with</div>
+        <button class="btn btn-cash">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="3"></circle></svg>
+          Cash / PayNow
+        </button>
+        <div class="pay-row-2">
+          <button class="btn btn-outline">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+            Card
+          </button>
+          <button class="btn btn-outline">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="9" y2="12"></line><line x1="15" y1="12" x2="20" y2="12"></line><polyline points="8 8 4 12 8 16"></polyline><polyline points="16 8 20 12 16 16"></polyline></svg>
+            Split
+          </button>
+        </div>
+        <div class="autoprint"><span>Auto-print receipt</span><div class="switch"></div></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

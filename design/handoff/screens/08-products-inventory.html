@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salon Pro — Products &amp; Inventory</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: #F3F4FA; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .app { width: 1280px; height: 900px; background: #F3F4FA; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1B2350; display: flex; overflow: hidden; }
+  a { color: #6144E4; text-decoration: none; }
+
+  .sidebar { width: 84px; flex-shrink: 0; background: #1B2350; display: flex; flex-direction: column; align-items: center; padding: 20px 0 16px; }
+  .side-logo { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg,#6144E4,#8B6BFF); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 17px; flex-shrink: 0; margin-bottom: 22px; }
+  .side-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; width: 100%; align-items: center; }
+  .nav-item { width: 54px; height: 50px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #8890C4; position: relative; }
+  .nav-item .lbl { font-size: 8.5px; font-weight: 700; letter-spacing: .01em; }
+  .nav-item.active { background: #6144E4; color: #fff; box-shadow: 0 4px 10px rgba(97,68,228,.35); }
+  .nav-badge { position: absolute; top: 2px; right: 10px; width: 16px; height: 16px; border-radius: 999px; background: #E14B4B; color: #fff; font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 2px solid #1B2350; }
+  .side-foot { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+  .topbar { height: 76px; background: #FFFFFF; border-bottom: 1px solid #E3E6F2; display: flex; align-items: center; gap: 16px; padding: 0 28px; flex-shrink: 0; }
+  .page-head { display: flex; flex-direction: column; line-height: 1.25; }
+  .page-title { font-weight: 800; font-size: 18px; }
+  .page-sub { font-size: 12px; color: #8A90AA; }
+  .search-box { display: flex; align-items: center; gap: 8px; background: #F3F4FA; border: 1px solid #E3E6F2; border-radius: 10px; padding: 9px 14px; color: #8A90AA; width: 260px; margin-left: 18px; }
+  .search-box span { font-size: 13px; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 12px; font-weight: 700; font-size: 13.5px; padding: 11px 18px; border: none; cursor: pointer; white-space: nowrap; }
+  .btn-primary { background: #6144E4; color: #fff; box-shadow: 0 4px 10px rgba(97,68,228,.28); }
+  .avatar { width: 38px; height: 38px; border-radius: 999px; background: #1B2350; color: #fff; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .divider-v { width: 1px; height: 28px; background: #E3E6F2; }
+
+  .content { flex: 1; overflow: hidden; padding: 20px 28px; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+
+  .stat-row { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 16px; flex-shrink: 0; }
+  .stat { background: #fff; border: 1px solid #E3E6F2; border-radius: 16px; padding: 15px 18px; display: flex; align-items: center; gap: 12px; }
+  .stat-icon { width: 36px; height: 36px; border-radius: 10px; background: #F1ECFF; color: #6144E4; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .stat-icon.warn { background: #FFF4DE; color: #B9740A; }
+  .stat-icon.bad { background: #FDEBEB; color: #E14B4B; }
+  .stat-v { font-size: 18px; font-weight: 800; line-height: 1.1; }
+  .stat-k { font-size: 11.5px; color: #8A90AA; }
+
+  .tabs { display: flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #E3E6F2; padding: 5px; border-radius: 999px; width: fit-content; flex-shrink: 0; }
+  .tab { padding: 9px 18px; border-radius: 999px; font-size: 13px; font-weight: 700; color: #6E7390; }
+  .tab.active { background: #6144E4; color: #fff; }
+
+  .tbl-card { flex: 1; background: #fff; border: 1px solid #E3E6F2; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+  .t-head-row { display: grid; grid-template-columns: 2.2fr 1fr 1fr 1fr 1fr 0.9fr 0.6fr; padding: 12px 20px; font-size: 10.5px; font-weight: 800; color: #A0A5BD; text-transform: uppercase; letter-spacing: .02em; border-bottom: 1px solid #EEF0F7; }
+  .tbl-body { flex: 1; overflow: auto; }
+  .t-row { display: grid; grid-template-columns: 2.2fr 1fr 1fr 1fr 1fr 0.9fr 0.6fr; align-items: center; padding: 12px 20px; border-bottom: 1px solid #F3F4FA; }
+  .t-row:hover { background: #F8F9FC; }
+  .item-cell { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .item-icon { width: 36px; height: 36px; border-radius: 10px; background: #F1ECFF; color: #6144E4; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .item-name { font-size: 13.5px; font-weight: 700; }
+  .item-dept { font-size: 11px; color: #8A90AA; }
+  .t-cell { font-size: 12.5px; color: #4B5271; font-weight: 600; }
+  .t-cell.price { font-weight: 800; color: #1B2350; }
+  .stock-cell { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; }
+  .stock-cell.low { color: #B9740A; }
+  .stock-cell.out { color: #E14B4B; }
+  .stock-cell.ok { color: #1B8A57; }
+  .switch { width: 34px; height: 19px; border-radius: 999px; background: #22A76D; position: relative; flex-shrink: 0; }
+  .switch::after { content: ""; position: absolute; width: 15px; height: 15px; border-radius: 999px; background: #fff; top: 2px; right: 2px; }
+  .switch.off { background: #E3E6F2; }
+  .switch.off::after { right: auto; left: 2px; }
+  .row-actions { display: flex; align-items: center; gap: 8px; justify-content: flex-end; color: #8A90AA; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="sidebar">
+    <div class="side-logo">S</div>
+    <div class="side-nav">
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg><div class="lbl">Home</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"></path></svg><div class="lbl">Sale</div><div class="nav-badge">1</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg><div class="lbl">Calendar</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><div class="lbl">Customers</div></div>
+      <div class="nav-item active"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><line x1="12" y1="13" x2="12" y2="21"></line></svg><div class="lbl">Products</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg><div class="lbl">Staff</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><div class="lbl">Reports</div></div>
+    </div>
+    <div class="side-foot">
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg><div class="lbl">Settings</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><div class="lbl">Log out</div></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="page-head">
+        <div class="page-title">Products &amp; Inventory</div>
+        <div class="page-sub">Hair department</div>
+      </div>
+      <div class="search-box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <span>Search items&hellip;</span>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-primary">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Add item
+        </button>
+        <div class="divider-v"></div>
+        <div class="avatar">K</div>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <div class="stat-row">
+        <div class="stat"><div class="stat-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><line x1="12" y1="13" x2="12" y2="21"></line></svg></div><div><div class="stat-v">248</div><div class="stat-k">Total items</div></div></div>
+        <div class="stat"><div class="stat-icon warn"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div><div><div class="stat-v">14</div><div class="stat-k">Low stock</div></div></div>
+        <div class="stat"><div class="stat-icon bad"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></div><div><div class="stat-v">3</div><div class="stat-k">Out of stock</div></div></div>
+        <div class="stat"><div class="stat-icon"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="3"></circle></svg></div><div><div class="stat-v">S$18,240</div><div class="stat-k">Inventory value</div></div></div>
+      </div>
+
+      <div class="tabs">
+        <div class="tab active">Products</div>
+        <div class="tab">Services</div>
+        <div class="tab">Packages</div>
+        <div class="tab">Gift cards</div>
+      </div>
+
+      <div class="tbl-card">
+        <div class="t-head-row"><span>Item</span><span>Price</span><span>Member price</span><span>Cost</span><span>Stock</span><span>Status</span><span></span></div>
+        <div class="tbl-body">
+          <div class="t-row">
+            <div class="item-cell"><div class="item-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8"></path><path d="M9 2v5.2c0 .5-.2 1-.6 1.4L6 11.8A4 4 0 0 0 5 14.6V20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.4a4 4 0 0 0-1-2.8l-2.4-3.2A2 2 0 0 1 15 7.2V2"></path></svg></div><div><div class="item-name">Magken Shampoo</div><div class="item-dept">Hair &middot; SKU MK-001</div></div></div>
+            <div class="t-cell price">S$88.00</div>
+            <div class="t-cell">S$78.00</div>
+            <div class="t-cell">S$32.00</div>
+            <div class="stock-cell ok"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>42 units</div>
+            <div class="switch"></div>
+            <div class="row-actions"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg></div>
+          </div>
+          <div class="t-row">
+            <div class="item-cell"><div class="item-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8"></path><path d="M9 2v5.2c0 .5-.2 1-.6 1.4L6 11.8A4 4 0 0 0 5 14.6V20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.4a4 4 0 0 0-1-2.8l-2.4-3.2A2 2 0 0 1 15 7.2V2"></path></svg></div><div><div class="item-name">Argan Oil Treatment</div><div class="item-dept">Hair &middot; SKU AO-014</div></div></div>
+            <div class="t-cell price">S$52.00</div>
+            <div class="t-cell">S$45.00</div>
+            <div class="t-cell">S$21.00</div>
+            <div class="stock-cell low"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>4 units</div>
+            <div class="switch"></div>
+            <div class="row-actions"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg></div>
+          </div>
+          <div class="t-row">
+            <div class="item-cell"><div class="item-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8"></path><path d="M9 2v5.2c0 .5-.2 1-.6 1.4L6 11.8A4 4 0 0 0 5 14.6V20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.4a4 4 0 0 0-1-2.8l-2.4-3.2A2 2 0 0 1 15 7.2V2"></path></svg></div><div><div class="item-name">Styling Gel</div><div class="item-dept">Hair &middot; SKU SG-007</div></div></div>
+            <div class="t-cell price">S$28.00</div>
+            <div class="t-cell">S$24.00</div>
+            <div class="t-cell">S$9.50</div>
+            <div class="stock-cell out"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>0 units</div>
+            <div class="switch off"></div>
+            <div class="row-actions"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg></div>
+          </div>
+          <div class="t-row">
+            <div class="item-cell"><div class="item-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8"></path><path d="M9 2v5.2c0 .5-.2 1-.6 1.4L6 11.8A4 4 0 0 0 5 14.6V20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.4a4 4 0 0 0-1-2.8l-2.4-3.2A2 2 0 0 1 15 7.2V2"></path></svg></div><div><div class="item-name">Heat Protectant</div><div class="item-dept">Hair &middot; SKU HP-009</div></div></div>
+            <div class="t-cell price">S$34.00</div>
+            <div class="t-cell">S$30.00</div>
+            <div class="t-cell">S$12.00</div>
+            <div class="stock-cell ok"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>28 units</div>
+            <div class="switch"></div>
+            <div class="row-actions"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg></div>
+          </div>
+          <div class="t-row">
+            <div class="item-cell"><div class="item-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8"></path><path d="M9 2v5.2c0 .5-.2 1-.6 1.4L6 11.8A4 4 0 0 0 5 14.6V20a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5.4a4 4 0 0 0-1-2.8l-2.4-3.2A2 2 0 0 1 15 7.2V2"></path></svg></div><div><div class="item-name">Keratin Mask</div><div class="item-dept">Hair &middot; SKU KM-021</div></div></div>
+            <div class="t-cell price">S$68.00</div>
+            <div class="t-cell">S$60.00</div>
+            <div class="t-cell">S$26.00</div>
+            <div class="stock-cell low"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>6 units</div>
+            <div class="switch"></div>
+            <div class="row-actions"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="19" cy="12" r="1.6"></circle></svg></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

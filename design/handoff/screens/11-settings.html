@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salon Pro — Settings</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: #F3F4FA; }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .app { width: 1280px; height: 900px; background: #F3F4FA; font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; color: #1B2350; display: flex; overflow: hidden; }
+  a { color: #6144E4; text-decoration: none; }
+
+  .sidebar { width: 84px; flex-shrink: 0; background: #1B2350; display: flex; flex-direction: column; align-items: center; padding: 20px 0 16px; }
+  .side-logo { width: 40px; height: 40px; border-radius: 12px; background: linear-gradient(135deg,#6144E4,#8B6BFF); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 17px; flex-shrink: 0; margin-bottom: 22px; }
+  .side-nav { display: flex; flex-direction: column; gap: 6px; flex: 1; width: 100%; align-items: center; }
+  .nav-item { width: 54px; height: 50px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; color: #8890C4; position: relative; }
+  .nav-item .lbl { font-size: 8.5px; font-weight: 700; letter-spacing: .01em; }
+  .nav-item.active { background: #6144E4; color: #fff; box-shadow: 0 4px 10px rgba(97,68,228,.35); }
+  .nav-badge { position: absolute; top: 2px; right: 10px; width: 16px; height: 16px; border-radius: 999px; background: #E14B4B; color: #fff; font-size: 9px; font-weight: 800; display: flex; align-items: center; justify-content: center; border: 2px solid #1B2350; }
+  .side-foot { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 100%; }
+
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+  .topbar { height: 76px; background: #FFFFFF; border-bottom: 1px solid #E3E6F2; display: flex; align-items: center; gap: 16px; padding: 0 28px; flex-shrink: 0; }
+  .page-head { display: flex; flex-direction: column; line-height: 1.25; }
+  .page-title { font-weight: 800; font-size: 18px; }
+  .page-sub { font-size: 12px; color: #8A90AA; }
+  .topbar-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+  .btn { display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 12px; font-weight: 700; font-size: 13.5px; padding: 11px 18px; border: none; cursor: pointer; white-space: nowrap; }
+  .btn-primary { background: #6144E4; color: #fff; box-shadow: 0 4px 10px rgba(97,68,228,.28); }
+  .avatar { width: 38px; height: 38px; border-radius: 999px; background: #1B2350; color: #fff; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .divider-v { width: 1px; height: 28px; background: #E3E6F2; }
+
+  .content { flex: 1; overflow: hidden; padding: 20px 28px; display: flex; gap: 18px; min-height: 0; }
+
+  .settings-nav { width: 240px; flex-shrink: 0; background: #fff; border: 1px solid #E3E6F2; border-radius: 20px; padding: 12px; display: flex; flex-direction: column; gap: 2px; height: fit-content; }
+  .snav-item { display: flex; align-items: center; gap: 11px; padding: 11px 12px; border-radius: 12px; font-size: 13.5px; font-weight: 700; color: #6E7390; }
+  .snav-item svg { color: #8A90AA; flex-shrink: 0; }
+  .snav-item.active { background: #F1ECFF; color: #6144E4; }
+  .snav-item.active svg { color: #6144E4; }
+
+  .settings-body { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .panel { background: #fff; border: 1px solid #E3E6F2; border-radius: 20px; padding: 22px; }
+  .panel-title { font-weight: 800; font-size: 15px; margin-bottom: 2px; }
+  .panel-sub { font-size: 12px; color: #8A90AA; margin-bottom: 18px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field.full { grid-column: 1 / -1; }
+  .field label { font-size: 12px; font-weight: 700; color: #4B5271; }
+  .field input, .field select { border: 1.5px solid #E3E6F2; border-radius: 10px; padding: 11px 13px; font-size: 13.5px; font-family: inherit; color: #1B2350; background: #F8F9FC; }
+  .logo-row { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+  .logo-box { width: 64px; height: 64px; border-radius: 16px; background: linear-gradient(135deg,#6144E4,#8B6BFF); display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 22px; flex-shrink: 0; }
+  .upload-btn { display: flex; align-items: center; gap: 8px; border: 1.5px solid #E3E6F2; border-radius: 10px; padding: 9px 14px; font-size: 12.5px; font-weight: 700; color: #2B3160; width: fit-content; }
+  .upload-hint { font-size: 11px; color: #8A90AA; margin-top: 6px; }
+
+  .hours-row { display: flex; align-items: center; gap: 14px; padding: 11px 0; border-bottom: 1px solid #F3F4FA; }
+  .hours-day { width: 100px; font-size: 13px; font-weight: 700; }
+  .switch { width: 34px; height: 19px; border-radius: 999px; background: #22A76D; position: relative; flex-shrink: 0; }
+  .switch::after { content: ""; position: absolute; width: 15px; height: 15px; border-radius: 999px; background: #fff; top: 2px; right: 2px; }
+  .switch.off { background: #E3E6F2; }
+  .switch.off::after { right: auto; left: 2px; }
+  .hours-time { font-size: 12.5px; color: #4B5271; font-weight: 600; margin-left: auto; }
+  .hours-time.closed { color: #C3C7DA; }
+
+  .save-row { display: flex; justify-content: flex-end; gap: 10px; }
+  .btn-outline { background: #fff; border: 1.5px solid #E3E6F2; color: #2B3160; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="sidebar">
+    <div class="side-logo">S</div>
+    <div class="side-nav">
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"></rect><rect x="14" y="3" width="7" height="7" rx="1.5"></rect><rect x="3" y="14" width="7" height="7" rx="1.5"></rect><rect x="14" y="14" width="7" height="7" rx="1.5"></rect></svg><div class="lbl">Home</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"></path></svg><div class="lbl">Sale</div><div class="nav-badge">1</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg><div class="lbl">Calendar</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg><div class="lbl">Customers</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><line x1="12" y1="13" x2="12" y2="21"></line></svg><div class="lbl">Products</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg><div class="lbl">Staff</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg><div class="lbl">Reports</div></div>
+    </div>
+    <div class="side-foot">
+      <div class="nav-item active"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg><div class="lbl">Settings</div></div>
+      <div class="nav-item"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg><div class="lbl">Log out</div></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="page-head">
+        <div class="page-title">Settings</div>
+        <div class="page-sub">Eurosense Hair Studio</div>
+      </div>
+      <div class="topbar-right">
+        <div class="divider-v"></div>
+        <div class="avatar">K</div>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="settings-nav">
+        <div class="snav-item active">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"></path><path d="M3 8v8l9 5 9-5V8"></path><line x1="12" y1="13" x2="12" y2="21"></line></svg>
+          General
+        </div>
+        <div class="snav-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          Business hours
+        </div>
+        <div class="snav-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+          Tax &amp; receipt
+        </div>
+        <div class="snav-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          Notifications
+        </div>
+        <div class="snav-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          Users &amp; permissions
+        </div>
+        <div class="snav-item">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          Integrations
+        </div>
+      </div>
+
+      <div class="settings-body">
+        <div class="panel">
+          <div class="panel-title">Business profile</div>
+          <div class="panel-sub">Shown on receipts, the booking page, and customer notifications</div>
+          <div class="logo-row">
+            <div class="logo-box">ES</div>
+            <div>
+              <div class="upload-btn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 16 12 12 8 16"></polyline><line x1="12" y1="12" x2="12" y2="21"></line><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"></path></svg>Upload logo</div>
+              <div class="upload-hint">PNG or SVG, at least 256&times;256px</div>
+            </div>
+          </div>
+          <div class="form-grid">
+            <div class="field"><label>Business name</label><input type="text" value="Eurosense Hair Studio"></div>
+            <div class="field"><label>Contact phone</label><input type="text" value="+65 6299 4488"></div>
+            <div class="field full"><label>Address</label><input type="text" value="21 Tanjong Pagar Road, #01-05, Singapore 088444"></div>
+            <div class="field"><label>Currency</label><select><option>SGD (S$)</option></select></div>
+            <div class="field"><label>Timezone</label><select><option>Asia/Singapore (UTC+8)</option></select></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-title">Business hours</div>
+          <div class="panel-sub">Used to generate available appointment slots</div>
+          <div class="hours-row"><div class="hours-day">Monday</div><div class="switch"></div><div class="hours-time">9:00 AM &ndash; 8:00 PM</div></div>
+          <div class="hours-row"><div class="hours-day">Tuesday</div><div class="switch"></div><div class="hours-time">9:00 AM &ndash; 8:00 PM</div></div>
+          <div class="hours-row"><div class="hours-day">Wednesday</div><div class="switch"></div><div class="hours-time">9:00 AM &ndash; 8:00 PM</div></div>
+          <div class="hours-row"><div class="hours-day">Thursday</div><div class="switch"></div><div class="hours-time">9:00 AM &ndash; 8:00 PM</div></div>
+          <div class="hours-row"><div class="hours-day">Friday</div><div class="switch"></div><div class="hours-time">9:00 AM &ndash; 9:00 PM</div></div>
+          <div class="hours-row"><div class="hours-day">Saturday</div><div class="switch"></div><div class="hours-time">9:00 AM &ndash; 9:00 PM</div></div>
+          <div class="hours-row" style="border-bottom:none"><div class="hours-day">Sunday</div><div class="switch off"></div><div class="hours-time closed">Closed</div></div>
+        </div>
+
+        <div class="save-row">
+          <button class="btn btn-outline">Cancel</button>
+          <button class="btn btn-primary">Save changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

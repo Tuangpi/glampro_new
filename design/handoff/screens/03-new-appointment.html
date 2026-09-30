@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Salon Pro — New Appointment</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<style>
+  html, body { margin: 0; padding: 0; background: #F3F4FA; }
+* { box-sizing: border-box; }
+  body { margin: 0; }
+  .root {
+    width: 1280px; height: 900px; background: #F3F4FA;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    color: #1B2350; display: flex; flex-direction: column; overflow: hidden;
+  }
+  .topbar { height: 72px; background: #FFFFFF; border-bottom: 1px solid #E3E6F2; display: flex; align-items: center; gap: 14px; padding: 0 28px; flex-shrink: 0; }
+  .back { display: flex; align-items: center; gap: 6px; color: #6E7390; font-weight: 700; font-size: 13.5px; }
+  .topbar-title { font-weight: 800; font-size: 16px; margin-left: 6px; }
+  .step-track { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .step-dot { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: #C3C7DA; }
+  .step-dot .n { width: 20px; height: 20px; border-radius: 999px; background: #EEF0F7; color: #A0A5BD; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+  .step-dot.done { color: #22A76D; }
+  .step-dot.done .n { background: #22A76D; color: #fff; }
+  .step-line { width: 22px; height: 1.5px; background: #E3E6F2; }
+
+  .content { flex: 1; display: flex; gap: 22px; padding: 22px 28px; overflow: hidden; }
+  .form-col { flex: 1; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+  .section { background: #fff; border: 1px solid #E3E6F2; border-radius: 18px; padding: 18px 20px; }
+  .section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .section-icon { width: 30px; height: 30px; border-radius: 9px; background: #F1ECFF; color: #6144E4; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .section-title { font-weight: 800; font-size: 14.5px; }
+  .section-sub { font-size: 11.5px; color: #8A90AA; margin-left: 4px; }
+
+  .search-input { display: flex; align-items: center; gap: 10px; background: #F3F4FA; border: 1px solid #E3E6F2; border-radius: 12px; padding: 12px 14px; color: #8A90AA; }
+  .search-input span { font-size: 13.5px; }
+  .toggle-pair { display: flex; gap: 8px; margin-top: 10px; }
+  .toggle-chip { padding: 7px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 700; border: 1.5px solid #E3E6F2; color: #6E7390; }
+  .toggle-chip.active { background: #6144E4; border-color: #6144E4; color: #fff; }
+
+  .chip-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+  .svc-chip { border: 1.5px solid #E3E6F2; border-radius: 13px; padding: 12px; }
+  .svc-chip.active { border-color: #6144E4; background: #F8F6FF; box-shadow: 0 0 0 1px #6144E4 inset; }
+  .svc-name { font-size: 13px; font-weight: 700; }
+  .svc-meta { font-size: 11px; color: #8A90AA; margin-top: 3px; }
+
+  .when-row { display: flex; gap: 12px; }
+  .date-picker { flex: 1; display: flex; align-items: center; gap: 10px; background: #F3F4FA; border: 1px solid #E3E6F2; border-radius: 12px; padding: 12px 14px; font-size: 13.5px; font-weight: 700; }
+  .date-picker svg { color: #6144E4; }
+  .duration-picker { display: flex; align-items: center; gap: 10px; background: #F3F4FA; border: 1px solid #E3E6F2; border-radius: 12px; padding: 12px 14px; font-size: 13.5px; font-weight: 700; }
+  .duration-picker svg { color: #6144E4; }
+
+  .slot-grid { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 8px; margin-top: 12px; }
+  .slot { text-align: center; padding: 9px 4px; border-radius: 10px; border: 1.5px solid #E3E6F2; font-size: 12px; font-weight: 700; color: #4B5271; }
+  .slot.active { background: #6144E4; border-color: #6144E4; color: #fff; }
+  .slot.disabled { color: #D3D6E6; border-color: #EEF0F7; }
+
+  .staff-row { display: flex; gap: 12px; margin-top: 4px; }
+  .staff-pill { display: flex; align-items: center; gap: 8px; border: 1.5px solid #E3E6F2; border-radius: 999px; padding: 6px 14px 6px 6px; }
+  .staff-pill.active { border-color: #6144E4; background: #F8F6FF; }
+  .staff-avatar { width: 26px; height: 26px; border-radius: 999px; background: #1B2350; color: #fff; font-size: 10.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .staff-pill span { font-size: 12.5px; font-weight: 700; }
+
+  .note-toggle { display: flex; align-items: center; gap: 8px; color: #6144E4; font-weight: 700; font-size: 12.5px; }
+
+  /* summary column */
+  .summary-col { width: 320px; flex-shrink: 0; }
+  .ticket { background: #1B2350; border-radius: 20px; padding: 22px; color: #fff; height: 100%; display: flex; flex-direction: column; }
+  .ticket-label { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #9FA6D9; margin-bottom: 4px; }
+  .ticket-title { font-size: 17px; font-weight: 800; margin-bottom: 22px; }
+  .ticket-row { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
+  .ticket-icon { width: 30px; height: 30px; border-radius: 9px; background: rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #C6BBFF; }
+  .ticket-k { font-size: 10.5px; color: #9FA6D9; text-transform: uppercase; letter-spacing: .03em; }
+  .ticket-v { font-size: 13.5px; font-weight: 700; margin-top: 2px; }
+  .ticket-v.placeholder { color: #6C74AD; font-weight: 600; }
+  .ticket-spacer { flex: 1; }
+  .ticket-price-row { display: flex; align-items: baseline; justify-content: space-between; border-top: 1px solid rgba(255,255,255,.14); padding-top: 16px; margin-bottom: 18px; }
+  .ticket-price-row span:first-child { font-size: 12px; color: #9FA6D9; }
+  .ticket-price-row span:last-child { font-size: 20px; font-weight: 800; }
+  .btn-create { width: 100%; background: #22A76D; color: #fff; border: none; border-radius: 12px; padding: 15px; font-weight: 700; font-size: 14.5px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="root">
+  <div class="topbar">
+    <div class="back">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      Close
+    </div>
+    <div class="topbar-title">New appointment</div>
+    <div class="step-track">
+      <div class="step-dot done"><div class="n"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div>Who</div>
+      <div class="step-line"></div>
+      <div class="step-dot done"><div class="n"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div>What</div>
+      <div class="step-line"></div>
+      <div class="step-dot"><div class="n">3</div>When</div>
+      <div class="step-line"></div>
+      <div class="step-dot"><div class="n">4</div>With</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="form-col">
+
+      <div class="section">
+        <div class="section-head">
+          <div class="section-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>
+          <div class="section-title">Who</div>
+          <div class="section-sub">customer</div>
+        </div>
+        <div class="search-input">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          <span>Mrs Loi &middot; 9030 9386</span>
+        </div>
+        <div class="toggle-pair">
+          <div class="toggle-chip active">Existing customer</div>
+          <div class="toggle-chip">New customer</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">
+          <div class="section-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></div>
+          <div class="section-title">What</div>
+          <div class="section-sub">service &middot; tap to pick, duration fills in automatically</div>
+        </div>
+        <div class="chip-grid">
+          <div class="svc-chip active"><div class="svc-name">Signature Haircut</div><div class="svc-meta">45 min &middot; S$58</div></div>
+          <div class="svc-chip"><div class="svc-name">Colour Retouch</div><div class="svc-meta">90 min &middot; S$128</div></div>
+          <div class="svc-chip"><div class="svc-name">Deep Conditioning</div><div class="svc-meta">30 min &middot; S$45</div></div>
+          <div class="svc-chip"><div class="svc-name">Classic Manicure</div><div class="svc-meta">40 min &middot; S$38</div></div>
+          <div class="svc-chip"><div class="svc-name">Blow Dry &amp; Style</div><div class="svc-meta">35 min &middot; S$42</div></div>
+          <div class="svc-chip"><div class="svc-name">Keratin Treatment</div><div class="svc-meta">120 min &middot; S$188</div></div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">
+          <div class="section-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg></div>
+          <div class="section-title">When</div>
+          <div class="section-sub">date &amp; time &mdash; only open slots for the pick above are shown</div>
+        </div>
+        <div class="when-row">
+          <div class="date-picker">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            Fri, 18 Sep 2026
+          </div>
+          <div class="duration-picker">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            45 min
+          </div>
+        </div>
+        <div class="slot-grid">
+          <div class="slot disabled">9:00</div>
+          <div class="slot">9:45</div>
+          <div class="slot">10:30</div>
+          <div class="slot active">11:15</div>
+          <div class="slot">2:00</div>
+          <div class="slot">2:45</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-head">
+          <div class="section-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>
+          <div class="section-title">With</div>
+          <div class="section-sub">only staff who perform this service are listed</div>
+        </div>
+        <div class="staff-row">
+          <div class="staff-pill active"><div class="staff-avatar">SL</div><span>Sam Liang</span></div>
+          <div class="staff-pill"><div class="staff-avatar">JT</div><span>Jia Ting</span></div>
+          <div class="staff-pill"><div class="staff-avatar">RK</div><span>Ravi K.</span></div>
+        </div>
+        <div class="note-toggle" style="margin-top:14px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Add a note (optional)
+        </div>
+      </div>
+
+    </div>
+
+    <div class="summary-col">
+      <div class="ticket">
+        <div class="ticket-label">Appointment summary</div>
+        <div class="ticket-title">Fri, 18 Sep &middot; 11:15 AM</div>
+
+        <div class="ticket-row">
+          <div class="ticket-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>
+          <div><div class="ticket-k">Customer</div><div class="ticket-v">Mrs Loi</div></div>
+        </div>
+        <div class="ticket-row">
+          <div class="ticket-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"></circle><circle cx="6" cy="18" r="3"></circle><line x1="20" y1="4" x2="8.12" y2="15.88"></line><line x1="14.47" y1="14.48" x2="20" y2="20"></line><line x1="8.12" y1="8.12" x2="12" y2="12"></line></svg></div>
+          <div><div class="ticket-k">Service</div><div class="ticket-v">Signature Haircut &middot; 45 min</div></div>
+        </div>
+        <div class="ticket-row">
+          <div class="ticket-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></div>
+          <div><div class="ticket-k">Staff</div><div class="ticket-v">Sam Liang</div></div>
+        </div>
+        <div class="ticket-row">
+          <div class="ticket-icon"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></div>
+          <div><div class="ticket-k">Note</div><div class="ticket-v placeholder">None added</div></div>
+        </div>
+
+        <div class="ticket-spacer"></div>
+
+        <div class="ticket-price-row"><span>Estimated total</span><span>S$58.00</span></div>
+        <button class="btn-create">Create appointment</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
