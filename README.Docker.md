@@ -40,12 +40,13 @@ docker compose --env-file .env.docker up --build -d
 | URL                                | What                                            |
 | ---------------------------------- | ----------------------------------------------- |
 | <http://localhost:5173>            | Web app (Vite HMR)                              |
-| <http://localhost:9000/health>     | API liveness                                    |
-| <http://localhost:9000/api/health> | API readiness (includes database status)        |
+| <http://localhost:9100/health>     | API liveness                                    |
+| <http://localhost:9100/api/health> | API readiness (includes database status)        |
 | `localhost:5433`                   | PostgreSQL, published so host tools can connect |
 
-The database is published on **5433** by default so it never collides with a
-PostgreSQL already running on the host. Change `POSTGRES_PORT` if 5433 is taken.
+The API is published on **9100** and the database on **5433** by default, so
+neither collides with a PostgreSQL or another local stack already running on the
+host. Change `API_PORT` or `POSTGRES_PORT` if those are taken.
 
 ### What the API container does on start
 

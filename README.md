@@ -33,8 +33,12 @@ docker compose --env-file .env.docker up --build -d
 | ---------------------------------- | ------------------------------------------------------ |
 | <http://localhost:5173>            | Salon Pro web app (Vite, hot reload)                   |
 | <http://localhost:5173/api/health> | API readiness through the dev proxy                    |
-| <http://localhost:9000/health>     | API liveness                                           |
+| <http://localhost:9100/health>     | API liveness                                           |
 | `localhost:5433`                   | PostgreSQL (`glampro` + the password in `.env.docker`) |
+
+Ports are chosen to avoid other local stacks on this workstation — 9000 and 8080
+are already taken. Change `API_PORT`, `WEB_PORT` or `POSTGRES_PORT` in
+`.env.docker` at any time.
 
 On first boot the API container applies migrations, generates the Prisma client
 and seeds development users:
@@ -75,7 +79,7 @@ Working outside Docker is supported too:
 ```bash
 npm install                                 # npm workspaces: both apps + shared
 docker compose --env-file .env.docker up -d database
-cp apps/api/.env.example apps/api/.env      # point DATABASE_URL at localhost:5433
+cp apps/api/.env.example apps/api/.env      # already points at localhost:5433
 npm run dev                                 # shared watcher + API + web together
 ```
 
