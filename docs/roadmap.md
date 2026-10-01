@@ -27,7 +27,7 @@ that changes the schema or an external contract also needs an ADR in
 
 ---
 
-## Phase 1 — Design system · **Next**
+## Phase 1 — Design system · **In progress**
 
 The phase that stops every later screen from inventing its own spacing, colour or
 button.
