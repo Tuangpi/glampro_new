@@ -1,0 +1,142 @@
+/**
+ * A tab set following the WAI-ARIA tabs pattern.
+ *
+ * Arrow keys move between tabs, Home and End jump to the ends, and only the
+ * active tab is in the tab order (roving tabindex) so Tab moves past the strip
+ * to the panel instead of walking every tab. Disabled tabs are skipped when
+ * cycling and are not reachable.
+ *
+ * Controlled: `activeId` plus `onChange`. The panel is rendered for the active
+ * tab only, so a tab that switches views should keep its own state above.
+ */
+import { useId, useRef } from "react";
+
+import { cn } from "@/lib/utils";
+
+export interface TabItem {
+  id: string;
+  label: React.ReactNode;
+  /** Count or status next to the label — decorative, the label carries meaning. */
+  badge?: React.ReactNode;
+  disabled?: boolean;
+  content: React.ReactNode;
+}
+
+export interface TabsProps {
+  /** Names the tab set for assistive technology. */
+  label: string;
+  items: TabItem[];
+  activeId: string;
+  onChange: (id: string) => void;
+  className?: string;
+}
+
+export default function Tabs({ label, items, activeId, onChange, className }: TabsProps) {
+  const baseId = useId();
+  const tabs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  const enabled = items.filter((item) => !item.disabled);
+
+  const move = (direction: 1 | -1) => {
+    if (enabled.length === 0) return;
+    const current = enabled.findIndex((item) => item.id === activeId);
+    const from = current === -1 ? 0 : current;
+    const next = enabled[(from + direction + enabled.length) % enabled.length];
+    onChange(next.id);
+    tabs.current[next.id]?.focus();
+  };
+
+  const jump = (edge: "first" | "last") => {
+    const target = edge === "first" ? enabled[0] : enabled[enabled.length - 1];
+    if (!target) return;
+    onChange(target.id);
+    tabs.current[target.id]?.focus();
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    switch (event.key) {
+      case "ArrowRight":
+        event.preventDefault();
+        move(1);
+        break;
+      case "ArrowLeft":
+        event.preventDefault();
+        move(-1);
+        break;
+      case "Home":
+        event.preventDefault();
+        jump("first");
+        break;
+      case "End":
+        event.preventDefault();
+        jump("last");
+        break;
+      default:
+        break;
+    }
+  };
+
+  const active = items.find((item) => item.id === activeId);
+
+  return (
+    <div className={cn("flex flex-col", className)}>
+      <div
+        role="tablist"
+        aria-label={label}
+        onKeyDown={onKeyDown}
+        className="scrollbar-hide flex gap-1 overflow-x-auto border-b border-line"
+      >
+        {items.map((item) => {
+          const isActive = item.id === activeId;
+          return (
+            <button
+              key={item.id}
+              ref={(node) => {
+                tabs.current[item.id] = node;
+              }}
+              type="button"
+              role="tab"
+              id={`${baseId}-tab-${item.id}`}
+              aria-controls={`${baseId}-panel-${item.id}`}
+              aria-selected={isActive}
+              disabled={item.disabled}
+              tabIndex={isActive ? 0 : -1}
+              onClick={() => onChange(item.id)}
+              className={cn(
+                "inline-flex h-control shrink-0 items-center gap-2 border-b-2 px-4 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-purple",
+                isActive
+                  ? "border-purple text-purple"
+                  : "border-transparent text-ink-muted hover:text-ink",
+                item.disabled && "cursor-not-allowed text-ink-disabled hover:text-ink-disabled",
+              )}
+            >
+              {item.label}
+              {item.badge ? (
+                <span
+                  className={cn(
+                    "rounded-pill px-1.5 py-0.5 text-2xs font-medium",
+                    isActive ? "bg-purple-soft text-purple" : "bg-surface-2 text-ink-muted",
+                  )}
+                >
+                  {item.badge}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+
+      {active ? (
+        <div
+          role="tabpanel"
+          id={`${baseId}-panel-${active.id}`}
+          aria-labelledby={`${baseId}-tab-${active.id}`}
+          tabIndex={0}
+          className="pt-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple"
+        >
+          {active.content}
+        </div>
+      ) : null}
+    </div>
+  );
+}

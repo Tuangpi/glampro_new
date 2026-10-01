@@ -142,8 +142,11 @@ screen review compares them:
 | `FiRefreshCw` (re-check status)      | `Eye`         | No refresh/rotate icon ships; the eye reads as "look again" |
 | `FiArrowLeft` (404 back link)        | `ChevronLeft` | No arrow-left ships; the chevron points the same way        |
 
-If a screen later proves a mapping wrong, the fix is to change the component used at the
-call site — never the path data.
+One gap in the set is worth knowing: it ships `chevron-down` and `chevron-left` but **no
+right-pointing chevron**. Forward steps — pagination's Next, a drawer opened from the left —
+use `ArrowRight` rather than mirroring `ChevronLeft` with a CSS flip, so the icon drawn is always
+one the designer actually delivered. If a later screen needs a right chevron as a distinct shape,
+add it to the handoff icons first and re-copy.
 
 ## 5. Screens → routes
 
