@@ -6,7 +6,16 @@
  *
  * Only the semantic tones the handoff actually defines are offered. There is
  * no amber/warning variant because the token file exposes amber as a gradient
- * for the dashboard income tile, not as a surface or text colour.
+ * for the dashboard income tile, not as a surface or text colour. Note the
+ * handoff's own `.status.progress` and `.tier.gold` *do* use an amber surface
+ * (`#FFF4DE`) and text (`#B9740A`), and neither colour is near any token, so
+ * they are open question Q23 rather than an invented variant — see
+ * [ADR 0006].
+ *
+ * Geometry is the handoff's `.tier` / `.status`: `800` weight, `4px 9px`
+ * padding, pill radius. The handoff's 10.5px has no token and sits exactly
+ * between `text-2xs` (10px) and `text-xs` (11px); per [ADR 0006] ties round
+ * up, so this is `text-xs`.
  */
 import { cn } from "@/lib/utils";
 
@@ -43,7 +52,7 @@ export default function Badge({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-pill px-2 py-0.5 text-2xs font-medium whitespace-nowrap",
+        "inline-flex items-center gap-1.5 rounded-pill px-2.25 py-1 text-xs font-heavy whitespace-nowrap",
         VARIANTS[variant],
         className,
       )}

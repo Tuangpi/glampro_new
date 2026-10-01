@@ -51,4 +51,35 @@ describe("Card", () => {
 
     expect(onClick).toHaveBeenCalledTimes(1);
   });
+
+  // Geometry is pinned by class name because jsdom has no Tailwind layout, so
+  // these assertions cannot measure a pixel — they only stop a later edit from
+  // quietly reverting the reconciliation. The rendered values are measured in
+  // the browser and recorded in docs/design/HANDOFF.md §5.
+  it("divides the header from the body the way the handoff's .card-head does", () => {
+    render(<Card title="Today's sales">Total</Card>);
+
+    const header = screen.getByRole("heading", { name: "Today's sales" }).closest("header");
+
+    expect(header).toHaveClass("border-b", "border-line-soft", "px-5", "py-4");
+  });
+
+  it("sets the card title at the handoff's weight and a snapped size", () => {
+    render(<Card title="Today's sales">Total</Card>);
+
+    expect(screen.getByRole("heading", { name: "Today's sales" })).toHaveClass(
+      "text-base",
+      "font-heavy",
+    );
+  });
+
+  it("pads the body 6px 12px 12px, and drops it entirely when flush", () => {
+    const { container, rerender } = render(<Card>Body</Card>);
+
+    expect(screen.getByText("Body")).toHaveClass("px-3", "pt-1.5", "pb-3");
+
+    rerender(<Card flush>Body</Card>);
+
+    expect(container.querySelector("section > div")).not.toHaveClass("px-3");
+  });
 });

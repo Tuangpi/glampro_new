@@ -6,6 +6,15 @@
  * for the documented small-stepper / overflow-menu cases and should be used
  * with a larger hit area around it.
  *
+ * Sized to the handoff's `.btn`: `700` weight and an 18px horizontal padding,
+ * both of which its token file omits — the padding rounds to `px-4.5`, the
+ * weight is the shared `font-bold`. Its *height* is the one deliberate
+ * departure. The handoff draws `.btn` between 37px (screens 06–11, `padding:
+ * 11px 18px`) and ~43px (screens 01–02, `padding: 13px`) — it contradicts
+ * itself — while `docs/roadmap.md` requires every control to clear 44px and
+ * `--sp-control-h-md` is the token the handoff defines for "standard buttons".
+ * The app takes the token. See [ADR 0006].
+ *
  * `cn` joins class strings without resolving conflicts, so `variant` and
  * `size` are the supported way to change appearance. `className` is for
  * layout (width, margin) — a conflicting colour utility in it will lose to
@@ -26,7 +35,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const BASE =
-  "inline-flex items-center justify-center gap-2 rounded-md font-medium whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple disabled:cursor-not-allowed disabled:opacity-60";
+  "inline-flex items-center justify-center gap-2 rounded-md font-bold whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple disabled:cursor-not-allowed disabled:opacity-60";
 
 const VARIANTS: Record<ButtonVariant, string> = {
   primary: "bg-purple text-white shadow-purple-btn hover:bg-purple-dark",
@@ -38,7 +47,7 @@ const VARIANTS: Record<ButtonVariant, string> = {
 
 const SIZES: Record<ButtonSize, string> = {
   sm: "h-control-sm px-3 text-xs",
-  md: "h-control px-4 text-sm",
+  md: "h-control px-4.5 text-base",
   lg: "h-control-lg px-6 text-base",
 };
 

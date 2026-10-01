@@ -13,14 +13,14 @@ Facts below were read out of the tree, not copied from a plan.
 
 ## 1. Snapshot
 
-|                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current phase    | **1 — Design system.** **All 17 primitives are built and tested.** The screen pass in §3 has begun: all 11 handoff screens were rendered at their true frame sizes, the app shell was measured against them and reconciled (see §3), and the standalone primitives have been **measured but not yet reconciled**. Q3, Q14 and Q21 closed alongside it: [ADR 0003](decisions/0003-tenant-scoped-customer-email.md), [0004](decisions/0004-platform-console-is-its-own-app.md) and [0005](decisions/0005-rail-has-no-services-destination.md). |
-| Last commit      | Not pinned here on purpose — run `git log -1 --oneline`. Pinning a hash in this file is what made it go stale twice; this file is updated in the same commit as the work it describes.                                                                                                                                                                                                                                                                                                                                                       |
-| Working tree     | The primitive list is complete. The screen pass landed the rail reconciliation (`AppShell` now matches the handoff's item geometry, gaps, label size and purple active state), a `Staff` nav entry that answers Q15 and the removal of the rail's `Services` entry ([ADR 0005](decisions/0005-rail-has-no-services-destination.md)); its measurements are in [`design/HANDOFF.md`](design/HANDOFF.md) §2.                                                                                                                                    |
-| `npm run verify` | See §5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Dev stack        | `make up-d` → API `:9100`, web `:5173`, Postgres `:5433` (`compose.yaml`, ports documented in `README.Docker.md`)                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Runtime          | Node 24, npm workspaces (no pnpm), Postgres 17, Prisma 7                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+|                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Current phase    | **1 — Design system.** **All 17 primitives are built, tested and reconciled** against the handoff ([ADR 0006](decisions/0006-snap-handoff-values-to-tokens.md)); the screen pass measured the app shell and the primitives and corrected them (§3, [`design/HANDOFF.md`](design/HANDOFF.md) §7). Q3, Q14 and Q21 closed alongside it: [ADR 0003](decisions/0003-tenant-scoped-customer-email.md), [0004](decisions/0004-platform-console-is-its-own-app.md) and [0005](decisions/0005-rail-has-no-services-destination.md). |
+| Last commit      | Not pinned here on purpose — run `git log -1 --oneline`. Pinning a hash in this file is what made it go stale twice; this file is updated in the same commit as the work it describes.                                                                                                                                                                                                                                                                                                                                      |
+| Working tree     | The primitive list is complete. The screen pass landed the rail reconciliation (`AppShell` now matches the handoff's item geometry, gaps, label size and purple active state), a `Staff` nav entry that answers Q15 and the removal of the rail's `Services` entry ([ADR 0005](decisions/0005-rail-has-no-services-destination.md)); its measurements are in [`design/HANDOFF.md`](design/HANDOFF.md) §2.                                                                                                                   |
+| `npm run verify` | See §5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Dev stack        | `make up-d` → API `:9100`, web `:5173`, Postgres `:5433` (`compose.yaml`, ports documented in `README.Docker.md`)                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Runtime          | Node 24, npm workspaces (no pnpm), Postgres 17, Prisma 7                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ## 2. What actually exists today
 
@@ -38,7 +38,7 @@ Facts below were read out of the tree, not copied from a plan.
 | Shared package      | `@glampro/shared` — Zod schemas, constants and types consumed by both the API and the web app                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Design package      | `design/handoff/` — 11 screens (+ PNGs for 01–04), `tokens.css` / `tokens.json`, 41 SVG icons                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Legacy application  | **Not in this repository.** `docs/legacy/` is the transcription of it: the API surface (154 registrations, 151 live routes) and the schema, plus the gaps worth knowing before migrating                                                                                                                                                                                                                                                                                                             |
-| Docs                | `architecture.md`, `CONTEXT.md`, `roadmap.md`, `STATE.md`, `decisions/` (0002–0005 + index), `legacy/` (LEGACY-MAP, API-INVENTORY, reference/legacy-schema), `saas/TENANCY.md`, `design/HANDOFF.md`                                                                                                                                                                                                                                                                                                  |
+| Docs                | `architecture.md`, `CONTEXT.md`, `roadmap.md`, `STATE.md`, `decisions/` (0002–0006 + index), `legacy/` (LEGACY-MAP, API-INVENTORY, reference/legacy-schema), `saas/TENANCY.md`, `design/HANDOFF.md`                                                                                                                                                                                                                                                                                                  |
 
 ## 3. Next up — Phase 1, in order
 
@@ -56,25 +56,37 @@ worth carrying forward:
   The numbers, and the one deliberate deviation (item width), are in
   [`design/HANDOFF.md`](design/HANDOFF.md) §2.
 
-1. **Reconcile the standalone primitives.** They have been measured against the rendered handoff
-   but not yet changed. The numbers to work from, read out of the browser:
+1. **Reconcile the standalone primitives — done.** Measured against the rendered handoff and
+   corrected; the full table with reasoning is in
+   [`design/HANDOFF.md`](design/HANDOFF.md) §7.
 
-   | Handoff selector  | Measured in the screens                                                       | App today                                         |
-   | ----------------- | ----------------------------------------------------------------------------- | ------------------------------------------------- |
-   | `.card`           | radius `20px`, 1px `#E3E6F2`                                                  | `rounded-card`, `border-line` — **matches**       |
-   | `.card-head`      | padding `16px 20px`, 1px `#EEF0F7` bottom                                     | `px-5 pt-4 pb-3`, **no divider**                  |
-   | `.card-title`     | `14.5px` / `800`                                                              | `15.5px` (`text-md`) / `700`                      |
-   | `.card-body`      | padding `6px 12px 12px`                                                       | `px-5 pb-5`                                       |
-   | `.btn`            | radius `12px` ✅, height **`37px`**, `13.5px`/`700`, padding `11px 18px`      | `h-control` (**`44px`**), `text-sm`/`600`, `px-4` |
-   | `.tier` (Badge)   | `10.5px`/`800`, padding `4px 9px`, height `22px`                              | `10px`/`600`, `px-2 py-0.5`, ~`16px`              |
-   | `.tab-opt` (Tabs) | padding `13px 0`, `12.5px`/`700`, active = `inset 0 -2px 0 #6144E4`           | see `Tabs`                                        |
-   | `.chip`           | `13px`/`600`, padding `8px 14px`, `#2B3160` on `#F3F4FA`, 1px `#E3E6F2`, pill | see `Chip`                                        |
+   | Handoff selector  | Measured in the screens                                                  | App now (reconciled)                                                         |
+   | ----------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+   | `.card`           | radius `20px`, 1px `#E3E6F2`                                             | `rounded-card border-line` — **matches**                                     |
+   | `.card-head`      | padding `16px 20px`, 1px `#EEF0F7` bottom, centred                       | `px-5 py-4 border-line-soft items-center` — **matches**                      |
+   | `.card-title`     | `14.5px` / `800`                                                         | `text-base font-heavy` — snapped, −0.5px                                     |
+   | `.card-body`      | padding `6px 12px 12px`                                                  | `px-3 pt-1.5 pb-3` — **matches**                                             |
+   | `.tier` (Badge)   | `10.5px`/`800`, padding `4px 9px`, height `22px`                         | `text-xs font-heavy px-2.25 py-1` — snapped, +0.5px                          |
+   | `.tab-opt` (Tabs) | padding `13px 0`, `12.5px`/`700`                                         | `text-sm font-bold` — **matches**; height `h-control`                        |
+   | `.chip`           | `13px`/`600`, padding `8px 14px`, `#F3F4FA` fill, pill                   | `text-sm px-3.5 py-2 bg-surface-2` — snapped, −0.5px                         |
+   | `.btn`            | radius `12px` ✅, height **`37px`**, `13.5px`/`700`, padding `11px 18px` | radius ✅, height **`44px`**, `font-bold text-base px-4.5` — snapped, +0.5px |
+
+   The rule applied is [ADR 0006](decisions/0006-snap-handoff-values-to-tokens.md): snap to
+   the nearest real token, ties round up, record the delta. Nothing was added to either
+   token file, so the `cmp` in [`design/HANDOFF.md`](design/HANDOFF.md) §3 still passes.
 
    One of these is a **conflict, not a bug**, and must not be "fixed" towards the screen: the
-   handoff draws `.btn` at 37px, but its own token file defines `--sp-control-h-md: 44px` as the
-   "standard buttons" height and [`design/HANDOFF.md`](design/HANDOFF.md) §6 requires every
-   control to clear 44px. The app follows the token. Record the 37px screen value as the
-   designer's under-sized button rather than regressing the app to it.
+   handoff draws `.btn` at 37px in screens 06–11 but ~43px in screens 01–02 — it contradicts
+   itself — while its own token file defines `--sp-control-h-md: 44px` as the "standard
+   buttons" height and [`design/HANDOFF.md`](design/HANDOFF.md) §6 requires every control to
+   clear 44px. The app follows the token.
+
+   Reconciling also surfaced what the measurement table could not: **the handoff's screens
+   use type sizes and colours its own token file does not define** (`10.5px`, `13px`,
+   `13.5px`, `14.5px`, `#2B3160`, `#FFF4DE`). That is why ADR 0006 exists rather than a
+   straight copy. Two consequences: `Chip`'s selected state was a soft tint matching _no_
+   screen and is now the solid purple fill of `.toggle-chip.active`, and the amber badge
+   tone became **Q23** rather than an invented variant.
 
 2. **Confirm the four stand-in icon mappings** in [`design/HANDOFF.md`](design/HANDOFF.md) §4 —
    **done, they hold.** The ported set is the complete handoff directory (41 SVGs) and it ships
@@ -133,14 +145,15 @@ These are ours to decide; none of them needs production data.
 | Q20 | 36 mobile routes are frozen and must come back **one phase at a time**, with identical response shapes.                                                                                                                                                                                                                                                                                             | It is easy for a phase to be called complete while a mobile route it owns is still missing                                                                                                                  | Nothing blocks it — the contract is written down in [`legacy/API-INVENTORY.md`](legacy/API-INVENTORY.md). Each phase's acceptance must check the frozen routes it owns                                               |
 | Q22 | The rail's **foot** is not modelled. The handoff puts `Settings` in `.side-foot` beside `Log out`; the app declares `Settings` as an ordinary `navItems` entry — rendered only once a role is supplied, and then in the main nav — and `AppShell` hard-codes its own `Log out` button below the `<nav>`. The labels differ too: `Dashboard`/`Appointments` here, `Home`/`Calendar` in the proposal. | Both are user-visible, and role-gating is currently the only thing keeping `Settings` out of the rail, so the foot's shape has to be settled before the settings screen and the top bar's account menu land | Product/scope: keep the app's labels and nav shape, or adopt the handoff's (`CONTEXT.md` §5 permits labels to differ). Decide before the first role-aware render arrives with Phase 3 auth                           |
 
+| Q23 | The handoff's **amber badge tone has no token**. `.status.progress` (screen 05) uses `#FFF4DE` on `#B9740A`, and `.tier.gold` (screen 07) uses the same pair. The token file exposes amber only as a gradient stop (`--sp-amber-grad-a/b`) for the dashboard income tile, so there is nothing to snap to — [ADR 0006](decisions/0006-snap-handoff-values-to-tokens.md) sends values further than 1px from every token to a question rather than an invented one. | `Badge` deliberately offers no amber variant, and **both the dashboard and customers screens need one** (an in-progress appointment status and the Gold/Silver/New tier column), so neither screen can be built as drawn until this is settled | Design, before those screens. Either the designer adds an amber surface/text token to `design/handoff/tokens/tokens.css` and it is re-copied, or we accept the nearest existing tones and record it as a visual deviation the way ADR 0006 records the rest |
+
 ## 5. Verify status
 
 `npm run verify` is `format:check` → `lint` → `typecheck` → `test`. Last full run:
-**exit 0**, 2026-10-01, after the screen pass landed the rail reconciliation, the `Staff`
-nav entry and the removal of the `Services` entry
-([ADR 0005](decisions/0005-rail-has-no-services-destination.md)). The web suite moved from 128
-to 129 tests: `navigation.test.ts` gains the assertion that the rail carries eight entries and
-no `Services` destination — the check that `design/HANDOFF.md` §5's "nine entries" had hidden.
+**exit 0**, 2026-10-01, after the standalone primitives were reconciled against the
+handoff ([ADR 0006](decisions/0006-snap-handoff-values-to-tokens.md)). The web suite
+moved from 129 to **137** tests: `Card`, `Badge`, `Chip` and `Tabs` each gained
+class-level assertions pinning the reconciled geometry.
 
 | Step           | Result                                                           |
 | -------------- | ---------------------------------------------------------------- |
@@ -149,24 +162,41 @@ no `Services` destination — the check that `design/HANDOFF.md` §5's "nine ent
 | `typecheck`    | Pass — `@glampro/shared`, `@glampro/api`, `@glampro/web`         |
 | API tests      | **16 passed, 0 failed** (7 suites, `node --test` over real HTTP) |
 | Shared tests   | **6 passed, 0 failed** (3 suites)                                |
-| Web tests      | **21 files, 129 tests passed** (Vitest)                          |
+| Web tests      | **21 files, 137 tests passed** (Vitest)                          |
 
-`npm run build:web` was also run once to confirm the new utilities compile — `w-rail`,
-`pl-rail`, `h-topbar`, `rounded-pill`, `text-2xs` and `text-[length:var(--app-rail-icon)]`
-all emit CSS, and each resolves to the token it should. `dist/` was deleted afterwards.
+`npm run build:web` was also run to confirm the reconciled utilities compile — the
+fractional spacings `px-2.25`, `px-3.5` and `px-4.5`, `pt-1.5` and `font-heavy` all emit
+CSS and each resolves to the token it should. `dist/` was deleted afterwards. The earlier
+build confirmed the same for `w-rail`, `pl-rail`, `h-topbar`, `rounded-pill` and
+`text-[length:var(--app-rail-icon)]`.
 
 The screen pass has **partly** run. The app shell was rendered and measured against screens
 05–11 and now matches the handoff — the rail's item geometry, both gaps, the 8.5px/700 label and
 the purple active state are verified by reading computed styles back out of the browser, not by
 eye, and the app now renders "Customers" at 46.4px, the same width the handoff produces. The
-`Staff` entry answers Q15.
+`Staff` entry answers Q15. The **standalone primitives are now reconciled too**: the
+measured values are in [`design/HANDOFF.md`](design/HANDOFF.md) §7.
 
-The **standalone primitives have not been reconciled**: they were measured against the rendered
-screens (the numbers are tabled in §3, item 1) but no change was made to them, so no primitive
-has yet been _corrected_ against the design. The token utilities they use (`h-control`,
-`size-control`, `rounded-md`, `shadow-purple-btn`, `font-medium`) resolve through the `@theme`
-block, but only `font-medium` changed meaning in an earlier pass: it is now the handoff's 600
-rather than Tailwind's default 500.
+One limit worth stating plainly. The new assertions check **class names, not pixels** —
+jsdom performs no Tailwind layout, so they prove the reconciliation was not silently
+reverted but they do not prove a rendered pixel. The rendered numbers come from the browser
+measurement pass and from `build:web`; a unit test cannot substitute for either. Anything
+claiming to have "verified the geometry" from the Vitest run alone is overstating it.
+
+The **standalone primitives are now reconciled**: each was measured against the rendered
+screens and corrected, per [ADR 0006](decisions/0006-snap-handoff-values-to-tokens.md).
+The values are tabled in §3, item 1 and in [`design/HANDOFF.md`](design/HANDOFF.md) §7.
+The token utilities they use (`h-control`, `rounded-md`, `rounded-card`, `font-heavy`,
+`border-line-soft`) all resolve through the `@theme` block; note that `font-medium` is the
+handoff's 600 rather than Tailwind's default 500, so `font-bold` is 700 and `font-heavy`
+is 800.
+
+Reconciling turned up something the earlier measurement pass could not have seen on its
+own: **the handoff's screens draw type sizes and colours its own token file does not
+define.** Nothing was added to either token file to compensate — the values were snapped
+to the nearest real token and the delta recorded — but it means the app now differs from
+the static handoff HTML by up to 0.5px of type size in three places, deliberately. The
+amber badge tone is the exception: it is too far from any token to snap, so it is Q23.
 
 How the shell reconciliation was validated, since unit tests cannot see geometry: every screen
 and the running dev server were screenshotted with headless Chrome at the handoff's own frame

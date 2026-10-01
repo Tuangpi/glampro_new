@@ -6,6 +6,13 @@
  * section with actions and a footer. The title renders as an `h3` because
  * cards sit below the page heading in the handoff frames; a card nested inside
  * another card should pass its own title markup through `title`.
+ *
+ * Geometry follows the handoff's `.card` / `.card-head` / `.card-body` and is
+ * reconciled against the token scale by [ADR 0006]: the head is `16px 20px`
+ * over a `--sp-border-soft` divider, the title is the handoff's 800 weight,
+ * and the body is `6px 12px 12px`. The handoff's `.card-link` (12px/700 purple,
+ * the "View all" in a head) has no prop of its own — render it into `actions`
+ * as `text-sm font-bold text-purple`, all three of which are existing tokens.
  */
 import { cn } from "@/lib/utils";
 
@@ -41,21 +48,19 @@ export default function Card({
       )}
     >
       {hasHeader ? (
-        <header className="flex items-start justify-between gap-4 px-5 pt-4 pb-3">
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-line-soft px-5 py-4">
           <div className="min-w-0">
-            {title ? <h3 className="truncate text-md text-ink">{title}</h3> : null}
+            {title ? <h3 className="truncate text-base font-heavy text-ink">{title}</h3> : null}
             {description ? <p className="mt-0.5 text-sm text-ink-muted">{description}</p> : null}
           </div>
           {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
         </header>
       ) : null}
 
-      {children ? (
-        <div className={cn(flush ? "" : "px-5 pb-5", hasHeader && "pt-0")}>{children}</div>
-      ) : null}
+      {children ? <div className={cn(flush ? "" : "px-3 pt-1.5 pb-3")}>{children}</div> : null}
 
       {footer ? (
-        <footer className="border-t border-line-soft bg-surface-muted px-5 py-3 text-sm text-ink-body">
+        <footer className="border-t border-line-soft bg-surface-muted px-3 py-3 text-sm text-ink-body">
           {footer}
         </footer>
       ) : null}

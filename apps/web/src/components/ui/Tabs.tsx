@@ -1,6 +1,19 @@
 /**
  * A tab set following the WAI-ARIA tabs pattern.
  *
+ * Geometry follows the handoff's `.tab-opt` (screen 07): `12.5px`/`700`, which
+ * is `text-sm font-bold` exactly — no snapping needed, see [ADR 0006]. The
+ * handoff's own heights land at ~43px, so `h-control` is within a pixel *and*
+ * clears the 44px tap target the roadmap requires; it is kept for that reason.
+ * The handoff draws the row border as `#EEF0F7`, so this is `border-line-soft`.
+ *
+ * Two deliberate departures from `.tab-opt`, both recorded rather than imitated.
+ * The handoff lays its tabs out `flex: 1` and centred; this is a horizontally
+ * scrollable strip, which stays legible when a tab set does not fit the frame
+ * and costs a screen no extra CSS. The active tab is an `inset 0 -2px 0` shadow
+ * in the handoff and a `border-b-2` here — the same 2px purple underline, drawn
+ * as a border so it cannot drift from the text colour.
+ *
  * Arrow keys move between tabs, Home and End jump to the ends, and only the
  * active tab is in the tab order (roving tabindex) so Tab moves past the strip
  * to the panel instead of walking every tab. Disabled tabs are skipped when
@@ -84,7 +97,7 @@ export default function Tabs({ label, items, activeId, onChange, className }: Ta
         role="tablist"
         aria-label={label}
         onKeyDown={onKeyDown}
-        className="scrollbar-hide flex gap-1 overflow-x-auto border-b border-line"
+        className="scrollbar-hide flex gap-1 overflow-x-auto border-b border-line-soft"
       >
         {items.map((item) => {
           const isActive = item.id === activeId;
@@ -103,7 +116,7 @@ export default function Tabs({ label, items, activeId, onChange, className }: Ta
               tabIndex={isActive ? 0 : -1}
               onClick={() => onChange(item.id)}
               className={cn(
-                "inline-flex h-control shrink-0 items-center gap-2 border-b-2 px-4 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-purple",
+                "inline-flex h-control shrink-0 items-center gap-2 border-b-2 px-4 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-purple",
                 isActive
                   ? "border-purple text-purple"
                   : "border-transparent text-ink-muted hover:text-ink",

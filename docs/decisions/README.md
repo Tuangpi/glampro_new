@@ -14,12 +14,13 @@ defines when a file has to be written.
 | 0003 | [Customer email is unique per tenant, not globally](0003-tenant-scoped-customer-email.md)  | Accepted |
 | 0004 | [The platform console is its own app](0004-platform-console-is-its-own-app.md)             | Accepted |
 | 0005 | [The rail has no Services destination](0005-rail-has-no-services-destination.md)           | Accepted |
+| 0006 | [Snap handoff values to tokens; record the delta](0006-snap-handoff-values-to-tokens.md)   | Accepted |
 
 `0001` is unallocated: `0002` is referenced by name from
 [`../saas/TENANCY.md`](../saas/TENANCY.md) and
 [`../legacy/LEGACY-MAP.md`](../legacy/LEGACY-MAP.md), and renumbering a referenced
 decision is worse than leaving the first slot empty. The next new decision is
-`0006`.
+`0007`.
 
 ## Rules
 

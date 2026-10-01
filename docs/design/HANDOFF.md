@@ -233,3 +233,46 @@ from the Products tab row and from the sale and appointment flows
    screens 05–11 are proposals, so a mismatch with the API is expected and the screen
    is what changes.
 6. `npm run verify` exits 0.
+
+## 7. Primitives, reconciled
+
+Phase 1 measured the standalone primitives against the rendered screens and corrected
+them. The handoff's screens turn out to draw **type sizes and colours its own token file
+does not define** — `10.5px`, `13px`, `13.5px`, `14.5px`, `#2B3160`, `#FFF4DE` — so the
+values below are snapped to the nearest real token and the delta recorded, per
+[ADR 0006](../decisions/0006-snap-handoff-values-to-tokens.md). Nothing was added to
+either token file, so the `cmp` in §3 still passes.
+
+| Selector            | Handoff (measured)                                 | App now                                   | Δ      |
+| ------------------- | -------------------------------------------------- | ----------------------------------------- | ------ |
+| `.card`             | radius `20px`, 1px `#E3E6F2`                       | `rounded-card border-line`                | 0      |
+| `.card-head`        | `padding 16px 20px`, 1px `#EEF0F7` bottom, centred | `px-5 py-4 border-line-soft items-center` | 0      |
+| `.card-title`       | `14.5px`/`800`                                     | `text-base font-heavy`                    | −0.5px |
+| `.card-body`        | `padding 6px 12px 12px`                            | `px-3 pt-1.5 pb-3`                        | 0      |
+| `.tier` / `.status` | `10.5px`/`800`, `4px 9px`, ~`22px` tall            | `text-xs font-heavy px-2.25 py-1`         | +0.5px |
+| `.tab-opt`          | `padding 13px 0`, `12.5px`/`700`                   | `text-sm font-bold`, `h-control`          | 0 (h)  |
+| `.chip`             | `13px`/`600`, `8px 14px`, `#F3F4FA` fill, pill     | `text-sm px-3.5 py-2 bg-surface-2`        | −0.5px |
+| `.btn`              | radius `12px`, `13.5px`/`700`, `padding 11px 18px` | `font-bold text-base px-4.5`              | +0.5px |
+
+**Three deliberate departures, not oversights.** The handoff contradicts itself on button
+height — 37px in screens 06–11 (`padding: 11px 18px`) against ~43px in screens 01–02
+(`padding: 13px`) — so the app takes `--sp-control-h-md` (44px), which is both what the
+token file defines for "standard buttons" and what §6's tap-target rule requires. `Chip`'s
+selected state is a **solid** `--sp-purple` fill with white text, matching
+`.toggle-chip.active` in screen 03; the soft tint it replaced matched no screen. `Tabs`
+stays a horizontally scrollable strip rather than the handoff's `flex: 1` centred row, and
+draws its active underline as `border-b-2` rather than an `inset 0 -2px 0` shadow — the
+same 2px purple line, but a border cannot drift from the text colour.
+
+**One gap snapping could not close.** `.status.progress` (screen 05) and `.tier.gold`
+(screen 07) use an amber surface `#FFF4DE` with amber text `#B9740A`. Neither is near any
+token — the token file exposes amber only as a gradient stop — so `Badge` has no amber
+tone and this is recorded as Q23 in [`STATE.md`](../STATE.md) §4.2 instead. The dashboard
+and customers screens both need it.
+
+How this was validated: the reconciled utilities are pinned by class-name assertions in
+each primitive's test file, which **cannot measure a pixel** — jsdom does no Tailwind
+layout — so they guard against a silent revert rather than proving geometry. The rendered
+values come from `getComputedStyle` read out of a browser at the handoff's frame size, the
+same method §2 records for the rail, and `npm run build:web` confirms `px-2.25`, `px-3.5`,
+`px-4.5` and `font-heavy` all emit CSS and resolve to the token they should.

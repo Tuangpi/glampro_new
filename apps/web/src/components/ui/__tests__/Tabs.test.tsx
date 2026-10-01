@@ -109,4 +109,13 @@ describe("Tabs", () => {
 
     expect(onChange).toHaveBeenCalledWith("week");
   });
+
+  // Pinned by class name — jsdom does no Tailwind layout, so this guards
+  // against a silent revert rather than measuring a pixel. See ADR 0006.
+  it("matches .tab-opt's 12.5px/700 type and the handoff's soft row divider", () => {
+    render(<ControlledTabs />);
+
+    expect(screen.getByRole("tab", { name: "All" })).toHaveClass("text-sm", "font-bold");
+    expect(screen.getByRole("tablist", { name: "Appointments" })).toHaveClass("border-line-soft");
+  });
 });

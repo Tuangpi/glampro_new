@@ -28,4 +28,12 @@ describe("Badge", () => {
 
     expect(screen.getByText("Overdue")).toHaveTextContent(/^Overdue$/);
   });
+
+  // Pinned by class name — jsdom does no Tailwind layout, so this guards
+  // against a silent revert rather than measuring a pixel. See ADR 0006.
+  it("carries the handoff's 4px 9px pill padding and 800 weight", () => {
+    render(<Badge>Gold</Badge>);
+
+    expect(screen.getByText("Gold")).toHaveClass("px-2.25", "py-1", "text-xs", "font-heavy");
+  });
 });

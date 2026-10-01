@@ -1,11 +1,21 @@
 /**
  * A pill used for a filter or a tag.
  *
- * Without `onSelect` it is a plain tag; with it, it becomes a toggle button
- * carrying `aria-pressed`, so a screen reader announces which filters are
- * active rather than leaving the colour to carry it. A toggle is a real
- * control and therefore gets the full 44px tap target; a passive tag may sit
- * at the 30px `--sp-control-h-sm`.
+ * The handoff draws two related things. `.chip` (screens 01, 05) is a passive
+ * context pill in the top bar: `8px 14px` padding, `13px`/`600`, `#2B3160` on
+ * `#F3F4FA` over a 1px `#E3E6F2` border. `.toggle-chip` (screen 03) is the
+ * selectable one, and its selected state is a **solid `--sp-purple` fill with
+ * white text** — not a tint. That is what `selected` renders here.
+ *
+ * Both the padding and the type are snapped to the token scale per
+ * [ADR 0006]: 8px/14px are `py-2 px-3.5` exactly, and the handoff's 13px sits
+ * nearer `text-sm` (12.5px) than `text-base`, so it is `text-sm`. Its `#2B3160`
+ * has no token and is nearest `--sp-text-primary`, so unselected chips read
+ * `text-ink`.
+ *
+ * A toggle is a real control and therefore keeps the full 44px tap target; the
+ * handoff's own `.toggle-chip` computes to ~30px, which is the same recorded
+ * conflict as `Button`'s height and is deliberately not copied.
  */
 import { cn } from "@/lib/utils";
 
@@ -31,20 +41,24 @@ export default function Chip({
   const toggleable = typeof onSelect === "function";
 
   const tone = cn(
-    "inline-flex items-center gap-1.5 rounded-pill border text-sm whitespace-nowrap transition-colors",
-    toggleable ? "h-control px-4" : "h-control-sm px-3",
+    "inline-flex items-center gap-1.5 rounded-pill border px-3.5 text-sm whitespace-nowrap transition-colors",
+    toggleable ? "h-control" : "py-2",
     disabled
       ? "cursor-not-allowed border-line bg-surface-2 text-ink-disabled"
       : selected
-        ? "border-purple bg-purple-soft text-purple"
-        : "border-line bg-surface text-ink-body hover:bg-surface-2 hover:text-ink",
+        ? "border-purple bg-purple text-white"
+        : "border-line bg-surface-2 text-ink hover:border-purple",
   );
+
+  // `.chip svg { color: #8A90AA }` in the handoff; on the purple selected fill
+  // the glyph has to follow the white label rather than stay muted.
+  const iconTone = selected && !disabled ? "text-white" : "text-ink-muted";
 
   if (!toggleable) {
     return (
       <span className={cn(tone, className)}>
         {icon ? (
-          <span aria-hidden className="text-base">
+          <span aria-hidden className={cn("text-base", iconTone)}>
             {icon}
           </span>
         ) : null}
@@ -66,7 +80,7 @@ export default function Chip({
       )}
     >
       {icon ? (
-        <span aria-hidden className="text-base">
+        <span aria-hidden className={cn("text-base", iconTone)}>
           {icon}
         </span>
       ) : null}
