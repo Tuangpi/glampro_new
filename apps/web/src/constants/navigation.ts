@@ -3,11 +3,11 @@ import type { ComponentType, SVGProps } from "react";
 
 import {
   BarChart,
+  Briefcase,
   Calendar,
   Cart,
   Grid,
   Package,
-  Scissors,
   Settings,
   Users,
 } from "@/components/icons";
@@ -27,6 +27,19 @@ export interface NavItem {
  *
  * Icons come from the handoff set ported into `@/components/icons`
  * (see docs/design/HANDOFF.md §4).
+ *
+ * Staff is an unrestricted peer of Customers and Products because the handoff's
+ * own rail draws it that way — screens 05–11 all render a Staff entry between
+ * Products and Reports. The screen behind it lands in the phase that builds the
+ * staff surface; until then the entry matches the other not-yet-built routes.
+ *
+ * The rail has **eight** entries, and there is deliberately none for Services:
+ * the handoff rail draws seven destinations plus Settings in its foot, and
+ * services are reached from the Products tab row and from the sale and
+ * appointment flows. The count and the absence are both asserted in
+ * navigation.test.ts, so do not add a ninth entry without a decision. See ADR
+ * 0005 (docs/decisions/0005-rail-has-no-services-destination.md) and
+ * docs/design/HANDOFF.md §5.
  */
 export const navItems: NavItem[] = [
   { label: "Dashboard", path: "/", icon: Grid },
@@ -34,7 +47,7 @@ export const navItems: NavItem[] = [
   { label: "Appointments", path: "/appointments", icon: Calendar },
   { label: "Customers", path: "/customers", icon: Users },
   { label: "Products", path: "/products", icon: Package, badge: "lowStock" },
-  { label: "Services", path: "/services", icon: Scissors },
+  { label: "Staff", path: "/staff", icon: Briefcase },
   { label: "Reports", path: "/reports", icon: BarChart, roles: ["SUPER_ADMIN", "MANAGER"] },
   { label: "Settings", path: "/settings", icon: Settings, roles: ["SUPER_ADMIN", "MANAGER"] },
 ];

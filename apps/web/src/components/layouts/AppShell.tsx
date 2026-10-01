@@ -9,9 +9,17 @@ import { cn, getInitials } from "@/lib/utils";
  * The Salon Pro application frame (handoff screens 05–11):
  * an 84px navy icon rail on the left and a 76px white top bar above the page.
  *
- * The rail collapse, search behaviour and notification tray are wired up in the
- * design-system and auth phases; the geometry and typography match the handoff
- * today so every page inherits the right frame.
+ * Rail geometry was checked against the rendered handoff in Phase 1's screen
+ * pass and matches it: 50px-tall, 14px-radius items, a 6px gap between them and
+ * a 4px icon-to-label gap, an 8.5px/700 label, and the active item painted
+ * `--sp-purple` with the purple button shadow. The item width is the one
+ * deliberate deviation — see `--app-rail-item-w` in styles/app-chrome.css.
+ *
+ * Two known gaps, both owned by later phases rather than this one: the
+ * open-cart badge that `navItems` declares is not drawn yet because the counter
+ * is live data (sale phase), and role-restricted entries stay hidden until auth
+ * supplies a role, so the rail is shorter than the handoff's for a signed-out
+ * user.
  */
 export default function AppShell() {
   const location = useLocation();
@@ -21,12 +29,12 @@ export default function AppShell() {
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <aside className="fixed inset-y-0 left-0 z-40 flex w-rail flex-col items-center bg-navy py-5">
-        <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-md bg-gradient-to-br from-[var(--sp-purple-grad-a)] to-[var(--sp-purple-grad-b)] text-base font-extrabold text-white">
+      <aside className="fixed inset-y-0 left-0 z-40 flex w-rail flex-col items-center bg-navy pt-5 pb-4">
+        <div className="mb-[var(--sp-space-10)] flex h-10 w-10 items-center justify-center rounded-md bg-gradient-to-br from-[var(--sp-purple-grad-a)] to-[var(--sp-purple-grad-b)] text-base font-extrabold text-white">
           G
         </div>
 
-        <nav className="flex flex-1 flex-col items-center gap-1 overflow-y-auto scrollbar-hide">
+        <nav className="flex flex-1 flex-col items-center gap-1.5 overflow-y-auto scrollbar-hide">
           {items.map((item) => (
             <NavLink
               key={item.path}
@@ -34,25 +42,29 @@ export default function AppShell() {
               end={item.path === "/"}
               className={({ isActive }) =>
                 cn(
-                  "group relative flex w-[var(--app-rail-item-w)] flex-col items-center gap-1.5 rounded-md py-2.5 transition",
+                  "group relative flex h-[var(--app-rail-item-h)] w-[var(--app-rail-item-w)] flex-col items-center justify-center gap-1 rounded-[var(--app-rail-item-radius)] transition",
                   isActive
-                    ? "bg-[var(--sp-navy-tint-14)] text-white"
+                    ? "bg-purple text-white shadow-purple-btn"
                     : "text-ink-on-dark hover:bg-[var(--sp-navy-tint-10)] hover:text-white",
                 )
               }
             >
               <item.icon className="text-[length:var(--app-rail-icon)]" aria-hidden />
-              <span className="text-2xs font-semibold tracking-wide">{item.label}</span>
+              <span className="text-[length:var(--app-rail-label)] font-bold tracking-[var(--app-rail-tracking)]">
+                {item.label}
+              </span>
             </NavLink>
           ))}
         </nav>
 
         <button
           type="button"
-          className="mt-4 flex h-9 w-9 items-center justify-center rounded-full bg-[var(--sp-navy-tint-10)] text-ink-on-dark transition hover:text-white"
-          aria-label="Sign out"
+          className="mt-1.5 flex h-[var(--app-rail-item-h)] w-[var(--app-rail-item-w)] flex-col items-center justify-center gap-1 rounded-[var(--app-rail-item-radius)] text-ink-on-dark transition hover:bg-[var(--sp-navy-tint-10)] hover:text-white"
         >
-          <LogOut />
+          <LogOut className="text-[length:var(--app-rail-icon)]" aria-hidden />
+          <span className="text-[length:var(--app-rail-label)] font-bold tracking-[var(--app-rail-tracking)]">
+            Log out
+          </span>
         </button>
       </aside>
 

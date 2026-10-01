@@ -41,8 +41,18 @@ Two things about the package matter before copying anything out of it:
 
 ## 2. Frame geometry
 
-Every screen paints a fixed frame, `.app { width: 1280px; height: 900px }`, on the
-`--sp-bg` background. Inside it:
+Every screen paints a fixed frame on the `--sp-bg` background. The frames are
+**not** all 1280 × 900, and the container class differs between the two groups:
+
+| Screen(s) | Container | Frame      | Rail                               |
+| --------- | --------- | ---------- | ---------------------------------- |
+| 01        | `.root`   | 1280 × 832 | no                                 |
+| 02        | `.root`   | 900 × 832  | no                                 |
+| 03        | `.root`   | 1280 × 900 | no                                 |
+| 04        | `.root`   | 1280 × 620 | no — reference sheet, not a screen |
+| 05–11     | `.app`    | 1280 × 900 | yes                                |
+
+Inside the full frame:
 
 | Element            | Size / value                                           | Token               |
 | ------------------ | ------------------------------------------------------ | ------------------- |
@@ -55,6 +65,47 @@ Every screen paints a fixed frame, `.app { width: 1280px; height: 900px }`, on t
 Screens 01–04 are flow/modal screens without the rail; screens 05–11 use the full
 frame. This is a desktop product: the frame is fixed and no breakpoint work is
 expected beyond letting the frame scroll sensibly in a smaller window.
+
+### The rail, measured
+
+Screens 05–11 share one shell block ("identical markup/CSS across every main-nav
+screen" per the file's own comment). Phase 1's screen pass rendered that shell and
+read the computed values back out of the browser rather than eyeballing the markup,
+which caught four things the app had wrong:
+
+| Element                | Handoff (measured)                                      | App now                                   |
+| ---------------------- | ------------------------------------------------------- | ----------------------------------------- |
+| `.nav-item`            | `54 × 50`, `border-radius:14px`                         | `70 × 50`, `14px` — see the width note    |
+| `.nav-item` icon→label | `gap:4px`                                               | `4px`                                     |
+| `.side-nav` item→item  | `gap:6px`                                               | `6px`                                     |
+| `.nav-item .lbl`       | `8.5px`, `700`, `letter-spacing:.01em`                  | `8.5px`, `700`, `.01em`                   |
+| `.nav-item.active`     | `background:#6144E4` + `0 4px 10px rgba(97,68,228,.35)` | `--sp-purple` + `--sp-shadow-purple-btn`  |
+| Rail icon              | 19 × 19, `stroke-width:1.8`                             | `19px` from `--app-rail-icon`             |
+| `.side-logo`           | `40 × 40`, `border-radius:12px`, `margin-bottom:22px`   | `40 × 40`, `12px`, `--sp-space-10` (22px) |
+| `.sidebar` padding     | `20px 0 16px`                                           | `20px 0 16px`                             |
+
+What was wrong, and is now fixed: the two gaps were applied the wrong way round (4px
+between items, 6px inside them); the active item was painted as a
+`--sp-navy-tint-14` wash instead of the handoff's solid purple, which made the
+current page nearly invisible on the rail; the label was 10px, which made
+"Appointments" measure 74.3px and clip against its own item; and the logo's 24px
+margin and the rail's symmetric 20px padding were both off the handoff's values.
+
+**The one deliberate deviation is item width.** The handoff's 54px is sized for its
+own longest label — "Customers", which measures 46.4px at 8.5px, leaving ~3.8px of
+side padding. This app's longest rail label is "Appointments", 61.7px at the same
+size, so a 54px item would clip it; the item is therefore 70px, which keeps the
+handoff's padding proportion. The label size is _not_ widened to compensate: 8.5px
+is what the designer drew, and the app now renders "Customers" at 46.4px — the same
+value the handoff produces — so the label metrics match exactly. The derivation is
+written into `--app-rail-item-w` in
+[`../../apps/web/src/styles/app-chrome.css`](../../apps/web/src/styles/app-chrome.css).
+
+Two rail differences are **not** geometry and are left to their own phases: the
+handoff's open-cart badge (16 × 16, `--sp-red` fill, 2px navy ring) is not drawn
+because the counter is live data, and the handoff's `.side-foot` groups Settings
+with Log out at the bottom where this app keeps one flat nav — the app's nav is
+role-filtered, so a signed-out user sees fewer entries than the handoff draws.
 
 Typography is Plus Jakarta Sans, loaded from Google Fonts in both the handoff screens
 and [`../../apps/web/index.html`](../../apps/web/index.html) (preconnected). The
@@ -151,21 +202,24 @@ add it to the handoff icons first and re-copy.
 ## 5. Screens → routes
 
 The nav in [`../../apps/web/src/constants/navigation.ts`](../../apps/web/src/constants/navigation.ts)
-has eight entries and is the source of the route names below.
+has eight entries and is the source of the route names below. There is no Services entry:
+the handoff rail draws seven destinations plus Settings in its foot, and services are reached
+from the Products tab row and from the sale and appointment flows
+([ADR 0005](../decisions/0005-rail-has-no-services-destination.md)).
 
-| Screen                    | Route / surface           | Phase | Notes                                                                                                                                                    |
-| ------------------------- | ------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 01 sale browse + cart     | `/sale`                   | 5     | One tab row plus a searchable item grid; cart visible at all times                                                                                       |
-| 02 sale confirmation      | step inside `/sale`       | 5     | Confirmation _is_ the receipt: the sale carries its `payments[]`, so the legacy `pay-by-cash` / `pay-by-card` / `split-pay` trio collapses into one call |
-| 03 new appointment        | flow over `/appointments` | 6     | Guided Who / What / When / With; duration comes from the service                                                                                         |
-| 04 quick-win fixes        | —                         | —     | Reference sheet: live dashboard tile, de-emphasised delete, cart badge                                                                                   |
-| 05 dashboard              | `/`                       | 7     | Income tile, today's sales, low-stock and open-cart indicators                                                                                           |
-| 06 appointments calendar  | `/appointments`           | 6     |                                                                                                                                                          |
-| 07 customers              | `/customers`              | 4     |                                                                                                                                                          |
-| 08 products and inventory | `/products`               | 4     |                                                                                                                                                          |
-| 09 staff                  | _undecided_               | 4     | No staff entry in the nav yet — its own route or a Settings section is a Phase 4 decision                                                                |
-| 10 reports                | `/reports`                | 7     | Admin-only in the nav today                                                                                                                              |
-| 11 settings               | `/settings`               | 8     | Admin-only in the nav today                                                                                                                              |
+| Screen                    | Route / surface           | Phase | Notes                                                                                                                                                                     |
+| ------------------------- | ------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 01 sale browse + cart     | `/sale`                   | 5     | One tab row plus a searchable item grid; cart visible at all times                                                                                                        |
+| 02 sale confirmation      | step inside `/sale`       | 5     | Confirmation _is_ the receipt: the sale carries its `payments[]`, so the legacy `pay-by-cash` / `pay-by-card` / `split-pay` trio collapses into one call                  |
+| 03 new appointment        | flow over `/appointments` | 6     | Guided Who / What / When / With; duration comes from the service                                                                                                          |
+| 04 quick-win fixes        | —                         | —     | Reference sheet: live dashboard tile, de-emphasised delete, cart badge                                                                                                    |
+| 05 dashboard              | `/`                       | 7     | Income tile, today's sales, low-stock and open-cart indicators                                                                                                            |
+| 06 appointments calendar  | `/appointments`           | 6     |                                                                                                                                                                           |
+| 07 customers              | `/customers`              | 4     |                                                                                                                                                                           |
+| 08 products and inventory | `/products`               | 4     |                                                                                                                                                                           |
+| 09 staff                  | `/staff`                  | 4     | Rail entry added in Phase 1 — screens 05–11 all draw Staff beside Customers/Products (see §4). It follows the other not-yet-built routes until Phase 4 builds the screen. |
+| 10 reports                | `/reports`                | 7     | Admin-only in the nav today                                                                                                                                               |
+| 11 settings               | `/settings`               | 8     | Admin-only in the nav today                                                                                                                                               |
 
 ## 6. Checklist before a screen is called done
 

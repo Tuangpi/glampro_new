@@ -9,8 +9,10 @@ const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // ── Route tree ─────────────────────────────────────────────────────
-// Feature routes (sale, appointments, customers, products, services,
-// reports, settings) are added by the phase that builds them.
+// Feature routes (sale, appointments, customers, products, reports,
+// settings) are added by the phase that builds them. There is no /services
+// route: services are a tab on the products screen and a step in the sale and
+// appointment flows (ADR 0005).
 const routes: RouteObject[] = [
   {
     path: "/",

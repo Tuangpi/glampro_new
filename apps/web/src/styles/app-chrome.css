@@ -11,10 +11,23 @@
   --sp-rail-w: 84px; /* navy icon rail */
   --sp-topbar-h: 76px; /* white top bar */
 
-  /* AppShell rail — the screens draw 54px items with 8.5px labels; the app
-     keeps 66px so the 10px labels fit on one line. Rechecked in Phase 1's
-     screen pass. */
-  --app-rail-item-w: 66px;
+  /* AppShell rail. Screens 05–11 share one shell whose `.nav-item` is
+     `width:54px; height:50px; border-radius:14px; gap:4px` with an
+     `8.5px/700, letter-spacing:.01em` label, and whose `.side-nav` gaps its
+     items by 6px. None of those five values is a handoff token, so they are
+     mirrored here. Phase 1's screen pass measured the running rail and found
+     the item/`gap` pair applied the wrong way round, the active state painted
+     as a navy tint instead of `--sp-purple`, and a 10px label that overflowed.
+     Width is the one deliberate deviation: 54px fits the handoff's own longest
+     label ("Customers", 46.4px measured), but this app's longest rail label is
+     "Appointments", which measures 63.2px at 8.5px — so the item is 70px, the
+     same ~3.8px of side padding the handoff leaves. See docs/design/HANDOFF.md
+     §4. */
+  --app-rail-item-w: 70px;
+  --app-rail-item-h: 50px;
+  --app-rail-item-radius: 14px;
+  --app-rail-label: 8.5px;
+  --app-rail-tracking: 0.01em;
   --app-rail-icon: 19px; /* rail icon size — screens 05–11 draw 19×19 nav icons */
 
   /* Top-bar search field — screens 01/08 draw a 260px search box. */
