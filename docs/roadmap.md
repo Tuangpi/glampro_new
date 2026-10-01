@@ -75,9 +75,10 @@ a component.
 
 Customers, products and staff — handoff screens 07, 08 and 09. There is no separate
 services screen; services are managed from the same list pattern (and appear in the
-sale flow and the appointment flow). Criterion: create, edit and archive a record of
-each kind against the real API, with list search, pagination and server-side validation
-errors surfaced on the field that caused them.
+sale flow and the appointment flow), and the rail carries no Services entry
+([ADR 0005](decisions/0005-rail-has-no-services-destination.md)). Criterion: create,
+edit and archive a record of each kind against the real API, with list search,
+pagination and server-side validation errors surfaced on the field that caused them.
 
 ## Phase 5 — POS sale and confirmation
 
@@ -117,8 +118,8 @@ on a copy.
 
 ## Not scheduled yet
 
-| Item                                                                           | Why it is not a phase yet                                                                                                                                                                                                                                                    |
-| ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Platform console** — salons, modules, subscription ledger, suspension, audit | The data model and the `platform` realm are specified in [`saas/TENANCY.md`](saas/TENANCY.md), but there is no phase, no acceptance criteria and no decision on whether it ships inside `apps/web` or as a separate app. `AuthRealm` does not contain `platform` yet either. |
-| **Data import tooling**                                                        | The legacy `MigrationController` routes were commented out and are not part of the API surface ([`legacy/API-INVENTORY.md`](legacy/API-INVENTORY.md)), so the importer is written in Phase 9 against the new schema instead of being re-exposed.                             |
-| **Mobile client changes**                                                      | The client is shipped and the API surface it consumes is frozen ([`legacy/API-INVENTORY.md`](legacy/API-INVENTORY.md)). Those routes are re-implemented against the new schema in the phases that own their domain; the client itself is not rebuilt.                        |
+| Item                                                                           | Why it is not a phase yet                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Platform console** — salons, modules, subscription ledger, suspension, audit | The data model and the `platform` realm are specified in [`saas/TENANCY.md`](saas/TENANCY.md), and where it lives is settled: a separate `apps/platform` on port 5174, sharing `@glampro/shared` and the same API ([ADR 0004](decisions/0004-platform-console-is-its-own-app.md)). What is still missing is a phase and its acceptance criteria, so it is unscheduled rather than undecided. The `platform` realm lands with the console phase, not Phase 3. |
+| **Data import tooling**                                                        | The legacy `MigrationController` routes were commented out and are not part of the API surface ([`legacy/API-INVENTORY.md`](legacy/API-INVENTORY.md)), so the importer is written in Phase 9 against the new schema instead of being re-exposed.                                                                                                                                                                                                             |
+| **Mobile client changes**                                                      | The client is shipped and the API surface it consumes is frozen ([`legacy/API-INVENTORY.md`](legacy/API-INVENTORY.md)). Those routes are re-implemented against the new schema in the phases that own their domain; the client itself is not rebuilt.                                                                                                                                                                                                        |

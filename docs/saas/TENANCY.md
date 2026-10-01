@@ -79,6 +79,12 @@ A token's `realm` decides which middleware will even look at it.
 | `pos`      | User          | present          | Till sessions (screen-locked) |
 | `mobile`   | User          | present          | The shipped mobile client     |
 
+The `platform` row is the **target** state, not the shipped one: `AUTH_REALMS` in
+[`packages/shared/src/constants.ts`](../../packages/shared/src/constants.ts) is
+`web · pos · mobile` today, and `AuthRealm` is a database enum, so adding `platform` is a
+migration. It lands with the phase that builds the console, whose placement is settled by
+[ADR 0004](../decisions/0004-platform-console-is-its-own-app.md) — not with Phase 3.
+
 Access token claims: `sub`, `realm`, `role`, `tenantId` (omitted for `platform`),
 `ver`, `iss`, `exp`.
 
