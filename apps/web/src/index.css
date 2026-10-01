@@ -53,6 +53,12 @@
   --text-2xl: var(--sp-text-2xl);
   --text-display: var(--sp-text-display);
 
+  /* Weights — so `font-medium` is the handoff's 600, not Tailwind's default 500. */
+  --font-weight-regular: var(--sp-weight-regular);
+  --font-weight-medium: var(--sp-weight-medium);
+  --font-weight-bold: var(--sp-weight-bold);
+  --font-weight-heavy: var(--sp-weight-heavy);
+
   /* Radii */
   --radius-sm: var(--sp-radius-sm);
   --radius-md: var(--sp-radius-md);
