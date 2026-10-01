@@ -32,8 +32,12 @@ Two things about the package matter before copying anything out of it:
   product. Their field lists, names and permissions are a starting point to check
   against the real data model, not a specification to implement literally. Screen 04 is
   a reference sheet of three fixes, not a page to build.
-- **The icon directory holds 41 SVGs while the README says 40.** Treat the directory as
-  the list and reconcile the count while porting in Phase 1.
+- **The icon directory holds 41 SVGs while the README says 40** (at its lines 41 and 112).
+  Settled: the directory is the list. Its 41 SVGs are all distinct — there is no duplicate
+  file to name — and all 41 are ported to `../../apps/web/src/components/icons/` one-for-one,
+  so nothing is missing. The README's "40" is an undercount in prose. `design/handoff/` is
+  vendored reference material kept exactly as delivered, so that README is **not** edited and
+  this line is the reconciliation of record.
 
 ## 2. Frame geometry
 
