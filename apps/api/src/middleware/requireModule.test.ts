@@ -25,17 +25,20 @@ async function seed(): Promise<void> {
     await prisma.tenant.deleteMany({ where: { id: TENANT } });
     await prisma.user.deleteMany({ where: { email: { contains: "@rm-test.local" } } });
 
+    // Tenant first, then its owner user: `users.tenantId` and `tenants.ownerUserId`
+    // point at each other, so neither row can be inserted before the other.
+    await prisma.tenant.create({ data: { id: TENANT, name: "Rent Test", slug: "rm-test" } });
+
     const owner = await prisma.user.create({
       data: {
+        tenantId: TENANT,
         email: `owner-${TENANT}@rm-test.local`,
         name: "Owner",
         passwordHash: "not-a-real-hash",
       },
     });
 
-    await prisma.tenant.create({
-      data: { id: TENANT, name: "Rent Test", slug: "rm-test", ownerUserId: owner.id },
-    });
+    await prisma.tenant.update({ where: { id: TENANT }, data: { ownerUserId: owner.id } });
   });
 }
 

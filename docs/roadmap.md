@@ -51,16 +51,16 @@ a component.
 
 ## Phase 2 — Full data model · **In progress** (tenant plane landed)
 
-| Deliverable        | Acceptance criterion                                                                                                            | State                                                                    |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
-| Tenant plane       | `Tenant`, `Module`, `TenantModule`, `Subscription`, `Payment`, `AuditLog` per [`saas/TENANCY.md`](saas/TENANCY.md)              | **Done** — plus `PlatformAdmin`; migration `20261002042444_tenant_plane` |
-| Tenant scoping     | `TENANT_SCOPED_MODELS` extension over `AsyncLocalStorage`; `requireModule` entitlement guard                                    | **Done**                                                                 |
-| Tenant isolation   | An integration test seeds two tenants and asserts that every read path returns only the caller's rows                           | **Done** — 8 tests, green against the compose stack                      |
-| Domain models      | Catalogue, customers, staff, departments, appointments, sales, packages, gift cards, credit, commissions, leaves                | Not started                                                              |
-| Tenancy column     | `tenantId` non-null on every domain table; no query resolves a tenant from a body or a query parameter                          | Partly — `User` is still unscoped                                        |
-| Money and dates    | Money wider than the legacy `decimal(8,2)`; legacy date strings normalised once, in the importer                                | Partly — `Subscription`/`Payment` are `Decimal(12,2)`                    |
-| Legacy gaps closed | The gaps in [`legacy/LEGACY-MAP.md`](legacy/LEGACY-MAP.md) §5 that change the schema are decided and reflected in the migration | Partly — Q4/Q7/Q8/Q9 settled; Q1/Q2/Q5/Q6 need production MySQL          |
-| ID strategy        | [`decisions/0002`](decisions/0002-tenant-id-equals-owner-id.md) implemented, with its import test passing                       | Not started                                                              |
+| Deliverable        | Acceptance criterion                                                                                                            | State                                                                                                  |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Tenant plane       | `Tenant`, `Module`, `TenantModule`, `Subscription`, `Payment`, `AuditLog` per [`saas/TENANCY.md`](saas/TENANCY.md)              | **Done** — plus `PlatformAdmin`; migration `20261002042444_tenant_plane`                               |
+| Tenant scoping     | `TENANT_SCOPED_MODELS` extension over `AsyncLocalStorage`; `requireModule` entitlement guard                                    | **Done**                                                                                               |
+| Tenant isolation   | An integration test seeds two tenants and asserts that every read path returns only the caller's rows                           | **Done** — 12 tests, green against a real database                                                     |
+| Domain models      | Catalogue, customers, staff, departments, appointments, sales, packages, gift cards, credit, commissions, leaves                | Partly — catalogue, customers, departments, appointments, commissions; sales, credit and leaves remain |
+| Tenancy column     | `tenantId` non-null on every domain table; no query resolves a tenant from a body or a query parameter                          | **Done** — every model with a `tenantId` is scoped or a named reference                                |
+| Money and dates    | Money wider than the legacy `decimal(8,2)`; legacy date strings normalised once, in the importer                                | Partly — all money is `Decimal(12,2)`; the normalising importer is Phase 9                             |
+| Legacy gaps closed | The gaps in [`legacy/LEGACY-MAP.md`](legacy/LEGACY-MAP.md) §5 that change the schema are decided and reflected in the migration | Partly — Q4/Q7/Q8/Q9 settled; Q1/Q2/Q5/Q6 need production MySQL                                        |
+| ID strategy        | [`decisions/0002`](decisions/0002-tenant-id-equals-owner-id.md) implemented, with its import test passing                       | Not started                                                                                            |
 
 The phase splits into two commits. The tenant plane is the first, because the scoping
 extension is load-bearing and reviews better on its own; the domain models follow, and

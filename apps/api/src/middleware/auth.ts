@@ -5,6 +5,7 @@ import type { GlobalRole } from "@glampro/shared";
 import { forbidden, unauthorized } from "../lib/http-error.js";
 import { verifyAccessToken } from "../lib/tokens.js";
 import { prisma } from "../lib/prisma.js";
+import { runAsPlatform } from "../lib/tenant-context.js";
 import { logger } from "../lib/logger.js";
 import type { AuthenticatedUser } from "../types/index.js";
 
@@ -30,17 +31,26 @@ export async function auth(req: Request, res: Response, next: NextFunction): Pro
   try {
     const claims = verifyAccessToken(token);
 
-    const user = await prisma.user.findUnique({
-      where: { id: claims.sub },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        globalRole: true,
-        tokenVersion: true,
-        disabled: true,
-      },
-    });
+    // `User` is tenant-scoped, but this lookup happens before any tenant is
+    // known: it is keyed on the verified token's `sub`, not on anything the
+    // request supplied. `runAsPlatform` is the explicit opt-out the extension
+    // requires, and reading it here cannot cross tenants — it selects one row by
+    // primary key. Phase 3 replaces this with the token's `tenantId` claim and
+    // wraps the rest of the request in `runAsTenant`.
+    const user = await runAsPlatform(() =>
+      prisma.user.findUnique({
+        where: { id: claims.sub },
+        select: {
+          id: true,
+          tenantId: true,
+          email: true,
+          name: true,
+          globalRole: true,
+          tokenVersion: true,
+          disabled: true,
+        },
+      }),
+    );
 
     if (!user || user.disabled) {
       res.status(401).json({

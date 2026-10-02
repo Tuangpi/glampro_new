@@ -92,15 +92,40 @@ function resolveAdmin(): SeedUser {
   };
 }
 
-async function upsertUser(user: SeedUser): Promise<void> {
+/**
+ * Creates the demo tenant that the seeded users belong to.
+ *
+ * `users.tenantId` points at `tenants` and `tenants.ownerUserId` points back at
+ * `users`, so neither row can be inserted first. The tenant is created first with
+ * no owner and claimed in the next statement, which is the only place in the
+ * codebase that writes ownership in two steps.
+ */
+const DEMO_TENANT = {
+  slug: "glampro-demo",
+  name: "Glampro Demo Salon",
+};
+
+async function seedTenant(): Promise<string> {
+  const tenant = await prisma.tenant.upsert({
+    where: { slug: DEMO_TENANT.slug },
+    update: { name: DEMO_TENANT.name },
+    create: { name: DEMO_TENANT.name, slug: DEMO_TENANT.slug },
+  });
+
+  console.log(`  ✔ tenant ${tenant.slug} (${tenant.id})`);
+  return tenant.id;
+}
+
+async function upsertUser(user: SeedUser, tenantId: string): Promise<string> {
   const passwordHash = await bcrypt.hash(user.password, BCRYPT_ROUNDS);
 
-  await prisma.user.upsert({
+  const row = await prisma.user.upsert({
     where: { email: user.email },
     update: {
       name: user.name,
       passwordHash,
       globalRole: user.globalRole,
+      tenantId,
       // Re-enable an account that was locked or disabled during testing.
       disabled: false,
       disabledAt: null,
@@ -110,10 +135,12 @@ async function upsertUser(user: SeedUser): Promise<void> {
       name: user.name,
       passwordHash,
       globalRole: user.globalRole,
+      tenantId,
     },
   });
 
   console.log(`  ✔ ${user.globalRole.padEnd(11)} ${user.email}`);
+  return row.id;
 }
 
 /**
@@ -163,10 +190,17 @@ async function main(): Promise<void> {
     );
   }
 
+  const tenantId = await seedTenant();
+
   console.log(`Seeding ${users.length} user(s) in ${SEED_MODE} mode…`);
 
-  for (const user of users) {
-    await upsertUser(user);
+  const ownerUserId = await upsertUser(users[0] as SeedUser, tenantId);
+
+  // Claim ownership now that the owner exists. The administrator owns the tenant.
+  await prisma.tenant.update({ where: { id: tenantId }, data: { ownerUserId } });
+
+  for (const user of users.slice(1)) {
+    await upsertUser(user, tenantId);
   }
 
   await runAsPlatform(seedModules);

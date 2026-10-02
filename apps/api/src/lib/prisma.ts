@@ -25,7 +25,26 @@ const adapter = new PrismaPg({ connectionString });
  * `PlatformAdmin`, `Tenant`, `Module`, `Account`, `RefreshToken` and `JobRun`
  * are deliberately absent: they are not tenant-scoped.
  */
-export const TENANT_SCOPED_MODELS = ["TenantModule", "Subscription", "Payment"] as const;
+export const TENANT_SCOPED_MODELS = [
+  "TenantModule",
+  "Subscription",
+  "Payment",
+  // Domain. `User` is here because staff are user rows (Q4).
+  "User",
+  "Department",
+  "StaffDepartment",
+  "Customer",
+  "CustomerDepartment",
+  "Service",
+  "Product",
+  "Package",
+  "PackageService",
+  "ValuePackage",
+  "ValuePackageService",
+  "GiftCard",
+  "Appointment",
+  "EmployeeCommission",
+] as const;
 
 /**
  * Models that carry a `tenantId` as a *reference* rather than as a scope.

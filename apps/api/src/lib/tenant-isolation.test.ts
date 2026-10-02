@@ -22,6 +22,10 @@ const TENANT_B = "test-tenant-b";
 
 async function purge(): Promise<void> {
   await runAsPlatform(async () => {
+    await prisma.appointment.deleteMany({ where: { tenantId: { in: [TENANT_A, TENANT_B] } } });
+    await prisma.customer.deleteMany({ where: { tenantId: { in: [TENANT_A, TENANT_B] } } });
+    await prisma.service.deleteMany({ where: { tenantId: { in: [TENANT_A, TENANT_B] } } });
+    await prisma.department.deleteMany({ where: { tenantId: { in: [TENANT_A, TENANT_B] } } });
     await prisma.tenantModule.deleteMany({ where: { tenantId: { in: [TENANT_A, TENANT_B] } } });
     await prisma.payment.deleteMany({ where: { tenantId: { in: [TENANT_A, TENANT_B] } } });
     await prisma.subscription.deleteMany({ where: { tenantId: { in: [TENANT_A, TENANT_B] } } });
@@ -35,16 +39,46 @@ async function seed(): Promise<void> {
 
   await runAsPlatform(async () => {
     for (const id of [TENANT_A, TENANT_B]) {
+      // Tenant first, then its user, then ownership: `users.tenantId` and
+      // `tenants.ownerUserId` point at each other, so neither row can go first.
+      await prisma.tenant.create({ data: { id, name: `Salon ${id}`, slug: `salon-${id}` } });
+
       const owner = await prisma.user.create({
         data: {
+          tenantId: id,
           email: `owner-${id}@test.local`,
           name: `Owner ${id}`,
           passwordHash: "not-a-real-hash",
         },
       });
 
-      await prisma.tenant.create({
-        data: { id, name: `Salon ${id}`, slug: `salon-${id}`, ownerUserId: owner.id },
+      await prisma.tenant.update({ where: { id }, data: { ownerUserId: owner.id } });
+
+      await prisma.department.create({ data: { tenantId: id, name: `Dept ${id}` } });
+
+      const service = await prisma.service.create({
+        data: {
+          tenantId: id,
+          name: `Service ${id}`,
+          memberPrice: "50.00",
+          nonmemberPrice: "60.00",
+          durationMinutes: 45,
+        },
+      });
+
+      const customer = await prisma.customer.create({
+        data: { tenantId: id, name: `Customer ${id}`, email: `${id}@customer.test` },
+      });
+
+      await prisma.appointment.create({
+        data: {
+          tenantId: id,
+          customerId: customer.id,
+          staffId: owner.id,
+          serviceId: service.id,
+          startsAt: new Date("2026-05-01T10:00:00Z"),
+          endsAt: new Date("2026-05-01T10:45:00Z"),
+        },
       });
 
       await prisma.subscription.create({
@@ -186,5 +220,60 @@ describe("tenant isolation", { skip: databaseUrl ? false : "DATABASE_URL is not 
     const tenant = await runAsPlatform(() => prisma.tenant.findMany({ select: { id: true } }));
 
     assert.ok(tenant.length >= 2, "Tenant is above the isolation boundary and stays reachable");
+  });
+
+  it("scopes the domain models too, not just the tenant plane", async () => {
+    const seenByA = await runAsTenant(TENANT_A, async () => ({
+      customers: await prisma.customer.findMany({ select: { tenantId: true } }),
+      services: await prisma.service.findMany({ select: { tenantId: true } }),
+      departments: await prisma.department.findMany({ select: { tenantId: true } }),
+      appointments: await prisma.appointment.findMany({ select: { tenantId: true } }),
+      // `User` is tenant-scoped because staff are user rows (Q4).
+      users: await prisma.user.findMany({ select: { tenantId: true } }),
+    }));
+
+    for (const [model, rows] of Object.entries(seenByA)) {
+      assert.deepEqual(
+        rows.map((row) => row.tenantId),
+        [TENANT_A],
+        `prisma.${model} returned rows belonging to another tenant`,
+      );
+    }
+  });
+
+  it("cannot read another tenant's customer by unique id", async () => {
+    const bCustomer = await runAsPlatform(() =>
+      prisma.customer.findFirstOrThrow({ where: { tenantId: TENANT_B } }),
+    );
+
+    const seenFromA = await runAsTenant(TENANT_A, () =>
+      prisma.customer.findUnique({ where: { id: bCustomer.id } }),
+    );
+
+    assert.equal(seenFromA, null);
+  });
+
+  it("stamps the caller's tenant when a customer is created", async () => {
+    const created = await runAsTenant(TENANT_A, () =>
+      prisma.customer.create({ data: { tenantId: TENANT_B, name: "Smuggled" } }),
+    );
+
+    assert.equal(created.tenantId, TENANT_A);
+
+    await runAsPlatform(() => prisma.customer.delete({ where: { id: created.id } }));
+  });
+
+  it("keeps customer email unique per tenant, not globally (ADR 0003)", async () => {
+    // The legacy schema made `customers.email` globally unique, which stopped one
+    // person being a customer at two salons.
+    const created = await runAsPlatform(() =>
+      prisma.customer.create({
+        data: { tenantId: TENANT_B, name: "Same Email", email: `${TENANT_A}@customer.test` },
+      }),
+    );
+
+    assert.equal(created.email, `${TENANT_A}@customer.test`);
+
+    await runAsPlatform(() => prisma.customer.delete({ where: { id: created.id } }));
   });
 });

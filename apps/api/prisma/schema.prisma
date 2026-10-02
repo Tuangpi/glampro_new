@@ -65,8 +65,40 @@ enum PaymentMethod {
   OTHER
 }
 
+/// Active flag shared by the catalogue. The legacy tables each carried their own
+/// `status boolean` with the same `1=active 0=inactive` meaning but a different
+/// default, which is why it is explicit everywhere here.
+enum CatalogStatus {
+  ACTIVE
+  INACTIVE
+}
+
+/// The booking lifecycle. The legacy system stored a two-state flag and used
+/// `finish_time` for completion — see legacy/LEGACY-MAP.md §6 Q8 for the mapping.
+enum AppointmentStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+/// Free text in the legacy database (a string on `customers`, an integer on
+/// `users`). Provisional: what the production rows actually contain is Q5, still
+/// open, and the importer maps anything unrecognised to `UNDISCLOSED` rather than
+/// guessing.
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  UNDISCLOSED
+}
+
 model User {
   id           String     @id @default(cuid())
+  /// The isolation boundary. Staff are `User` rows (Q4 in legacy/LEGACY-MAP.md §6),
+  /// so this column is what makes a staff member tenant-scoped.
+  tenantId     String
   email        String     @unique
   name         String
   passwordHash String
@@ -78,6 +110,17 @@ model User {
   lastLoginAt  DateTime?
   /// Bumped on logout and password change to invalidate outstanding tokens.
   tokenVersion Int        @default(0)
+  /// `users.start_date` / `end_date` in the legacy schema.
+  startDate DateTime?
+  endDate   DateTime?
+  /// `users.position` — the free-text job title shown in booking.
+  position String?
+  /// Calendar colour, from `users.color`. Booking uses it to tint an appointment.
+  color        String?
+  /// Google Calendar sync fields (`2026_03_16` migration). Stored, not yet acted on.
+  googleCalendarId       String?
+  googleCalendarSyncToken String?
+  googleCalendarExpiresAt DateTime?
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -85,9 +128,15 @@ model User {
   /// Set on exactly one user per tenant. Ownership is a relation, not a role —
   /// see ADR 0002. `Tenant.id` equals this id only for tenants migrated from the
   /// legacy database, and nothing may rely on that.
-  ownedTenant   Tenant?     @relation("TenantOwner")
+  ownedTenant  Tenant?     @relation("TenantOwner")
+  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  departments  StaffDepartment[]
+  /// A user with no appointments yet still appears in pickers.
+  appointments Appointment[]
+  commissions  EmployeeCommission[]
 
   @@index([globalRole])
+  @@index([tenantId])
   @@map("users")
 }
 
@@ -148,15 +197,41 @@ model Tenant {
   /// Bumped on suspension, which invalidates every access token for the tenant.
   tokenVersion Int     @default(0)
   /// Ownership is this relation. There is deliberately no `OWNER` role.
-  ownerUserId String    @unique
+  ///
+  /// Nullable because of a real foreign-key cycle: `users.tenantId` points at
+  /// `tenants`, and `tenants.ownerUserId` points back at `users`, so neither row can
+  /// be inserted first. A tenant is created with no owner and given one in the
+  /// immediately following statement, which is also honest about the bootstrap step
+  /// where the first tenant's owner is an administrator account that does not exist
+  /// yet. Every path that creates a tenant from the API or the console sets it in the
+  /// same request; only the seed writes it in two steps.
+  ownerUserId String?   @unique
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
-  owner         User            @relation("TenantOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  owner         User?            @relation("TenantOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
   modules       TenantModule[]
   subscriptions Subscription[]
   payments      Payment[]
   auditLogs     AuditLog[]
+
+  // Every domain model below points back here. ADR 0002 wants `tenantId` to be a
+  // real foreign key, so a row that names a tenant that does not exist fails the
+  // insert instead of silently reading as "no tenant".
+  users               User[]
+  departments         Department[]
+  staffDepartments    StaffDepartment[]
+  customers           Customer[]
+  customerDepartments CustomerDepartment[]
+  services            Service[]
+  products            Product[]
+  packages            Package[]
+  packageServices     PackageService[]
+  valuePackages       ValuePackage[]
+  valuePackageServices ValuePackageService[]
+  giftCards           GiftCard[]
+  appointments        Appointment[]
+  employeeCommissions EmployeeCommission[]
 
   @@index([status])
   @@map("tenants")
@@ -264,4 +339,320 @@ model AuditLog {
   @@index([tenantId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Domain — docs/roadmap.md Phase 2. Every model carries a non-null `tenantId`.
+// ---------------------------------------------------------------------------
+
+/// A branch or section of the salon. Legacy `departments`, whose `company_id` had
+/// no foreign key because the table predates `users`.
+model Department {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staff     StaffDepartment[]
+  customers CustomerDepartment[]
+  services  Service[]
+  products  Product[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("departments")
+}
+
+/// Staff ↔ branch. Legacy `department_user`, which had no `company_id` at all and
+/// so could not be tenant-scoped on its own; the rebuild gives it one.
+model StaffDepartment {
+  id           String @id @default(cuid())
+  tenantId     String
+  userId       String
+  departmentId String
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, departmentId])
+  @@index([tenantId])
+  @@map("staff_departments")
+}
+
+/// A bookable service. Legacy `services`, whose department column was named
+/// `department` while `products` used `department_id` for the same relationship.
+model Service {
+  id             String        @id @default(cuid())
+  tenantId       String
+  departmentId   String?
+  name           String
+  status         CatalogStatus @default(ACTIVE)
+  memberPrice    Decimal       @db.Decimal(12, 2)
+  nonmemberPrice Decimal       @db.Decimal(12, 2)
+  /// Loyalty points earned. Legacy `point` (integer).
+  points         Int           @default(0)
+  description    String?
+  /// Minutes. The legacy `services` table had no duration column even though
+  /// booking needs one; it lived only on `appointments`.
+  durationMinutes Int?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  department         Department?            @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  appointments       Appointment[]
+  packageItems       PackageService[]
+  valuePackageItems  ValuePackageService[]
+
+  @@index([tenantId])
+  @@index([departmentId])
+  @@map("services")
+}
+
+/// A stock item. Legacy `products`.
+model Product {
+  id             String        @id @default(cuid())
+  tenantId       String
+  departmentId   String?
+  name           String
+  status         CatalogStatus @default(ACTIVE)
+  memberPrice    Decimal       @db.Decimal(12, 2)
+  nonmemberPrice Decimal       @db.Decimal(12, 2)
+  /// Stock on hand. Legacy `quantity` (integer).
+  quantity       Int           @default(0)
+  points         Int           @default(0)
+  description    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  tenant     Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([departmentId])
+  @@map("products")
+}
+
+/// A bundle of service sessions. Legacy `packages`.
+model Package {
+  id             String        @id @default(cuid())
+  tenantId       String
+  name           String
+  status         CatalogStatus @default(ACTIVE)
+  /// Sessions included. Legacy `no_of_time`.
+  sessionCount   Int           @default(0)
+  memberPrice    Decimal       @db.Decimal(12, 2)
+  nonmemberPrice Decimal       @db.Decimal(12, 2)
+  description    String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  services PackageService[]
+
+  @@index([tenantId])
+  @@map("packages")
+}
+
+/// Which services a package covers. Legacy `package_services`.
+model PackageService {
+  id        String @id @default(cuid())
+  tenantId  String
+  packageId String
+  serviceId String
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, serviceId])
+  @@index([tenantId])
+  @@map("package_services")
+}
+
+/// Prepaid credit: the customer pays `price` and receives `credit` of value, and
+/// the difference is the discount. Legacy `valuepackages`.
+model ValuePackage {
+  id          String        @id @default(cuid())
+  tenantId    String
+  name        String
+  status      CatalogStatus @default(ACTIVE)
+  price       Decimal       @db.Decimal(12, 2)
+  credit      Decimal       @db.Decimal(12, 2)
+  description String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tenant   Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  services ValuePackageService[]
+
+  @@index([tenantId])
+  @@map("value_packages")
+}
+
+/// Which services a value package may be spent on. Legacy `valuepackage_services`.
+model ValuePackageService {
+  id             String @id @default(cuid())
+  tenantId       String
+  valuePackageId String
+  serviceId      String
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  valuePackage ValuePackage @relation(fields: [valuePackageId], references: [id], onDelete: Cascade)
+  service      Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([valuePackageId, serviceId])
+  @@index([tenantId])
+  @@map("value_package_services")
+}
+
+/// A prepaid gift card. Legacy `giftcards`, whose `expired_date` was a **string**
+/// and is a real date here; the rule for malformed values is the importer's (Q6).
+model GiftCard {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  value     Decimal  @db.Decimal(12, 2)
+  /// Null means "never expires". Legacy `expired_date` (string).
+  expiresAt DateTime?
+  remark    String?
+  /// Payload for the client's QR renderer, not an image (legacy `qr_code`).
+  qrPayload String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("gift_cards")
+}
+
+/// A salon customer. Legacy `customers`.
+///
+/// Two legacy problems are fixed here. `email` was **globally** unique across all
+/// tenants, which stopped one person being a customer at two salons — uniqueness is
+/// now per tenant (ADR 0003). And `customer_id` was a second identifier the code had
+/// to keep in sync with `id`; it becomes `code`, a nullable human-readable label
+/// rather than an alternative key.
+model Customer {
+  id       String @id @default(cuid())
+  tenantId String
+  /// Human-readable label shown in the UI. Legacy `customer_id`.
+  code     String?
+  name     String
+  /// Legacy `member_id` — the membership/tier reference.
+  memberId String?
+  /// Legacy `dob` was a string; it is a date here and the importer normalises it.
+  dateOfBirth DateTime?
+  gender      Gender?
+  /// Unique **per tenant**, not globally. See ADR 0003.
+  email       String?
+  phone       String?
+  /// Physical loyalty cards. Kept as opaque strings: the issuing authority is the
+  /// legacy system's business, not ours to validate.
+  hairCardNumber String?
+  maniCardNumber String?
+  cardNumber     String?
+  address     String?
+  comment     String?
+  /// Customers can sign in to the mobile app, so the hash lives here and not only
+  /// on `User`.
+  passwordHash String?
+  /// Mobile password reset. Legacy `otp` + `otp_expire_at` (epoch seconds).
+  otpHash      String?
+  otpExpiresAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  departments  CustomerDepartment[]
+  appointments Appointment[]
+
+  /// Per-tenant email uniqueness. A customer with no email is unconstrained, which
+  /// Postgres treats as satisfying a unique index for every such row.
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([name])
+  @@map("customers")
+}
+
+/// Customer ↔ branch. Legacy `customer_department`, which had no `company_id`.
+model CustomerDepartment {
+  id           String @id @default(cuid())
+  tenantId     String
+  customerId   String
+  departmentId String
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer   Customer   @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  department Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, departmentId])
+  @@index([tenantId])
+  @@map("customer_departments")
+}
+
+/// A booking.
+///
+/// The legacy row stored `date`, `time` **and** `start_time`; reading the
+/// controllers settled that `start_time` is the authoritative one and the other two
+/// are copies written from the same input (Q7, [`legacy/LEGACY-MAP.md`](legacy/LEGACY-MAP.md)
+/// §6). Only the timestamp survives here, so the copies cannot drift.
+///
+/// `status` replaces a boolean that never had more than two meaningful values
+/// (`0` booked, `1` started) while completion was recorded by setting `finish_time`
+/// (Q8). Both halves of that are now one column, and `finishedAt` keeps the moment.
+model Appointment {
+  id          String            @id @default(cuid())
+  tenantId    String
+  customerId  String?
+  staffId     String?
+  serviceId   String?
+  startsAt    DateTime
+  endsAt      DateTime
+  status      AppointmentStatus @default(SCHEDULED)
+  /// Minutes, copied from the service at booking time so a later catalogue edit
+  /// does not silently move an existing appointment.
+  durationMinutes Int?
+  comment     String?
+  /// Set by `appointmentFinish`, alongside `finishedAt`. Legacy `signature` was
+  /// added by the `2025_07_16` migration.
+  signature  String?
+  finishedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  staff    User?     @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  service  Service?  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, startsAt])
+  @@index([staffId, startsAt])
+  @@map("appointments")
+}
+
+/// A staff member's cut of a sale. Legacy `employee_comissions`, whose
+/// `sale_amount` was an **integer** and therefore truncated cents; the rate is a
+/// percentage so the amount is derived rather than stored.
+model EmployeeCommission {
+  id       String @id @default(cuid())
+  tenantId String
+  userId   String
+  saleId   String?
+  /// Percentage of the sale, e.g. `15.50`.
+  rate     Decimal @db.Decimal(5, 2)
+  /// Derived at sale time and stored so a later rate change does not rewrite history.
+  amount   Decimal @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([userId])
+  @@map("employee_commissions")
 }
