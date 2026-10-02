@@ -96,8 +96,10 @@ The `auth` middleware, in order:
 
 1. Verify signature, issuer and expiry.
 2. Look the subject up in the database (`PlatformAdmin` or `User` by `realm`).
-3. Compare `ver` against `tokenVersion` — catches logout, password change, and a
-   tenant-level suspension.
+3. Compare `ver` against `tokenVersion` — catches a password change, a forced
+   sign-out, and a tenant-level suspension. Logout is deliberately **not** one of
+   these: it revokes the presented refresh row and ends one session rather than the
+   user ([ADR 0007](../decisions/0007-logout-revokes-the-refresh-token-not-the-user.md)).
 4. For tenant realms, load the `Tenant` and resolve its **effective status**:
    computed from `endDate` **and** the stored `status`.
 5. Refuse with `TENANT_SUSPENDED`, `TENANT_EXPIRED` or `TENANT_CANCELLED`. A

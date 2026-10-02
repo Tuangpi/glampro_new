@@ -44,6 +44,19 @@ describe("access tokens", () => {
       (error: unknown) => error instanceof HttpError && error.statusCode === 401,
     );
   });
+
+  // The tenant claim is what lets the middleware enter `runAsTenant` straight from
+  // the verified token, so a round-trip regression here would silently fall back to
+  // reading the tenant from the user's row on every request.
+  it("round-trips the tenant claim", () => {
+    const { token } = signAccessToken({ ...subject, tenantId: "tenant_abc" });
+    assert.equal(verifyAccessToken(token).tenantId, "tenant_abc");
+  });
+
+  it("omits the tenant claim for a platform session", () => {
+    const { token } = signAccessToken(subject);
+    assert.equal(verifyAccessToken(token).tenantId, undefined);
+  });
 });
 
 describe("refresh tokens", () => {

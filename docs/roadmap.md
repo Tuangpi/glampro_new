@@ -68,13 +68,13 @@ every new tenant-scoped model joins `TENANT_SCOPED_MODELS` in the same commit.
 
 ## Phase 3 — Authentication and authorisation
 
-| Deliverable              | Acceptance criterion                                                                 |
-| ------------------------ | ------------------------------------------------------------------------------------ |
-| Login / refresh / logout | Web realm only; the refresh token rotates and the previous one is rejected           |
-| Revocation               | Logout and password change invalidate outstanding access tokens via `tokenVersion`   |
-| Realm enforcement        | A `pos` or `mobile` token is refused by web-only routes and vice versa               |
-| Roles                    | Admin screens are gated in the API, not only in the UI                               |
-| Web session              | Unauthenticated visitors land on the login screen and return to where they came from |
+| Deliverable              | Acceptance criterion                                                                                                                                                                                        |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Login / refresh / logout | Web realm only; the refresh token rotates and the previous one is rejected                                                                                                                                  |
+| Revocation               | Password change and a forced sign-out invalidate every session via `tokenVersion`; logout revokes the presented refresh token ([ADR 0007](decisions/0007-logout-revokes-the-refresh-token-not-the-user.md)) |
+| Realm enforcement        | A `pos` or `mobile` token is refused by web-only routes and vice versa                                                                                                                                      |
+| Roles                    | Admin screens are gated in the API, not only in the UI                                                                                                                                                      |
+| Web session              | Unauthenticated visitors land on the login screen and return to where they came from                                                                                                                        |
 
 ## Phase 4 — Master data screens
 

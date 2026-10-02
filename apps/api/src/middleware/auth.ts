@@ -5,15 +5,27 @@ import type { GlobalRole } from "@glampro/shared";
 import { forbidden, unauthorized } from "../lib/http-error.js";
 import { verifyAccessToken } from "../lib/tokens.js";
 import { prisma } from "../lib/prisma.js";
-import { runAsPlatform } from "../lib/tenant-context.js";
+import { canWrite, resolveTenantStatus } from "../lib/tenant-status.js";
+import { runAsPlatform, runAsTenant } from "../lib/tenant-context.js";
 import { logger } from "../lib/logger.js";
 import type { AuthenticatedUser } from "../types/index.js";
 
+/** Realms whose subject is a `User` belonging to a tenant. */
+const TENANT_REALMS = new Set(["web", "pos", "mobile"]);
+
 /**
  * Verifies the bearer access token and re-validates the session against the
- * database on every request, so disabled accounts, revoked sessions (password
- * change, forced logout) and role changes apply immediately instead of waiting
- * for the token to expire.
+ * database on every request, so disabled accounts, sessions ended by a password
+ * change or a forced sign-out, and role changes all apply immediately instead of
+ * waiting for the token to expire. Logging out of one client is not one of those
+ * events — it revokes that client's refresh token and leaves `tokenVersion` where
+ * it is (`docs/decisions/0007-logout-revokes-the-refresh-token-not-the-user.md`).
+ *
+ * On success the rest of the request is entered through `runAsTenant`, which is
+ * what makes the Prisma extension scope every tenant-scoped query that follows.
+ * The lookups this middleware performs itself run through `runAsPlatform`: they are
+ * keyed on the verified token's subject and happen before a tenant is trusted, so
+ * they read one row by primary key and cannot cross tenants.
  */
 export async function auth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
@@ -70,17 +82,69 @@ export async function auth(req: Request, res: Response, next: NextFunction): Pro
       return;
     }
 
+    // A tenant realm's subject is a `User`. A token without a tenant realm is not
+    // one this build issued for a tenant route.
+    if (!TENANT_REALMS.has(claims.realm)) {
+      next(forbidden("This token is not valid for a tenant realm.", "REALM_NOT_SUPPORTED"));
+      return;
+    }
+
+    // The tenant comes from the token, never from the request. Fall back to the
+    // user's own row only for tokens minted before the claim existed.
+    const tenantId = claims.tenantId ?? user.tenantId;
+
+    const tenant = await runAsPlatform(() =>
+      prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          status: true,
+          subscriptions: {
+            orderBy: { endDate: "desc" },
+            take: 1,
+            select: { endDate: true },
+          },
+        },
+      }),
+    );
+
+    if (!tenant) {
+      next(unauthorized("Your salon is no longer available.", "TENANT_NOT_FOUND"));
+      return;
+    }
+
+    const status = resolveTenantStatus(tenant.status, tenant.subscriptions[0]?.endDate ?? null);
+
+    if (status === "CANCELLED" || status === "EXPIRED") {
+      next(
+        forbidden(
+          status === "CANCELLED"
+            ? "This account is closed. Please contact your provider."
+            : "This salon's subscription has ended. Please contact your provider.",
+          status === "CANCELLED" ? "TENANT_CANCELLED" : "TENANT_EXPIRED",
+        ),
+      );
+      return;
+    }
+
     const principal: AuthenticatedUser = {
       id: user.id,
+      tenantId: tenant.id,
       email: user.email,
       name: user.name,
       globalRole: user.globalRole,
       realm: claims.realm,
       tokenVersion: user.tokenVersion,
+      tenantStatus: status,
     };
 
     req.user = principal;
-    next();
+
+    // Enter the tenant scope for everything downstream. `next()` runs inside
+    // `runAsTenant` so the route handlers and their continuations inherit it.
+    runAsTenant(tenant.id, next);
   } catch (error) {
     logger.debug("Rejected request during authentication", { error });
     next(error);
@@ -98,6 +162,35 @@ export function requireRole(...roles: GlobalRole[]): RequestHandler {
       next(forbidden("Your role does not permit this action."));
       return;
     }
+    next();
+  };
+}
+
+/**
+ * Refuses writes for a salon that is suspended.
+ *
+ * `SUSPENDED` still signs in — the owner can look at their data and see why — but
+ * nothing may change until it is settled, so every write route carries this. It is
+ * separate from `auth` because a route mounted with `auth` alone is readable by a
+ * suspended tenant by design, as `docs/saas/TENANCY.md` §6 requires.
+ */
+export function requireWritableTenant(): RequestHandler {
+  return (req, _res, next) => {
+    if (!req.user) {
+      next(unauthorized());
+      return;
+    }
+
+    if (req.user.tenantStatus !== undefined && !canWrite(req.user.tenantStatus)) {
+      next(
+        forbidden(
+          "Your salon's subscription is suspended, so changes are disabled. Please contact your provider.",
+          "TENANT_SUSPENDED",
+        ),
+      );
+      return;
+    }
+
     next();
   };
 }

@@ -1,8 +1,11 @@
-import type { AUTH_REALMS, GLOBAL_ROLES } from "./constants.js";
+import type { AUTH_REALMS, GLOBAL_ROLES, TENANT_STATUSES } from "./constants.js";
 
 export type GlobalRole = (typeof GLOBAL_ROLES)[number];
 
 export type AuthRealm = (typeof AUTH_REALMS)[number];
+
+/** Lifecycle of the tenant a session belongs to. */
+export type TenantStatus = (typeof TENANT_STATUSES)[number];
 
 /**
  * API response envelope.
@@ -42,6 +45,11 @@ export interface AccessTokenClaims {
   email: string;
   globalRole: GlobalRole;
   realm: AuthRealm;
+  /**
+   * The tenant the session belongs to. Absent only for a platform session, which
+   * sits above every tenant and reads platform-plane models only.
+   */
+  tenantId?: string;
   /** Bumped on logout / password change to invalidate outstanding tokens. */
   tokenVersion: number;
 }

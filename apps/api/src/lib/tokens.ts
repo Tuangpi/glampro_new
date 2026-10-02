@@ -20,13 +20,17 @@ export interface TokenSubject {
   email: string;
   globalRole: GlobalRole;
   realm: AuthRealm;
+  /** Omitted for a platform session, which sits above every tenant. */
+  tenantId?: string;
   tokenVersion: number;
 }
 
 /**
  * Short-lived, stateless access token. Every request re-checks `tokenVersion`
- * against the database (see `middleware/auth.ts`) so logout and password
- * changes take effect immediately.
+ * against the database (see `middleware/auth.ts`), so a password change or a
+ * forced sign-out takes effect on the next request rather than at the token's
+ * expiry. Logout deliberately does not move `tokenVersion`: it revokes the refresh
+ * row, per `docs/decisions/0007-logout-revokes-the-refresh-token-not-the-user.md`.
  */
 export function signAccessToken(subject: TokenSubject): { token: string; expiresIn: number } {
   const token = jwt.sign(
@@ -34,6 +38,7 @@ export function signAccessToken(subject: TokenSubject): { token: string; expires
       email: subject.email,
       globalRole: subject.globalRole,
       realm: subject.realm,
+      ...(subject.tenantId === undefined ? {} : { tenantId: subject.tenantId }),
       tokenVersion: subject.tokenVersion,
     },
     env.jwtSecret,
@@ -59,11 +64,14 @@ export function verifyAccessToken(token: string): AccessTokenClaims {
       throw unauthorized("Invalid or expired token", "SESSION_EXPIRED");
     }
 
+    const tenantId = payload.tenantId;
+
     return {
       sub: payload.sub,
       email: String(payload.email ?? ""),
       globalRole: payload.globalRole as GlobalRole,
       realm: payload.realm as AuthRealm,
+      ...(typeof tenantId === "string" && tenantId !== "" ? { tenantId } : {}),
       tokenVersion: Number(payload.tokenVersion ?? 0),
     };
   } catch (error) {

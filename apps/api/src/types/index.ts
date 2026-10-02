@@ -1,4 +1,4 @@
-import type { AuthRealm, AuthUser } from "@glampro/shared";
+import type { AuthRealm, AuthUser, TenantStatus } from "@glampro/shared";
 
 /**
  * The authenticated principal attached to every request by
@@ -8,6 +8,12 @@ import type { AuthRealm, AuthUser } from "@glampro/shared";
 export interface AuthenticatedUser extends AuthUser {
   realm: AuthRealm;
   tokenVersion: number;
+  /**
+   * Effective tenant status, resolved from the stored status and the
+   * subscription's end date. Present for every tenant realm; absent only for a
+   * platform session.
+   */
+  tenantStatus?: TenantStatus;
 }
 
 /** Request properties populated by `middleware/validate.ts`. */

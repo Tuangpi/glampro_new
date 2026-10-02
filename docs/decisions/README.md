@@ -7,20 +7,21 @@ defines when a file has to be written.
 
 ## Index
 
-| #    | Decision                                                                                   | Status   |
-| ---- | ------------------------------------------------------------------------------------------ | -------- |
-| 0001 | _unallocated_                                                                              | —        |
-| 0002 | [A migrated tenant keeps the owner's legacy `users.id`](0002-tenant-id-equals-owner-id.md) | Accepted |
-| 0003 | [Customer email is unique per tenant, not globally](0003-tenant-scoped-customer-email.md)  | Accepted |
-| 0004 | [The platform console is its own app](0004-platform-console-is-its-own-app.md)             | Accepted |
-| 0005 | [The rail has no Services destination](0005-rail-has-no-services-destination.md)           | Accepted |
-| 0006 | [Snap handoff values to tokens; record the delta](0006-snap-handoff-values-to-tokens.md)   | Accepted |
+| #    | Decision                                                                                                | Status   |
+| ---- | ------------------------------------------------------------------------------------------------------- | -------- |
+| 0001 | _unallocated_                                                                                           | —        |
+| 0002 | [A migrated tenant keeps the owner's legacy `users.id`](0002-tenant-id-equals-owner-id.md)              | Accepted |
+| 0003 | [Customer email is unique per tenant, not globally](0003-tenant-scoped-customer-email.md)               | Accepted |
+| 0004 | [The platform console is its own app](0004-platform-console-is-its-own-app.md)                          | Accepted |
+| 0005 | [The rail has no Services destination](0005-rail-has-no-services-destination.md)                        | Accepted |
+| 0006 | [Snap handoff values to tokens; record the delta](0006-snap-handoff-values-to-tokens.md)                | Accepted |
+| 0007 | [Logout revokes the refresh token, not the user](0007-logout-revokes-the-refresh-token-not-the-user.md) | Accepted |
 
 `0001` is unallocated: `0002` is referenced by name from
 [`../saas/TENANCY.md`](../saas/TENANCY.md) and
 [`../legacy/LEGACY-MAP.md`](../legacy/LEGACY-MAP.md), and renumbering a referenced
 decision is worse than leaving the first slot empty. The next new decision is
-`0007`.
+`0008`.
 
 ## Rules
 

@@ -205,11 +205,14 @@ Two tokens, three realms.
 
 - `realm` (`web` / `pos` / `mobile`) is a claim in the access token, so the API
   can refuse a POS token on an admin-only endpoint even when the role matches.
-- `tokenVersion` on `users` is compared against the claim on every request.
-  Logout, password change or a forced sign-out increments it and invalidates all
-  outstanding access tokens immediately.
+- `tokenVersion` on `users` is compared against the claim on every request. A
+  password change or a forced sign-out from the platform console increments it and
+  invalidates every outstanding access token at once.
 - `refresh_tokens` rows are rotated on every refresh; a revoked or expired row
-  returns `SESSION_INVALIDATED`.
+  returns `SESSION_INVALIDATED`. **Logout revokes the presented refresh row and
+  leaves `tokenVersion` alone**, so ending one session does not sign the user out
+  elsewhere; the access token it was issued with expires within its 15-minute
+  lifetime ([ADR 0007](decisions/0007-logout-revokes-the-refresh-token-not-the-user.md)).
 - The `auth` middleware re-reads the user from the database on every request, so
   a disabled account or a role change applies to the next request rather than
   after the access token expires.
@@ -364,18 +367,18 @@ Developer-experience details worth knowing:
 
 ## 12. Roadmap and current status
 
-| Phase | Scope                                                              | Status       |
-| ----- | ------------------------------------------------------------------ | ------------ |
-| 0     | Monorepo, tooling, Docker, health endpoints, docs                  | **Complete** |
-| 1     | Design system: handoff tokens, icon port, UI primitives, app shell | **Complete** |
-| 2     | Full data model: catalogue, customers, staff, appointments, sales  | In progress  |
-| 3     | Auth: login / refresh / logout, roles, protected routes            | Not started  |
-| 4     | Master data screens: customers, products, services, staff          | Not started  |
-| 5     | POS Sale + confirmation (handoff screens 01–02)                    | Not started  |
-| 6     | Appointments and calendar (handoff screens 03, 06)                 | Not started  |
-| 7     | Dashboard and reports (handoff screens 05, 10)                     | Not started  |
-| 8     | Settings and integrations (handoff screen 11)                      | Not started  |
-| 9     | Hardening and the live MySQL → PostgreSQL data migration           | Not started  |
+| Phase | Scope                                                              | Status                                           |
+| ----- | ------------------------------------------------------------------ | ------------------------------------------------ |
+| 0     | Monorepo, tooling, Docker, health endpoints, docs                  | **Complete**                                     |
+| 1     | Design system: handoff tokens, icon port, UI primitives, app shell | **Complete**                                     |
+| 2     | Full data model: catalogue, customers, staff, appointments, sales  | In progress                                      |
+| 3     | Auth: login / refresh / logout, roles, protected routes            | Partly — the API landed; the web session is next |
+| 4     | Master data screens: customers, products, services, staff          | Not started                                      |
+| 5     | POS Sale + confirmation (handoff screens 01–02)                    | Not started                                      |
+| 6     | Appointments and calendar (handoff screens 03, 06)                 | Not started                                      |
+| 7     | Dashboard and reports (handoff screens 05, 10)                     | Not started                                      |
+| 8     | Settings and integrations (handoff screen 11)                      | Not started                                      |
+| 9     | Hardening and the live MySQL → PostgreSQL data migration           | Not started                                      |
 
 `GET /api/auth/me` already exists so the session plumbing (token verification,
 database re-validation) is exercised end to end. Login, refresh and logout land

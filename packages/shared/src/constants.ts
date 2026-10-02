@@ -68,3 +68,13 @@ export const GLOBAL_ROLES = ["SUPER_ADMIN", "MANAGER", "STAFF", "CASHIER"] as co
 
 /** Client surfaces that authenticate against the API. */
 export const AUTH_REALMS = ["web", "pos", "mobile"] as const;
+
+/**
+ * The isolation boundary's lifecycle. Mirrors the `TenantStatus` database enum.
+ * `SUSPENDED` still lets the owner in, read-only, so the person who can pay is the
+ * person who sees the message; the other two refuse sign-in outright.
+ */
+export const TENANT_STATUSES = ["ACTIVE", "SUSPENDED", "EXPIRED", "CANCELLED"] as const;
+
+/** Realms this phase serves. `pos` and `mobile` arrive with their own surfaces. */
+export const WEB_REALM = "web" as const;
