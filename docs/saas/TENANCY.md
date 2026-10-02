@@ -101,7 +101,7 @@ The `auth` middleware, in order:
 4. For tenant realms, load the `Tenant` and resolve its **effective status**:
    computed from `endDate` **and** the stored `status`.
 5. Refuse with `TENANT_SUSPENDED`, `TENANT_EXPIRED` or `TENANT_CANCELLED`. A
-   suspended tenant's `OWNER` may proceed **read-only** (see §6).
+   suspended tenant's owner may proceed **read-only** (see §6).
 6. Stamp `req.auth = { kind, id, realm, role, tenantId, tenant }`.
 
 ---
@@ -160,8 +160,12 @@ GET  /api/reports/commission requireModule("employeeCommission")
 ```
 
 The front end receives the tenant's effective entitlement list once per session
-(`GET /api/auth/me`) and uses it to hide navigation — `navigation.ts` carries a
-`module` field for exactly this. Hidden is not secured; the guard is the boundary.
+(`GET /api/auth/me`) and uses it to hide navigation — `navigation.ts` gains a `module`
+field for exactly this, **arriving with Phase 3**, when `/api/auth/me` starts returning the
+entitlement list. The field does not exist yet: `NavItem` is `label` / `path` / `icon` /
+`roles` / `badge`, and `navigation.test.ts` asserts the rail's shape, so do not add a
+`module` field before there is something to populate it. Hidden is not secured; the guard is
+the boundary.
 
 ---
 
@@ -223,18 +227,18 @@ change while the model is still moving.
 
 ## 10. Legacy mapping at a glance
 
-| Legacy                                 | New                                                          |
-| -------------------------------------- | ------------------------------------------------------------ |
-| `users` row with `company_id IS NULL`  | `Tenant` (+ its owner `User`)                                |
-| `users.company_id`                     | `Tenant.id` → every domain row's `tenantId`                  |
-| `company_id ?? user.id` idiom          | not needed; `tenantId` is always present and always explicit |
-| `users.isOwner` (`1` / `2` / `NULL`)   | `User.role` = `OWNER` / `MANAGER` / `STAFF`                  |
-| `users.*_access`, `user_infos.*`       | `TenantModule` rows                                          |
-| `users.start_date` / `end_date`        | `Subscription` rows                                          |
-| `user_payments`                        | `Payment`                                                    |
-| `system_admins` + `system-admin` guard | `PlatformAdmin` + `realm: "platform"`                        |
-| `/api/v1/system-admin/*`               | `/api/platform/*`                                            |
-| no audit trail                         | `AuditLog` on every privileged action                        |
-| suspension did not exist               | `Tenant.status` + `Tenant.tokenVersion`                      |
+| Legacy                                 | New                                                                                                                    |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `users` row with `company_id IS NULL`  | `Tenant` (+ its owner `User`)                                                                                          |
+| `users.company_id`                     | `Tenant.id` → every domain row's `tenantId`                                                                            |
+| `company_id ?? user.id` idiom          | not needed; `tenantId` is always present and always explicit                                                           |
+| `users.isOwner` (`1` / `2` / `NULL`)   | `Tenant.ownerUserId` — a relation, not a role. `User.globalRole` stays `SUPER_ADMIN` / `MANAGER` / `STAFF` / `CASHIER` |
+| `users.*_access`, `user_infos.*`       | `TenantModule` rows                                                                                                    |
+| `users.start_date` / `end_date`        | `Subscription` rows                                                                                                    |
+| `user_payments`                        | `Payment`                                                                                                              |
+| `system_admins` + `system-admin` guard | `PlatformAdmin` + `realm: "platform"`                                                                                  |
+| `/api/v1/system-admin/*`               | `/api/platform/*`                                                                                                      |
+| no audit trail                         | `AuditLog` on every privileged action                                                                                  |
+| suspension did not exist               | `Tenant.status` + `Tenant.tokenVersion`                                                                                |
 
 Detail for each table is in [`../legacy/LEGACY-MAP.md`](../legacy/LEGACY-MAP.md).

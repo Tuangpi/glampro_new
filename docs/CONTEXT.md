@@ -33,21 +33,21 @@ Three audiences, three surfaces:
 
 These words are used precisely. Prefer them over synonyms in code, docs and UI.
 
-| Term                 | Meaning                                                                                   | Not to be confused with      |
-| -------------------- | ----------------------------------------------------------------------------------------- | ---------------------------- |
-| **Tenant**           | One salon business — the isolation boundary. Model `Tenant`, table `tenants`.             | A customer of the salon      |
-| **Business / Salon** | The user-facing name for a tenant in the platform console. Same thing, friendlier word.   | —                            |
-| **Platform admin**   | An employee of the SaaS operator. Model `PlatformAdmin`. No tenant, no `tenantId`.        | The salon owner              |
-| **Owner**            | The `User` with role `OWNER` who signed the salon up. One per tenant.                     | A platform admin             |
-| **Staff / user**     | Any other login inside a tenant — manager, stylist, cashier. Always carries a `tenantId`. | —                            |
-| **Module**           | A feature area that can be switched on or off per tenant (`Module` catalogue row).        | A screen                     |
-| **Entitlement**      | The row granting one tenant one module, with optional expiry and limits (`TenantModule`). | A role permission            |
-| **Core module**      | A module every tenant always has (`isCore`). Cannot be revoked.                           | —                            |
-| **Subscription**     | One paid period for a tenant: `startDate`, `endDate`, status.                             | A Stripe subscription object |
-| **Payment**          | A recorded payment against a tenant's subscription. The ledger.                           | A POS sale                   |
-| **Sale**             | A transaction at the salon till — what the customer pays the salon.                       | A platform payment           |
-| **Department**       | A branch or a section of the salon. The legacy term; kept in the UI.                      | A tenant                     |
-| **Realm**            | Which kind of caller a token belongs to: `platform`, `web`, `pos`, `mobile`.              | A role                       |
+| Term                 | Meaning                                                                                                                                             | Not to be confused with            |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| **Tenant**           | One salon business — the isolation boundary. Model `Tenant`, table `tenants`.                                                                       | A customer of the salon            |
+| **Business / Salon** | The user-facing name for a tenant in the platform console. Same thing, friendlier word.                                                             | —                                  |
+| **Platform admin**   | An employee of the SaaS operator. Model `PlatformAdmin`. No tenant, no `tenantId`.                                                                  | The salon owner                    |
+| **Owner**            | The `User` referenced by that tenant's `Tenant.ownerUserId` — the account that signed the salon up. One per tenant, and a **relation, not a role**. | A platform admin, or `SUPER_ADMIN` |
+| **Staff / user**     | Any other login inside a tenant — manager, stylist, cashier. Always carries a `tenantId`.                                                           | —                                  |
+| **Module**           | A feature area that can be switched on or off per tenant (`Module` catalogue row).                                                                  | A screen                           |
+| **Entitlement**      | The row granting one tenant one module, with optional expiry and limits (`TenantModule`).                                                           | A role permission                  |
+| **Core module**      | A module every tenant always has (`isCore`). Cannot be revoked.                                                                                     | —                                  |
+| **Subscription**     | One paid period for a tenant: `startDate`, `endDate`, status.                                                                                       | A Stripe subscription object       |
+| **Payment**          | A recorded payment against a tenant's subscription. The ledger.                                                                                     | A POS sale                         |
+| **Sale**             | A transaction at the salon till — what the customer pays the salon.                                                                                 | A platform payment                 |
+| **Department**       | A branch or a section of the salon. The legacy term; kept in the UI.                                                                                | A tenant                           |
+| **Realm**            | Which kind of caller a token belongs to: `platform`, `web`, `pos`, `mobile`.                                                                        | A role                             |
 
 **"Tenant" in code, "business" or "salon" in the console UI.** The domain model is
 about isolation; the console operator thinks in businesses.
@@ -83,12 +83,12 @@ explicitly aggregated, read-only reporting.
 
 Distinct from platform admins, and distinct from _module_ entitlements.
 
-| Role      | Scope                                                                        |
-| --------- | ---------------------------------------------------------------------------- |
-| `OWNER`   | Everything in the tenant, including staff management and settings.           |
-| `MANAGER` | Everything the tenant has modules for, except destructive/ownership actions. |
-| `STAFF`   | The operational subset the tenant grants them.                               |
-| `CASHIER` | Point of sale and receipt handling.                                          |
+| Role          | Scope                                                                        |
+| ------------- | ---------------------------------------------------------------------------- |
+| `SUPER_ADMIN` | Everything in the tenant, including staff management and settings.           |
+| `MANAGER`     | Everything the tenant has modules for, except destructive/ownership actions. |
+| `STAFF`       | The operational subset the tenant grants them.                               |
+| `CASHIER`     | Point of sale and receipt handling.                                          |
 
 The legacy system encoded role as `users.isOwner` (`1=owner, 2=manager, NULL=user`)
 plus eleven boolean `*_access` flags on the same row. That conflated **"the tenant

@@ -12,7 +12,7 @@ out, and the mapping from its model to the new one.
 ## 1. Where it is
 
 ```
-/media/tuangpi/2f03b0ac-9b56-4f1a-ab1c-0529d7bb4e799/home/singtuang/Documents/Aridient/Glampros/glampro
+/media/tuangpi/2f03b0ac-9b56-4f1a-ab1c-0529d7bb4e7910/home/singtuang/Documents/Aridient/Glampros/glampro
 ```
 
 A sibling directory of this repository — **outside** the monorepo, not a git
@@ -125,7 +125,7 @@ suspension, and no subscription history.
 | Legacy                                                                                     | New                                               | Notes                                                   |
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------- | ------------------------------------------------------- |
 | `users` (owner + staff in one table)                                                       | `User` + `Tenant`                                 | Split identity from the business                        |
-| `users.isOwner` `1` / `2` / `NULL`                                                         | `User.role` = `OWNER` / `MANAGER` / `STAFF`       | `CASHIER` is new                                        |
+| `users.isOwner` `1` / `2` / `NULL`                                                         | `Tenant.ownerUserId` (a relation, not a role)     | `CASHIER` is new; `GLOBAL_ROLES` is unchanged           |
 | `users.*_access`, `user_infos.*`                                                           | `TenantModule` + role defaults                    | Bought vs. permitted, separated                         |
 | `departments`                                                                              | `Department`                                      |                                                         |
 | `department_user`, `customer_department`                                                   | Prisma implicit m-n joins                         | Plus `tenantId` on both sides                           |

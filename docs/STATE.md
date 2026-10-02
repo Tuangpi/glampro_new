@@ -92,12 +92,14 @@ routes and no data — the `Staff` entry points at a route Phase 4 fills, exactl
 
 ### Gates before any Phase 2 code
 
-1. **Settle the `OWNER` role.** `docs/CONTEXT.md` and `docs/saas/TENANCY.md` both say
+1. **The `OWNER` role — settled.** `docs/CONTEXT.md` and `docs/saas/TENANCY.md` both said
    `User.role` includes `OWNER`, but the code's `GLOBAL_ROLES` is `SUPER_ADMIN · MANAGER ·
-STAFF · CASHIER` — there is no `OWNER`. Decided: **ownership is a relation, not a role**,
-   carried by `Tenant.ownerUserId` (already in the `TENANCY.md` §2 model, unique), so
-   `GLOBAL_ROLES` is unchanged. The doc corrections land in the next commit. Anyone
-   implementing Phase 2 must treat `ownerUserId` as the only definition of ownership.
+STAFF · CASHIER` — there was no `OWNER`. Ownership is a **relation, not a role**, carried
+   by `Tenant.ownerUserId` (already in the `TENANCY.md` §2 model, unique, and used by
+   [ADR 0002](decisions/0002-tenant-id-equals-owner-id.md)), so `GLOBAL_ROLES` is unchanged
+   and no enum is added. The four doc statements that contradicted the code are corrected.
+   Anyone implementing Phase 2 must treat `ownerUserId` as the only definition of ownership,
+   and must not add an `OWNER` role.
 2. **Answer the four legacy-source questions** that change the schema, by reading the
    Laravel code rather than guessing: **Q4** (is "employee" the same row as "user"?),
    **Q7** (in `appointments`, is `date` + `time` or `start_time` authoritative?), **Q8**
@@ -117,6 +119,13 @@ STAFF · CASHIER` — there is no `OWNER`. Decided: **ownership is a relation, n
 Four further questions (**Q1**, **Q2**, **Q5**, **Q6**) need production MySQL and are listed
 in §4.1 with the exact query for each. Nothing that depends on them can proceed without DB
 access.
+
+Also settled, and needed by Phase 3: [`saas/TENANCY.md`](saas/TENANCY.md) §5 said
+`navigation.ts` "carries a `module` field" for entitlement-based nav hiding, but `NavItem` is
+`label` / `path` / `icon` / `roles` / `badge` and no such field exists. The field **arrives
+with Phase 3**, when `GET /api/auth/me` starts returning the entitlement list; adding it
+now would be a field nothing populates, and `navigation.test.ts` asserts the rail's shape.
+The doc now says so rather than describing a field that is not there.
 
 Conventions the built primitives established: a primitive's own `variant`/`size` props change its
 appearance and `className` is for layout only, because `cn` joins strings without resolving
