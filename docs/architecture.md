@@ -367,7 +367,7 @@ Developer-experience details worth knowing:
 | Phase | Scope                                                              | Status       |
 | ----- | ------------------------------------------------------------------ | ------------ |
 | 0     | Monorepo, tooling, Docker, health endpoints, docs                  | **Complete** |
-| 1     | Design system: handoff tokens, icon port, UI primitives, app shell | In progress  |
+| 1     | Design system: handoff tokens, icon port, UI primitives, app shell | **Complete** |
 | 2     | Full data model: catalogue, customers, staff, appointments, sales  | Not started  |
 | 3     | Auth: login / refresh / logout, roles, protected routes            | Not started  |
 | 4     | Master data screens: customers, products, services, staff          | Not started  |
