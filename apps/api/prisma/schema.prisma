@@ -4,9 +4,12 @@
 // snake_case names (`@@map`) so hand-written reporting SQL stays readable,
 // while the Prisma models keep PascalCase like the rest of the codebase.
 //
-// Phase 0 ships only the session tables needed to boot and authenticate.
-// Catalogue, POS, appointments, staff and reporting models land in the phases
-// that own them.
+// Phase 0 shipped only the session tables needed to boot and authenticate.
+// Phase 2 adds the tenant plane — `PlatformAdmin`, `Tenant`, `Module`,
+// `TenantModule`, `Subscription`, `Payment` and `AuditLog` — per
+// `docs/saas/TENANCY.md` §2. Catalogue, POS, appointments, staff and reporting
+// models land in the second Phase 2 commit, which also gives `User` its
+// `tenantId`.
 
 generator client {
   provider = "prisma-client"
@@ -32,6 +35,36 @@ enum AuthRealm {
   mobile
 }
 
+/// The isolation boundary's lifecycle. Drives what a tenant's users may do —
+/// see `docs/saas/TENANCY.md` §6.
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  EXPIRED
+  CANCELLED
+}
+
+/// An operator of the SaaS itself. Never has a `tenantId`.
+enum PlatformAdminStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  BANK_TRANSFER
+  CHEQUE
+  OTHER
+}
+
 model User {
   id           String     @id @default(cuid())
   email        String     @unique
@@ -49,6 +82,10 @@ model User {
   updatedAt    DateTime   @updatedAt
 
   refreshTokens RefreshToken[]
+  /// Set on exactly one user per tenant. Ownership is a relation, not a role —
+  /// see ADR 0002. `Tenant.id` equals this id only for tenants migrated from the
+  /// legacy database, and nothing may rely on that.
+  ownedTenant   Tenant?     @relation("TenantOwner")
 
   @@index([globalRole])
   @@map("users")
@@ -71,4 +108,160 @@ model RefreshToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("refresh_tokens")
+}
+
+// ---------------------------------------------------------------------------
+// Tenant plane — docs/saas/TENANCY.md §2
+// ---------------------------------------------------------------------------
+
+/// An employee of the SaaS operator. Sits above every tenant and never has a
+/// `tenantId`. The `platform` realm that authenticates it lands with the console
+/// phase, not here.
+model PlatformAdmin {
+  id           String              @id @default(cuid())
+  email        String              @unique
+  name         String
+  passwordHash String
+  status       PlatformAdminStatus @default(ACTIVE)
+  /// Bumped on logout and password change, as on `User`.
+  tokenVersion Int                 @default(0)
+  lastLoginAt  DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  payments  Payment[]
+  auditLogs AuditLog[]
+
+  @@map("platform_admins")
+}
+
+/// One salon business. The isolation boundary every domain row points at.
+///
+/// `id` is `cuid()` for tenants created after the cutover. A tenant migrated from
+/// the legacy database keeps its owner's legacy `users.id` verbatim, so every
+/// `company_id` is already a valid `tenantId` — see ADR 0002.
+model Tenant {
+  id      String       @id @default(cuid())
+  name    String
+  slug    String       @unique
+  status  TenantStatus @default(ACTIVE)
+  /// Bumped on suspension, which invalidates every access token for the tenant.
+  tokenVersion Int     @default(0)
+  /// Ownership is this relation. There is deliberately no `OWNER` role.
+  ownerUserId String    @unique
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  owner         User            @relation("TenantOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  modules       TenantModule[]
+  subscriptions Subscription[]
+  payments      Payment[]
+  auditLogs     AuditLog[]
+
+  @@index([status])
+  @@map("tenants")
+}
+
+/// The catalogue of switchable features. Seeded, never user-created.
+model Module {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  name      String
+  category  String
+  /// Core modules need no `TenantModule` row; `requireModule` passes as soon as
+  /// the tenant exists.
+  isCore    Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenants TenantModule[]
+
+  @@map("modules")
+}
+
+/// One entitlement: this tenant has this module.
+model TenantModule {
+  id       String    @id @default(cuid())
+  tenantId String
+  moduleId String
+  /// An entitlement past this instant is not effective, even while the row exists.
+  expiresAt DateTime?
+  /// Per-module caps (seats, transaction counts). Null means "unlimited".
+  limits   Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, moduleId])
+  @@index([tenantId])
+  @@map("tenant_modules")
+}
+
+/// One paid period. Several per tenant over time.
+model Subscription {
+  id        String             @id @default(cuid())
+  tenantId  String
+  startDate DateTime
+  endDate   DateTime
+  status    SubscriptionStatus @default(ACTIVE)
+  amount    Decimal            @db.Decimal(12, 2)
+  currency  String             @default("USD")
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@index([tenantId])
+  @@index([endDate])
+  @@map("subscriptions")
+}
+
+/// Ledger entry against a subscription.
+model Payment {
+  id        String        @id @default(cuid())
+  tenantId  String
+  subscriptionId String?
+  /// `Decimal(12,2)`, not the legacy `decimal(8,2)` — that capped a salon at
+  /// 999,999.99.
+  amount    Decimal       @db.Decimal(12, 2)
+  paidAt    DateTime
+  method    PaymentMethod
+  recordedByPlatformAdminId String?
+  note      String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  tenant                  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscription            Subscription?  @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  recordedByPlatformAdmin PlatformAdmin? @relation(fields: [recordedByPlatformAdminId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([paidAt])
+  @@map("payments")
+}
+
+/// Every privileged platform action. Carries a `tenantId` as a *reference* to
+/// what was acted on, not as a scope — the console reads audit rows across every
+/// tenant, so this model is deliberately absent from `TENANT_SCOPED_MODELS`.
+model AuditLog {
+  id                   String    @id @default(cuid())
+  actorPlatformAdminId String?
+  tenantId             String?
+  action               String
+  targetType           String
+  targetId             String?
+  metadata             Json?
+  ip                   String?
+  createdAt            DateTime  @default(now())
+
+  actor  PlatformAdmin? @relation(fields: [actorPlatformAdminId], references: [id], onDelete: SetNull)
+  tenant Tenant?        @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

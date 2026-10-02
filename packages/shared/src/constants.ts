@@ -13,6 +13,47 @@ export const API_PREFIX = "/api";
 /** Mobile clients are served from this prefix and must stay byte-compatible. */
 export const MOBILE_API_PREFIX = "/api/mobile";
 
+/**
+ * Codes for the switchable features in `Module`. Seeded into the `modules`
+ * table; `requireModule(code)` resolves the string at the route boundary, so a
+ * typo fails as an unknown module rather than silently passing an unauthenticated
+ * entitlement check.
+ *
+ * The legacy system carried these as 18 boolean columns (`users.*_access` plus
+ * seven on `user_infos`); rows in `TenantModule` replace them.
+ */
+export const MODULE_CODES = [
+  "dashboard",
+  "appointments",
+  "customers",
+  "catalogue",
+  "staff",
+  "packages",
+  "giftCards",
+  "memberships",
+  "inventory",
+  "reports",
+  "employeeCommission",
+  "sales",
+  "expenses",
+  "stock",
+] as const;
+
+export type ModuleCode = (typeof MODULE_CODES)[number];
+
+/**
+ * Modules every tenant has without buying them, keyed by the same `Module.code`.
+ * A core module passes `requireModule` as soon as the tenant exists.
+ */
+export const CORE_MODULE_CODES = [
+  "dashboard",
+  "appointments",
+  "customers",
+  "catalogue",
+  "staff",
+  "sales",
+] as const;
+
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 200;
 

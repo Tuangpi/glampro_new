@@ -13,14 +13,14 @@ Facts below were read out of the tree, not copied from a plan.
 
 ## 1. Snapshot
 
-|                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current phase    | **2 — Full data model. Phase 1 closed**: all 17 primitives built, tested and reconciled against the handoff ([ADR 0006](decisions/0006-snap-handoff-values-to-tokens.md)); the screen pass measured the app shell and the primitives and corrected them ([`design/HANDOFF.md`](design/HANDOFF.md) §2, §7). Q3, Q14 and Q21 closed alongside it: [ADR 0003](decisions/0003-tenant-scoped-customer-email.md), [0004](decisions/0004-platform-console-is-its-own-app.md) and [0005](decisions/0005-rail-has-no-services-destination.md). **Nothing of Phase 2 is started** — see §3. |
-| Last commit      | Not pinned here on purpose — run `git log -1 --oneline`. Pinning a hash in this file is what made it go stale twice; this file is updated in the same commit as the work it describes.                                                                                                                                                                                                                                                                                                                                                                                            |
-| Working tree     | Clean at the Phase 1 close. Phase 1 delivered: the token copy, the 41-icon port, the 17 primitives with tests, the reconciled `AppShell` (item geometry, gaps, 8.5px/700 label, purple active state), a `Staff` nav entry answering Q15 and the removal of the rail's `Services` entry ([ADR 0005](decisions/0005-rail-has-no-services-destination.md)). Measurements are in [`design/HANDOFF.md`](design/HANDOFF.md) §2 and §7.                                                                                                                                                  |
-| `npm run verify` | See §5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| Dev stack        | `make up-d` → API `:9100`, web `:5173`, Postgres `:5433` (`compose.yaml`, ports documented in `README.Docker.md`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Runtime          | Node 24, npm workspaces (no pnpm), Postgres 17, Prisma 7                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+|                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Current phase    | **2 — Full data model, in progress.** Phase 1 closed: all 17 primitives built, tested and reconciled against the handoff ([ADR 0006](decisions/0006-snap-handoff-values-to-tokens.md)); the screen pass measured the app shell and the primitives and corrected them ([`design/HANDOFF.md`](design/HANDOFF.md) §2, §7). Q3, Q14 and Q21 closed alongside it: [ADR 0003](decisions/0003-tenant-scoped-customer-email.md), [0004](decisions/0004-platform-console-is-its-own-app.md) and [0005](decisions/0005-rail-has-no-services-destination.md). **Phase 2 commit A (the tenant plane) is landed**: `PlatformAdmin`, `Tenant`, `Module`, `TenantModule`, `Subscription`, `Payment`, `AuditLog`, the `AsyncLocalStorage` scoping extension and the `requireModule` entitlement guard. **The domain models and `User.tenantId` are commit B and are not started** — see §3. |
+| Last commit      | Not pinned here on purpose — run `git log -1 --oneline`. Pinning a hash in this file is what made it go stale twice; this file is updated in the same commit as the work it describes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Working tree     | Clean at the Phase 2 commit A close. Phase 1 delivered: the token copy, the 41-icon port, the 17 primitives with tests, the reconciled `AppShell` (item geometry, gaps, 8.5px/700 label, purple active state), a `Staff` nav entry answering Q15 and the removal of the rail's `Services` entry ([ADR 0005](decisions/0005-rail-has-no-services-destination.md)). Phase 2A added migration `20261002042444_tenant_plane`, the seven tenant-plane models, the `AsyncLocalStorage` scoping extension, the `requireModule` guard and the module-catalogue seed. Measurements are in [`design/HANDOFF.md`](design/HANDOFF.md) §2 and §7.                                                                                                                                                                                                                                        |
+| `npm run verify` | Exit 0 at the Phase 2 commit A close: format, lint, type-check, **41 API tests** (8 tenant-isolation, 6 `requireModule`, plus the Phase 0/1 suites), 6 shared, 21 web test files. The isolation and entitlement suites need a database; they **skip with a message** when `DATABASE_URL` is unset, so a run without Postgres still passes but has not proved isolation. They were run green against the compose stack.                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Dev stack        | `make up-d` → API `:9100`, web `:5173`, Postgres `:5433` (`compose.yaml`, ports documented in `README.Docker.md`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Runtime          | Node 24, npm workspaces (no pnpm), Postgres 17, Prisma 7                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ## 2. What actually exists today
 
@@ -108,15 +108,27 @@ STAFF · CASHIER` — there was no `OWNER`. Ownership is a **relation, not a rol
    finished; and leave approval _was_ persisted, lossily, in
    `employee_leaves.granted_by`. The rows are closed in §4.1. **The schema may now be
    written against these answers.**
-3. **Build the tenant plane, then the domain.** `Tenant`, `Module`, `TenantModule`,
-   `Subscription`, `Payment`, `AuditLog`, `PlatformAdmin`, plus `tenantId` on every domain
-   table; then the `TENANT_SCOPED_MODELS` Prisma extension over `AsyncLocalStorage` and
-   `requireModule`; then the isolation suite in [`saas/TENANCY.md`](saas/TENANCY.md) §8.
-   Catalogue, customers, staff, departments, appointments, sales, packages, gift cards,
-   credit, commissions and leaves follow, with money widened past `decimal(8,2)` and
+3. ~~**Build the tenant plane, then the domain.**~~ — **The tenant plane half is
+   landed.** Migration `20261002042444_tenant_plane` adds `PlatformAdmin`, `Tenant`,
+   `Module`, `TenantModule`, `Subscription`, `Payment` and `AuditLog` per
+   [`saas/TENANCY.md`](saas/TENANCY.md) §2, plus `tenantId` on every table that takes
+   one. `lib/tenant-context.ts` provides `runAsTenant` / `runAsPlatform` over
+   `AsyncLocalStorage`; `lib/prisma.ts` exports the extended client and the auditable
+   `TENANT_SCOPED_MODELS`; `middleware/requireModule.ts` is the entitlement guard. The
+   §8 isolation suite is in and green against the compose stack.
+   **Still to do — commit B, the domain:** give `User` its `tenantId` (it is
+   tenant-scoped, and Q4 settled that staff _is_ user), then catalogue, customers,
+   staff, departments, appointments, sales, packages, gift cards, credit, commissions
+   and leaves, with money widened past `decimal(8,2)` and
    [ADR 0002](decisions/0002-tenant-id-equals-owner-id.md) implemented with its import test.
-   Splitting the tenant plane from the domain models into separate commits is recommended:
-   the extension is the load-bearing isolation work and is easier to review alone.
+   Each new model goes into `TENANT_SCOPED_MODELS` in the same commit — the schema test
+   fails otherwise.
+4. **Wire the scope into `middleware/auth.ts`.** It runs before Phase 3's token
+   `tenantId` claim, so today the scope is established only by `runAsTenant` and by the
+   console's `runAsPlatform`. When Phase 3 adds `tenantId` to the access token, the auth
+   middleware must call `runAsTenant` for tenant realms — and the user lookup it
+   performs to resolve the session must run under `runAsPlatform`, because it is keyed
+   on the token's `sub` and happens before any tenant is known.
 
 Four further questions (**Q1**, **Q2**, **Q5**, **Q6**) need production MySQL and are listed
 in §4.1 with the exact query for each. Nothing that depends on them can proceed without DB
@@ -202,6 +214,30 @@ lint, type-check and formatting only. The Docker stack was **not** started at th
 `GET /health`, `GET /health/ready` and `make smoke` carry the earlier session's result and
 were not re-confirmed here. If the stack matters to your change, run `make up-d && make
 smoke` before trusting those endpoints.
+
+### Two Prisma 7 behaviours that cost real time, and will cost it again
+
+Both were found by the Phase 2 commit A work and are recorded here because neither fails
+loudly — the first scoped nothing while every test still passed.
+
+**`$allModels` handlers receive the model name, not the delegate name.** An extension
+written as `$allModels: { findMany({ model }) { … } }` is handed `"Subscription"`, while
+the delegate is `prisma.subscription`. A `TENANT_SCOPED_MODELS` list written in
+camelCase therefore matches nothing, every handler falls through to `query(args)`, and
+**no tenant is ever filtered**. `isTenantScoped()` returning `false` for every query is
+the symptom. The list now holds the names as written in `schema.prisma`.
+
+**Prisma defers a query until the returned promise is subscribed to.** It does not
+dispatch on the call, so `runAsTenant(id, () => prisma.x.findMany())` builds the promise
+inside the scope, returns it, and the scope has already exited by the time the caller
+awaits — the extension then throws _"No tenant scope"_ for a correctly scoped call.
+`runAsTenant` / `runAsPlatform` now subscribe to a returned promise before leaving the
+scope (`startInsideScope` in [`saas/TENANCY.md`](saas/TENANCY.md) §4 territory). Any new
+helper that opens a scope must do the same.
+
+A third, smaller one: the `prisma-client` generator used here **exports no DMMF**, so
+`Prisma.dmmf` is `undefined`. The "every `tenantId` model is scoped" test reads
+`prisma/schema.prisma` directly instead.
 
 The screen pass has **partly** run. The app shell was rendered and measured against screens
 05–11 and now matches the handoff — the rail's item geometry, both gaps, the 8.5px/700 label and

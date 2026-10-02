@@ -127,10 +127,19 @@ no handler passes `tenantId` around by hand. Two consequences worth stating:
 - **A query outside any tenant context fails loudly** rather than silently returning
   everything. Background jobs and the console opt in explicitly with
   `runAsPlatform()` / `runAsTenant(id)`. There is no implicit "no tenant means all
-  tenants".
-- A `findUnique` on a tenant-scoped model is rewritten to `findFirst` with the
-  tenant filter, because Prisma will not accept extra non-unique predicates there.
-  A known, deliberate trade: correctness over the marginal cost of `findFirst`.
+  tenants". Note that the scope has three states — a tenant, an explicit platform
+  opt-out, and _none_ — and only the third throws.
+- Prisma has accepted extra non-unique fields alongside a unique predicate in
+  `findUnique` since v5, so the tenant filter merges into the same `where` object
+  and `findUnique` needs no rewrite to `findFirst`. An earlier draft of
+  `prisma.ts` did rewrite it through the client delegate; that cost the call its
+  return type and bought no isolation, so it was removed.
+
+One Prisma 7 detail that is easy to get wrong and fails silently: `$allModels`
+extension handlers receive the **model name** (`"Subscription"`), not the
+camelCase delegate name (`"subscription"`). `TENANT_SCOPED_MODELS` therefore holds
+the names as written in `schema.prisma`; a camelCase list matches nothing and
+scopes nothing while every test still appears to pass.
 
 ### Models that are not tenant-scoped
 

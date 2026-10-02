@@ -10,10 +10,47 @@
 import "dotenv/config";
 
 import bcrypt from "bcrypt";
+import { CORE_MODULE_CODES, MODULE_CODES } from "@glampro/shared";
 
 import { prisma } from "../src/lib/prisma.js";
+import { runAsPlatform } from "../src/lib/tenant-context.js";
 
 type SeedRole = "SUPER_ADMIN" | "MANAGER" | "STAFF" | "CASHIER";
+
+/** Display names for the seeded module catalogue, keyed by `Module.code`. */
+const MODULE_NAMES: Record<(typeof MODULE_CODES)[number], string> = {
+  dashboard: "Dashboard",
+  appointments: "Appointments",
+  customers: "Customers",
+  catalogue: "Catalogue",
+  staff: "Staff",
+  packages: "Packages",
+  giftCards: "Gift cards",
+  memberships: "Memberships",
+  inventory: "Inventory",
+  reports: "Reports",
+  employeeCommission: "Employee commission",
+  sales: "Sales",
+  expenses: "Expenses",
+  stock: "Stock",
+};
+
+const MODULE_CATEGORIES: Record<(typeof MODULE_CODES)[number], string> = {
+  dashboard: "Core",
+  appointments: "Core",
+  customers: "Core",
+  catalogue: "Core",
+  staff: "Core",
+  packages: "Add-on",
+  giftCards: "Add-on",
+  memberships: "Add-on",
+  inventory: "Add-on",
+  reports: "Add-on",
+  employeeCommission: "Add-on",
+  sales: "Core",
+  expenses: "Add-on",
+  stock: "Add-on",
+};
 
 interface SeedUser {
   email: string;
@@ -79,6 +116,44 @@ async function upsertUser(user: SeedUser): Promise<void> {
   console.log(`  ✔ ${user.globalRole.padEnd(11)} ${user.email}`);
 }
 
+/**
+ * `CORE_MODULE_CODES` is a literal tuple, so its `includes` only accepts its own
+ * members. Widening to `string` here is what lets any `ModuleCode` be tested
+ * against it.
+ */
+function isCore(code: string): boolean {
+  return (CORE_MODULE_CODES as readonly string[]).includes(code);
+}
+
+/**
+ * The module catalogue is platform data, not tenant data, so it is seeded in both
+ * modes and written with an unscoped client. `isCore` is derived from
+ * `CORE_MODULE_CODES` so the two lists cannot disagree.
+ */
+async function seedModules(): Promise<void> {
+  for (const [index, code] of MODULE_CODES.entries()) {
+    await prisma.module.upsert({
+      where: { code },
+      update: {
+        name: MODULE_NAMES[code],
+        category: MODULE_CATEGORIES[code],
+        isCore: isCore(code),
+        sortOrder: index,
+      },
+      create: {
+        code,
+        name: MODULE_NAMES[code],
+        category: MODULE_CATEGORIES[code],
+        isCore: isCore(code),
+        sortOrder: index,
+      },
+    });
+  }
+
+  const coreCount = MODULE_CODES.filter(isCore).length;
+  console.log(`  ✔ ${MODULE_CODES.length} modules (${coreCount} core)`);
+}
+
 async function main(): Promise<void> {
   const users = SEED_MODE === "production" ? [resolveAdmin()] : [resolveAdmin(), ...DEMO_USERS];
 
@@ -93,6 +168,8 @@ async function main(): Promise<void> {
   for (const user of users) {
     await upsertUser(user);
   }
+
+  await runAsPlatform(seedModules);
 
   console.log("Seed complete.");
 }

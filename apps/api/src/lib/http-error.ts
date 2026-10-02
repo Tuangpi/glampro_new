@@ -35,8 +35,11 @@ export const validationFailed = (details: unknown): HttpError =>
 export const unauthorized = (message = "Unauthorized", code = "UNAUTHORIZED"): HttpError =>
   new HttpError(401, message, { code });
 
-export const forbidden = (message = "Forbidden", code = "FORBIDDEN"): HttpError =>
-  new HttpError(403, message, { code });
+export const forbidden = (
+  message = "Forbidden",
+  code = "FORBIDDEN",
+  details?: unknown,
+): HttpError => new HttpError(403, message, { code, details });
 
 export const notFound = (message = "Not found", code = "NOT_FOUND"): HttpError =>
   new HttpError(404, message, { code });
