@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { MODULE_CODES, type ModuleEntitlement } from "@glampro/shared";
+
 import { activeNavItem, navItems, visibleNavItems } from "./navigation";
 
 describe("visibleNavItems", () => {
@@ -68,5 +70,49 @@ describe("navItems", () => {
     expect(visibleNavItems()).toHaveLength(6);
     expect(navItems.map((item) => item.label)).not.toContain("Services");
     expect(navItems.some((item) => item.path.startsWith("/services"))).toBe(false);
+  });
+});
+
+describe("entitlements", () => {
+  const entitled = (...codes: string[]): ModuleEntitlement[] =>
+    codes.map((code) => ({
+      code,
+      name: code,
+      category: "Core",
+      isCore: true,
+      expiresAt: null,
+    }));
+
+  it("hides a destination the salon has not bought", () => {
+    const labels = visibleNavItems("MANAGER", entitled("dashboard", "customers")).map(
+      (item) => item.label,
+    );
+    expect(labels).toContain("Dashboard");
+    expect(labels).toContain("Customers");
+    expect(labels).not.toContain("Appointments");
+    expect(labels).not.toContain("Reports");
+  });
+
+  it("does not filter at all while the entitlements are unknown", () => {
+    // `/auth/me` has not answered. Flickering entries in and out is worse than
+    // briefly showing one the API will refuse anyway.
+    expect(visibleNavItems("MANAGER", undefined)).toHaveLength(visibleNavItems("MANAGER").length);
+  });
+
+  it("treats an empty list as a real answer, not as unknown", () => {
+    const labels = visibleNavItems("SUPER_ADMIN", []).map((item) => item.label);
+    expect(labels).toEqual(["Settings"]);
+  });
+
+  it("keeps Settings, which is not a switchable module", () => {
+    expect(navItems.find((item) => item.label === "Settings")?.module).toBeUndefined();
+    expect(visibleNavItems("MANAGER", []).map((item) => item.label)).toContain("Settings");
+  });
+
+  it("names only real module codes, so requireModule cannot be given a typo", () => {
+    const valid = new Set<string>(MODULE_CODES);
+    for (const item of navItems) {
+      if (item.module) expect(valid).toContain(item.module);
+    }
   });
 });

@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router";
 
 import { Bell, LogOut, Plus, Search } from "@/components/icons";
 import { activeNavItem, visibleNavItems } from "@/constants/navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn, getInitials } from "@/lib/utils";
 
 /**
@@ -15,16 +16,14 @@ import { cn, getInitials } from "@/lib/utils";
  * `--sp-purple` with the purple button shadow. The item width is the one
  * deliberate deviation — see `--app-rail-item-w` in styles/app-chrome.css.
  *
- * Two known gaps, both owned by later phases rather than this one: the
- * open-cart badge that `navItems` declares is not drawn yet because the counter
- * is live data (sale phase), and role-restricted entries stay hidden until auth
- * supplies a role, so the rail is shorter than the handoff's for a signed-out
- * user.
+ * One known gap remains, owned by the sale phase: the open-cart badge that
+ * `navItems` declares is not drawn because the counter is live data.
  */
 export default function AppShell() {
   const location = useLocation();
-  const items = visibleNavItems();
-  const current = activeNavItem(location.pathname);
+  const { user, tenant, entitlements, isReadOnly, signOut } = useAuth();
+  const items = visibleNavItems(user?.globalRole, entitlements);
+  const current = activeNavItem(location.pathname, user?.globalRole, entitlements);
   const [search, setSearch] = useState("");
 
   return (
@@ -59,6 +58,7 @@ export default function AppShell() {
 
         <button
           type="button"
+          onClick={() => void signOut()}
           className="mt-1.5 flex h-[var(--app-rail-item-h)] w-[var(--app-rail-item-w)] flex-col items-center justify-center gap-1 rounded-[var(--app-rail-item-radius)] text-ink-on-dark transition hover:bg-[var(--sp-navy-tint-10)] hover:text-white"
         >
           <LogOut className="text-[length:var(--app-rail-icon)]" aria-hidden />
@@ -72,7 +72,9 @@ export default function AppShell() {
         <header className="sticky top-0 z-30 flex h-topbar items-center gap-5 border-b border-line bg-surface px-7">
           <div className="min-w-0">
             <h1 className="truncate text-lg leading-tight">{current?.label ?? "Glampro"}</h1>
-            <p className="text-xs text-ink-muted">Glampro Salon — {weekdayToday()}</p>
+            <p className="text-xs text-ink-muted">
+              {tenant?.name ?? "Glampro Salon"} — {weekdayToday()}
+            </p>
           </div>
 
           <div className="ml-auto flex items-center gap-3">
@@ -105,12 +107,24 @@ export default function AppShell() {
             </button>
 
             <div className="flex items-center gap-2.5 pl-1">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-soft text-xs font-bold text-purple">
-                {getInitials("Glampro Admin")}
+              <div
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-soft text-xs font-bold text-purple"
+                title={user ? `${user.name} — ${user.globalRole.replace("_", " ")}` : undefined}
+              >
+                {getInitials(user?.name ?? "Glampro Admin")}
               </div>
             </div>
           </div>
         </header>
+
+        {/* A suspended salon can sign in but not write (TENANCY.md §6), so the
+            shell says so once rather than leaving every save button to fail. */}
+        {isReadOnly ? (
+          <p role="status" className="bg-purple-soft px-7 py-2 text-sm text-purple">
+            This salon&rsquo;s subscription is suspended. You can look at everything, but changes
+            are disabled until it is renewed.
+          </p>
+        ) : null}
 
         <main className="flex-1 px-7 py-6">
           <Outlet />

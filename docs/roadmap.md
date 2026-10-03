@@ -59,14 +59,14 @@ a component.
 | Domain models      | Catalogue, customers, staff, departments, appointments, sales, packages, gift cards, credit, commissions, leaves                | Partly — catalogue, customers, departments, appointments, commissions; sales, credit and leaves remain |
 | Tenancy column     | `tenantId` non-null on every domain table; no query resolves a tenant from a body or a query parameter                          | **Done** — every model with a `tenantId` is scoped or a named reference                                |
 | Money and dates    | Money wider than the legacy `decimal(8,2)`; legacy date strings normalised once, in the importer                                | Partly — all money is `Decimal(12,2)`; the normalising importer is Phase 9                             |
-| Legacy gaps closed | The gaps in [`legacy/LEGACY-MAP.md`](legacy/LEGACY-MAP.md) §5 that change the schema are decided and reflected in the migration | Partly — Q4/Q7/Q8/Q9 settled; Q1/Q2/Q5/Q6 need production MySQL                                        |
+| Legacy gaps closed | The gaps in [`legacy/LEGACY-MAP.md`](legacy/LEGACY-MAP.md) §5 that change the schema are decided and reflected in the migration | Partly — Q1/Q4/Q7/Q8/Q9 settled; Q2/Q5/Q6 need production MySQL                                        |
 | ID strategy        | [`decisions/0002`](decisions/0002-tenant-id-equals-owner-id.md) implemented, with its import test passing                       | Not started                                                                                            |
 
 The phase splits into two commits. The tenant plane is the first, because the scoping
 extension is load-bearing and reviews better on its own; the domain models follow, and
 every new tenant-scoped model joins `TENANT_SCOPED_MODELS` in the same commit.
 
-## Phase 3 — Authentication and authorisation
+## Phase 3 — Authentication and authorisation · **Complete**
 
 | Deliverable              | Acceptance criterion                                                                                                                                                                                        |
 | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -75,6 +75,15 @@ every new tenant-scoped model joins `TENANT_SCOPED_MODELS` in the same commit.
 | Realm enforcement        | A `pos` or `mobile` token is refused by web-only routes and vice versa                                                                                                                                      |
 | Roles                    | Admin screens are gated in the API, not only in the UI                                                                                                                                                      |
 | Web session              | Unauthenticated visitors land on the login screen and return to where they came from                                                                                                                        |
+
+The last two rows are met in code but only partly _demonstrable_ yet, and the
+phase is called complete with that stated rather than hidden. `Realm enforcement`
+needs a `pos`/`mobile` route to refuse a `web` token and neither exists yet
+(**Q25**, closes with Phase 5 and the frozen mobile surface). `Roles` needs an
+admin-only route for `requireRole` to be mounted on — it is implemented and unit
+tested but has no caller (**Q26**, closes with the first admin-only write in
+Phase 4 or 8). Everything else is covered by tests, and the web session was built
+without inventing a design: see [ADR 0008](decisions/0008-login-screen-shape.md).
 
 ## Phase 4 — Master data screens
 

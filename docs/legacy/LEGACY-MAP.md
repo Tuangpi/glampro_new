@@ -12,12 +12,17 @@ out, and the mapping from its model to the new one.
 ## 1. Where it is
 
 ```
-/media/tuangpi/2f03b0ac-9b56-4f1a-ab1c-0529d7bb4e7910/home/singtuang/Documents/Aridient/Glampros/glampro
+/media/tuangpi/2f03b0ac-9b56-4f1a-ab1c-0529d7bb4e7911/home/singtuang/Documents/Aridient/Glampros/glampro
 ```
 
 A sibling directory of this repository — **outside** the monorepo, not a git
 submodule, not a dependency. It is reference material: read it, cite it, do not
 build against it.
+
+> The path above was wrong until 2026-10-03: it ended `…d7bb4e7910`, and that
+> mount holds an empty tree, so the legacy app could not be opened at all. It
+> ends `…d7bb4e7911` — the same mount as this repository. Q1 was only answerable
+> once that was fixed, which is the whole of §6 Q1.
 
 | Aspect       | Legacy                             | Rebuild                          |
 | ------------ | ---------------------------------- | -------------------------------- |
@@ -164,24 +169,24 @@ suspension, and no subscription history.
 Found while transcribing the migrations. None is a blocker; each costs time if
 discovered late.
 
-| #   | Finding                                                                            | Impact                                                     |
-| --- | ---------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| 1   | `sales.paymenttype_id` references a `paymenttypes` table **no migration creates**  | Either it exists in production only, or the column is dead |
-| 2   | `services.department` vs `products.department_id`                                  | Same relationship, two column names                        |
-| 3   | `users.email` is not unique at the DB level (application-enforced)                 | The migration must decide what to do with duplicates       |
-| 4   | `customers.email` is **globally** unique across tenants                            | Blocks one person being a customer at two salons           |
-| 5   | "Employee" and "user" are the same row; the words are interchangeable in the code  | **Resolved** — one row, §6 Q4                              |
-| 6   | `users.gender` is an integer, `customers.gender` a string                          | Normalise in the migration                                 |
-| 7   | `customers.dob` and `giftcards.expired_date` are strings                           | Normalise to dates; malformed values need a rule           |
-| 8   | `appointments.date` + `time` duplicate `start_time`                                | **Resolved** — `start_time` wins, §6 Q7                    |
-| 9   | `appointments.status` is a boolean for a five-state lifecycle                      | **Resolved** — booked/started, §6 Q8                       |
-| 10  | `employee_leaves` has no approval column although approve/reject endpoints exist   | **Resolved** — stored as free text in `granted_by`, §6 Q9  |
-| 11  | `employee_comissions.sale_amount` is an integer                                    | Truncated commission amounts                               |
-| 12  | Every money column is `decimal(8,2)`                                               | Max 999,999.99 — widen in the rebuild                      |
-| 13  | `MigrationController` exists but its routes are commented out                      | `migration_access` may gate nothing at all                 |
-| 14  | `get_user_appointments_history` route is commented out                             | Dead mobile endpoint                                       |
-| 15  | `POST /webhook` is public and unauthenticated (§1)                                 | Needs a signature check before it is re-implemented        |
-| 16  | `*_access` is read inconsistently — some code reads `users.*`, some `user_infos.*` | Any entitlement report from the legacy DB must check both  |
+| #   | Finding                                                                            | Impact                                                    |
+| --- | ---------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| 1   | `sales.paymenttype_id` references a `paymenttypes` table **no migration creates**  | **Resolved** — the column is dead, §6 Q1                  |
+| 2   | `services.department` vs `products.department_id`                                  | Same relationship, two column names                       |
+| 3   | `users.email` is not unique at the DB level (application-enforced)                 | The migration must decide what to do with duplicates      |
+| 4   | `customers.email` is **globally** unique across tenants                            | Blocks one person being a customer at two salons          |
+| 5   | "Employee" and "user" are the same row; the words are interchangeable in the code  | **Resolved** — one row, §6 Q4                             |
+| 6   | `users.gender` is an integer, `customers.gender` a string                          | Normalise in the migration                                |
+| 7   | `customers.dob` and `giftcards.expired_date` are strings                           | Normalise to dates; malformed values need a rule          |
+| 8   | `appointments.date` + `time` duplicate `start_time`                                | **Resolved** — `start_time` wins, §6 Q7                   |
+| 9   | `appointments.status` is a boolean for a five-state lifecycle                      | **Resolved** — booked/started, §6 Q8                      |
+| 10  | `employee_leaves` has no approval column although approve/reject endpoints exist   | **Resolved** — stored as free text in `granted_by`, §6 Q9 |
+| 11  | `employee_comissions.sale_amount` is an integer                                    | Truncated commission amounts                              |
+| 12  | Every money column is `decimal(8,2)`                                               | Max 999,999.99 — widen in the rebuild                     |
+| 13  | `MigrationController` exists but its routes are commented out                      | `migration_access` may gate nothing at all                |
+| 14  | `get_user_appointments_history` route is commented out                             | Dead mobile endpoint                                      |
+| 15  | `POST /webhook` is public and unauthenticated (§1)                                 | Needs a signature check before it is re-implemented       |
+| 16  | `*_access` is read inconsistently — some code reads `users.*`, some `user_infos.*` | Any entitlement report from the legacy DB must check both |
 
 Items 3, 4, 5, 8, 9 and 10 must be resolved before the corresponding phase is
 built, because they change the schema rather than just the code. They are tracked
@@ -195,16 +200,54 @@ production data.
 
 ## 6. Schema gates, answered from the legacy source
 
-These four changed the shape of the new schema, so they were resolved by reading
+These five changed the shape of the new schema, so they were resolved by reading
 the legacy application rather than guessed. They are the contract for the Phase 2
 migration, and each is marked resolved in [`../STATE.md`](../STATE.md) §4.1.
 
-| #   | Question                                       | Answer                                                                             |
-| --- | ---------------------------------------------- | ---------------------------------------------------------------------------------- |
-| Q4  | Is "employee" a different row from "user"?     | No — one row                                                                       |
-| Q7  | `appointments.date` + `time`, or `start_time`? | `start_time`                                                                       |
-| Q8  | What do `appointments.status` `0` / `1` mean?  | `0` booked, `1` started; completion is `finish_time`, not a status                 |
-| Q9  | Was leave approval ever stored?                | Yes, lossily — `employee_leaves.granted_by` holds an approver name or `"rejected"` |
+| #   | Question                                            | Answer                                                                             |
+| --- | --------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Q1  | Does `sales.paymenttype_id` reference a real table? | No — it is dead; drop it and keep `payment_type`                                   |
+| Q4  | Is "employee" a different row from "user"?          | No — one row                                                                       |
+| Q7  | `appointments.date` + `time`, or `start_time`?      | `start_time`                                                                       |
+| Q8  | What do `appointments.status` `0` / `1` mean?       | `0` booked, `1` started; completion is `finish_time`, not a status                 |
+| Q9  | Was leave approval ever stored?                     | Yes, lossily — `employee_leaves.granted_by` holds an approver name or `"rejected"` |
+
+### Q1 — `sales.paymenttype_id` is a dead column, not a missing table
+
+The question was whether a `paymenttypes` table exists in production and was
+simply never captured in a migration. It does not need production access to
+answer, because nothing in the application ever writes the column.
+
+Three pieces of evidence, all from the legacy source:
+
+1. **Nothing creates the table.** `grep -rn 'paymenttypes' database/` returns
+   nothing — not a `create`, not a `Schema::table`, not a foreign key. It is
+   absent from all 42 migrations.
+2. **No constraint was ever declared.** In
+   `database/migrations/2023_11_06_114584_create_sales_table.php:28` the column is
+   `$table->foreignUuid('paymenttype_id')->nullable();`. Lines 15–22 declare
+   `customer_id` and `employee_id` and then add explicit
+   `->foreign(...)->references('id')->on(...)` blocks; `paymenttype_id` has no such
+   block. `foreignUuid()` only casts the column type — it does not add a
+   constraint.
+3. **No code assigns it.** Across `app/`, `paymenttype_id` appears exactly once:
+   `app/Models/User/Sale/Sale.php:33`, inside `$fillable`. Not a controller, not a
+   request, not a seeder.
+
+The live path is the text column beside it: `SaleController::payByCash()`
+(`app/Http/Controllers/Api/v1/User/Sale/SaleController.php:167,183`) sets
+`$sale->payment_type = $paymentType`, alongside `session_id` for the gateway and
+`payment_status` (`0=unpaid, 1=paid`).
+
+**Consequence:** the rebuild's `Sale` has no `paymentTypeId`. Payment is
+`paymentMethod` typed against the `PaymentMethod` enum that already exists in
+`schema.prisma` (`CASH · CARD · BANK_TRANSFER · CHEQUE · OTHER`), plus
+`sessionId` and `paymentStatus`, and the importer maps legacy `payment_type`
+text onto the enum. A nullable, never-written, unconstrained uuid with no target
+table carries no data worth preserving.
+
+This is the question that was blocked on "inspect production MySQL". It was not:
+the code answers it, once §1's path is right.
 
 ### Q4 — employee and user are the same row
 

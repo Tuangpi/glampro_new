@@ -367,18 +367,18 @@ Developer-experience details worth knowing:
 
 ## 12. Roadmap and current status
 
-| Phase | Scope                                                              | Status                                           |
-| ----- | ------------------------------------------------------------------ | ------------------------------------------------ |
-| 0     | Monorepo, tooling, Docker, health endpoints, docs                  | **Complete**                                     |
-| 1     | Design system: handoff tokens, icon port, UI primitives, app shell | **Complete**                                     |
-| 2     | Full data model: catalogue, customers, staff, appointments, sales  | In progress                                      |
-| 3     | Auth: login / refresh / logout, roles, protected routes            | Partly — the API landed; the web session is next |
-| 4     | Master data screens: customers, products, services, staff          | Not started                                      |
-| 5     | POS Sale + confirmation (handoff screens 01–02)                    | Not started                                      |
-| 6     | Appointments and calendar (handoff screens 03, 06)                 | Not started                                      |
-| 7     | Dashboard and reports (handoff screens 05, 10)                     | Not started                                      |
-| 8     | Settings and integrations (handoff screen 11)                      | Not started                                      |
-| 9     | Hardening and the live MySQL → PostgreSQL data migration           | Not started                                      |
+| Phase | Scope                                                              | Status                                               |
+| ----- | ------------------------------------------------------------------ | ---------------------------------------------------- |
+| 0     | Monorepo, tooling, Docker, health endpoints, docs                  | **Complete**                                         |
+| 1     | Design system: handoff tokens, icon port, UI primitives, app shell | **Complete**                                         |
+| 2     | Full data model: catalogue, customers, staff, appointments, sales  | In progress                                          |
+| 3     | Auth: login / refresh / logout, roles, protected routes            | Complete — API and web both landed; Q25/Q26 unproven |
+| 4     | Master data screens: customers, products, services, staff          | Not started                                          |
+| 5     | POS Sale + confirmation (handoff screens 01–02)                    | Not started                                          |
+| 6     | Appointments and calendar (handoff screens 03, 06)                 | Not started                                          |
+| 7     | Dashboard and reports (handoff screens 05, 10)                     | Not started                                          |
+| 8     | Settings and integrations (handoff screen 11)                      | Not started                                          |
+| 9     | Hardening and the live MySQL → PostgreSQL data migration           | Not started                                          |
 
 `GET /api/auth/me` already exists so the session plumbing (token verification,
 database re-validation) is exercised end to end. Login, refresh and logout land

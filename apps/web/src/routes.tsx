@@ -2,9 +2,11 @@ import { lazy } from "react";
 import type { RouteObject } from "react-router";
 
 import AppShell from "@/components/layouts/AppShell";
+import { ProtectedRoute, PublicOnlyRoute } from "@/components/layouts/RouteGuards";
 import { lazyRoute } from "@/components/layouts/RouteWrapper";
 
 // ── Lazy-loaded pages ──────────────────────────────────────────────
+const Login = lazy(() => import("@/pages/Login"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
@@ -15,8 +17,16 @@ const NotFound = lazy(() => import("@/pages/NotFound"));
 // appointment flows (ADR 0005).
 const routes: RouteObject[] = [
   {
+    path: "/login",
+    element: <PublicOnlyRoute>{lazyRoute(<Login />)}</PublicOnlyRoute>,
+  },
+  {
     path: "/",
-    element: <AppShell />,
+    element: (
+      <ProtectedRoute>
+        <AppShell />
+      </ProtectedRoute>
+    ),
     children: [
       { index: true, element: lazyRoute(<Dashboard />) },
       { path: "*", element: lazyRoute(<NotFound />) },

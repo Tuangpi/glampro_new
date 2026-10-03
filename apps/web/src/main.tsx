@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router";
 
 import App from "./App";
 import { ToastProvider } from "@/components/ui/Toast";
+import { AuthProvider } from "@/contexts/AuthContext";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -27,10 +28,14 @@ if (!rootElement) {
 createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
+      {/* Inside the router: the auth guards read the location to build ?next=. */}
       <BrowserRouter>
-        <ToastProvider>
-          <App />
-        </ToastProvider>
+        {/* Inside the query client: signing out clears every cached query. */}
+        <AuthProvider>
+          <ToastProvider>
+            <App />
+          </ToastProvider>
+        </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

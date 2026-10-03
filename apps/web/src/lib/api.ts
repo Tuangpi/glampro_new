@@ -1,9 +1,46 @@
-import axios, { type AxiosInstance, type AxiosResponse } from "axios";
-import type { ApiErrorBody, ApiResponse, PaginatedResponse, QueryParams } from "@glampro/shared";
+import axios, {
+  type AxiosInstance,
+  type AxiosRequestConfig,
+  type AxiosResponse,
+  type InternalAxiosRequestConfig,
+} from "axios";
+import type {
+  ApiErrorBody,
+  ApiResponse,
+  AuthSession,
+  PaginatedResponse,
+  QueryParams,
+} from "@glampro/shared";
 
 import { showToast } from "@/components/ui/toast-store";
-import { clearSession, getAccessToken, setAuthNotice } from "@/lib/auth-storage";
+import {
+  clearSession,
+  getAccessToken,
+  getRefreshToken,
+  setAuthNotice,
+  setSession,
+} from "@/lib/auth-storage";
 import { normalisePaginated } from "@/lib/apiUtils";
+
+/**
+ * Per-request flags the interceptors below set on the axios config.
+ *
+ * Declared here rather than as a global module augmentation so the contract is
+ * visible where it is used and a typo is a type error.
+ */
+interface RequestFlags {
+  /** The refresh call itself: a 401 there must not start another refresh. */
+  _skipAuthRefresh?: boolean;
+  /** Stops a replay whose renewed token is refused a second time. */
+  _hasRetried?: boolean;
+}
+
+type FlaggedConfig = InternalAxiosRequestConfig & RequestFlags;
+
+/** Carries `_skipAuthRefresh` through axios, which types its config narrowly. */
+function flagged(flags: RequestFlags): AxiosRequestConfig {
+  return flags as AxiosRequestConfig;
+}
 
 /**
  * The single axios instance for the whole app.
@@ -24,28 +61,91 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+/**
+ * The one in-flight refresh, joined by every request that hits a 401.
+ *
+ * A screen that fires five queries at once would otherwise send five refreshes.
+ * The server **rotates** the refresh token on every use, so the first rotation
+ * makes the other four a replay — and a replay revokes the whole family
+ * (`services/auth.service.ts`). One shared promise is the only correct shape:
+ * every caller awaits the same renewal and the same stored token.
+ */
+let refreshInFlight: Promise<string> | null = null;
+
+function refreshAccessToken(): Promise<string> {
+  if (!refreshInFlight) {
+    refreshInFlight = (async () => {
+      const refreshToken = getRefreshToken();
+      if (!refreshToken) {
+        throw new Error("No refresh token is stored, so the session cannot be renewed.");
+      }
+
+      const response = await api.post<ApiResponse<AuthSession> | AuthSession>(
+        "/auth/refresh",
+        { refreshToken },
+        flagged({ _skipAuthRefresh: true }),
+      );
+      const session = extractData<AuthSession>(response.data);
+      setSession(session);
+      return session.accessToken;
+    })().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+
+  return refreshInFlight;
+}
+
+/** Sends a dead session to the login screen, remembering where it came from. */
+function redirectToLogin(): void {
+  if (window.location.pathname === "/login") return;
+
+  const next = `${window.location.pathname}${window.location.search}`;
+  window.location.assign(`/login?next=${encodeURIComponent(next)}`);
+}
+
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error) => {
+  async (error) => {
     const status: number | undefined = error.response?.status;
+    const config = error.config as FlaggedConfig | undefined;
+    const data = error.response?.data as Partial<ApiErrorBody> | undefined;
+
+    // Renew once, then replay the original request exactly once. The access
+    // token lives 15 minutes, so this is the difference between a screen that
+    // quietly renews and one that dumps the user on the login page.
+    if (
+      status === 401 &&
+      config &&
+      !config._skipAuthRefresh &&
+      !config._hasRetried &&
+      getAccessToken()
+    ) {
+      config._hasRetried = true;
+      try {
+        config.headers.Authorization = `Bearer ${await refreshAccessToken()}`;
+        return await api.request(config);
+      } catch {
+        // The renewal or the replay failed; fall through and end the session.
+      }
+    }
 
     if (status === 401) {
       const hadToken = Boolean(getAccessToken());
       clearSession();
 
       if (hadToken) {
-        const data = error.response?.data as Partial<ApiErrorBody> | undefined;
         if (data?.code === "SESSION_INVALIDATED" || data?.code === "SESSION_EXPIRED") {
           setAuthNotice(data.message ?? "Your session has expired. Please log in again.");
         }
-        // Hard redirect: the session is gone, so nothing in the React tree is
-        // worth preserving.
-        window.location.assign("/login");
+        // A hard redirect, not a router navigate: the session is gone, so every
+        // cached query and in-memory store is suspect. A full load also re-runs
+        // the cold-start bootstrap on the login screen.
+        redirectToLogin();
       }
     } else if (status !== undefined && status >= 500) {
       // Surface unexpected server failures globally; pages still handle their
       // own 4xx cases.
-      const data = error.response?.data as Partial<ApiErrorBody> | undefined;
       showToast("error", data?.message ?? "An unexpected server error occurred. Please try again.");
     }
 
@@ -128,6 +228,30 @@ export function getErrorMessage(error: unknown): string {
   if (isApiErrorBody(error)) return error.message;
   if (error instanceof Error) return error.message;
   return "An unexpected error occurred";
+}
+
+/**
+ * The machine-readable error code (`INVALID_CREDENTIALS`, `TENANT_SUSPENDED`,
+ * `SESSION_INVALIDATED`, …).
+ *
+ * Messages are for people and get localised and reworded; a screen branches on
+ * the code, so this is how it tells "your salon is closed" apart from "that
+ * password is wrong" without matching on copy.
+ */
+export function getErrorCode(error: unknown): string | undefined {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data;
+    if (typeof data === "object" && data !== null && "code" in data) {
+      const { code } = data as { code?: unknown };
+      return typeof code === "string" ? code : undefined;
+    }
+    return undefined;
+  }
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const { code } = error as { code?: unknown };
+    return typeof code === "string" ? code : undefined;
+  }
+  return undefined;
 }
 
 /** Field-level validation problems from a 422, keyed by dotted request path. */
