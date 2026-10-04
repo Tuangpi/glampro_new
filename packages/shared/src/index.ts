@@ -8,3 +8,6 @@ export * from "./constants.js";
 export * from "./types.js";
 export * from "./schemas/auth.js";
 export * from "./schemas/common.js";
+export * from "./schemas/customer.js";
+export * from "./schemas/catalogue.js";
+export * from "./schemas/staff.js";

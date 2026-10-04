@@ -22,3 +22,23 @@ export const idParamSchema = z.object({
 export const emailSchema = z.email().max(255);
 
 export const moneySchema = z.coerce.number().finite().min(0).max(99_999_999);
+
+/** Loyalty points earned per sale line. Legacy stored these as bare integers. */
+export const pointsSchema = z.coerce.number().int().min(0).max(1_000_000);
+
+/** Stock on hand, or sessions in a package. Negative stock is never valid. */
+export const quantitySchema = z.coerce.number().int().min(0).max(10_000_000);
+
+/**
+ * Booking duration in minutes.
+ *
+ * `Service.durationMinutes` exists because the legacy `services` table had no
+ * duration column even though booking needed one — it lived only on
+ * `appointments`. It is optional on the service and required by the appointment
+ * flow, which is where it actually decides a slot length.
+ */
+export const durationMinutesSchema = z.coerce
+  .number()
+  .int()
+  .min(5)
+  .max(24 * 60);
