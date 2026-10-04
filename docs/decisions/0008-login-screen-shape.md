@@ -57,9 +57,9 @@ contradictions.**
 
 A suspended salon is told it can sign in but not change anything
 ([`saas/TENANCY.md`](../saas/TENANCY.md) §6). That needed a third notice tone
-besides error and neutral, and amber — the obvious choice — **has no token**:
-`.status.progress` and `.tier.gold` use `#FFF4DE` on `#B9740A`, which is
-[Q23](../STATE.md) and is still unresolved.
+besides error and neutral, and amber — the obvious choice — **had no token** at the
+time: `.status.progress` and `.tier.gold` use `#FFF4DE` on `#B9740A`, which was Q23
+and was unresolved when this screen was written.
 
 So the read-only notice uses `--sp-purple-bg` / `--sp-purple`, the brand surface.
 This was a deliberate choice over three alternatives:
@@ -72,6 +72,13 @@ This was a deliberate choice over three alternatives:
 
 Purple is on-system, distinguishable from both neutral and red, and reversible
 when Q23 lands.
+
+**Update (2026-10-04):** Q23 has since been answered by
+[ADR 0009](0009-amber-joins-the-handoff-token-file.md), which added
+`--sp-amber-bg` / `--sp-amber-text` to the handoff token file. The banner is
+**still purple** — nothing required changing it — but the reason it was purple was
+the missing token, and that reason no longer holds. Switching it is a one-line
+change if the amber tone is wanted.
 
 ## Why not the alternatives
 
@@ -87,7 +94,7 @@ when Q23 lands.
 - **Positive.** Phase 3 closes and the login page exists, built from tested parts rather than from scratch.
 - **Positive.** A real design can replace this page without touching the auth layer: the context, the guard and the refresh queue are independent of how the form looks.
 - **Negative / accepted.** The screen is not pixel-matched to anything, so it carries no visual-fidelity claim. It is a composition, not a reproduction.
-- **Negative / accepted.** Q23 still blocks the dashboard's in-progress badge and the customers' tier column. Using purple here does not answer it.
+- **Negative / accepted.** At the time, Q23 blocked the dashboard's in-progress badge and the customers' tier column. Using purple here did not answer it. **Q23 is now closed** by [ADR 0009](0009-amber-joins-the-handoff-token-file.md); the banner remains purple by choice.
 - **Maintenance.** If a sign-in design arrives, `pages/Login.tsx` is the only file it replaces.
 
 ## Enforcement

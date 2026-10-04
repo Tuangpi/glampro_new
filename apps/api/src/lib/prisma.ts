@@ -44,6 +44,21 @@ export const TENANT_SCOPED_MODELS = [
   "GiftCard",
   "Appointment",
   "EmployeeCommission",
+  "EmployeePerformance",
+  "EmployeeLeave",
+  // POS. `SaleLine` is here rather than reaching the sale's tenant indirectly,
+  // because a line is queried on its own (the cart) as well as through its sale.
+  "Sale",
+  "SaleLine",
+  // Customer holdings and their ledgers. Every one carries `tenantId` in its own
+  // right: a redemption is read per customer, not only through its sale.
+  "CustomerPackageHolding",
+  "CustomerValuePackageHolding",
+  "CustomerGiftCardHolding",
+  "CustomerPoint",
+  "CustomerOutstanding",
+  "CustomerOutstandingPayment",
+  "CustomerRedemption",
 ] as const;
 
 /**

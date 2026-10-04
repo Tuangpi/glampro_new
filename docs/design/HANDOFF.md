@@ -264,11 +264,14 @@ stays a horizontally scrollable strip rather than the handoff's `flex: 1` centre
 draws its active underline as `border-b-2` rather than an `inset 0 -2px 0` shadow — the
 same 2px purple line, but a border cannot drift from the text colour.
 
-**One gap snapping could not close.** `.status.progress` (screen 05) and `.tier.gold`
-(screen 07) use an amber surface `#FFF4DE` with amber text `#B9740A`. Neither is near any
-token — the token file exposes amber only as a gradient stop — so `Badge` has no amber
-tone and this is recorded as Q23 in [`STATE.md`](../STATE.md) §4.2 instead. The dashboard
-and customers screens both need it.
+**The one gap snapping could not close is now closed.** `.status.progress` (screen 05) and `.tier.gold` (screen 07) use an amber surface `#FFF4DE` with amber text
+`#B9740A`. Neither is near any existing token — the token file exposed amber only as
+a gradient stop (`--sp-amber-grad-a/b`, the income tile) — so this was Q23 and
+`Badge` had no amber tone. [ADR 0009](../../../decisions/0009-amber-joins-the-handoff-token-file.md)
+settled it by adding `--sp-amber-bg` and `--sp-amber-text` **to the handoff token
+file**, carrying the values from the handoff's own CSS, and re-copying. `Badge` now
+offers `warning` as `bg-warning-soft text-warning`, and screens 05 and 07 can be
+built as drawn.
 
 How this was validated: the reconciled utilities are pinned by class-name assertions in
 each primitive's test file, which **cannot measure a pixel** — jsdom does no Tailwind

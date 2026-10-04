@@ -94,6 +94,52 @@ enum Gender {
   UNDISCLOSED
 }
 
+/// The POS sale lifecycle.
+///
+/// Legacy `sale_status` was a two-state flag documented as `0=hold, 1=done`. The
+/// two legacy states map straight onto `HELD` and `COMPLETED`; `VOID` is the
+/// third because a sale that has been paid for and then found to be wrong needs a
+/// recorded state, and deleting the row is not one — the receipt has to stay.
+enum SaleStatus {
+  HELD
+  COMPLETED
+  VOID
+}
+
+/// Which catalogue row a sale line points at.
+///
+/// Legacy kept five separate line tables — `sale_products`, `sale_services`,
+/// `sale_packages`, `sale_valuepackages` and `sale_gift_cards` — with columns
+/// identical apart from which foreign key they carried. The handoff cart (screens
+/// 01–02) searches, adds and prices all five kinds identically, so one table with
+/// this discriminator is both smaller and closer to what the screen does.
+enum SaleLineItemType {
+  SERVICE
+  PRODUCT
+  PACKAGE
+  VALUE_PACKAGE
+  GIFT_CARD
+}
+
+/// Whether the money has changed hands. Legacy `payment_status`, `0=unpaid,
+/// 1=paid`, widened into a named pair rather than a tinyint.
+enum PaymentStatus {
+  UNPAID
+  PAID
+}
+
+/// Whether a leave request was approved.
+///
+/// The legacy table had no status column at all: approval was inferable only by
+/// reading `granted_by`, which holds either an approver's name or the literal
+/// string `"rejected"` (Q9). Naming the outcome means no query has to
+/// string-match a person's name.
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id           String     @id @default(cuid())
   /// The isolation boundary. Staff are `User` rows (Q4 in legacy/LEGACY-MAP.md §6),
@@ -134,6 +180,13 @@ model User {
   /// A user with no appointments yet still appears in pickers.
   appointments Appointment[]
   commissions  EmployeeCommission[]
+  /// Sales this user rang up, and the lines credited to them. Per-line credit is
+  /// the redesign's model — legacy had four fixed `sold_by_one..four` slots on the
+  /// sale, which cannot express "these two people shared this one service".
+  sales        Sale[]
+  saleLines    SaleLine[]
+  performances EmployeePerformance[]
+  leaves       EmployeeLeave[]
 
   @@index([globalRole])
   @@index([tenantId])
@@ -232,6 +285,17 @@ model Tenant {
   giftCards           GiftCard[]
   appointments        Appointment[]
   employeeCommissions EmployeeCommission[]
+  sales               Sale[]
+  saleLines           SaleLine[]
+  packageHoldings     CustomerPackageHolding[]
+  valuePackageHoldings CustomerValuePackageHolding[]
+  giftCardHoldings    CustomerGiftCardHolding[]
+  customerPoints      CustomerPoint[]
+  customerOutstandings CustomerOutstanding[]
+  outstandingPayments CustomerOutstandingPayment[]
+  customerRedemptions CustomerRedemption[]
+  employeePerformances EmployeePerformance[]
+  employeeLeaves      EmployeeLeave[]
 
   @@index([status])
   @@map("tenants")
@@ -452,6 +516,7 @@ model Package {
 
   tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   services PackageService[]
+  customerHoldings CustomerPackageHolding[]
 
   @@index([tenantId])
   @@map("packages")
@@ -488,6 +553,7 @@ model ValuePackage {
 
   tenant   Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   services ValuePackageService[]
+  customerHoldings CustomerValuePackageHolding[]
 
   @@index([tenantId])
   @@map("value_packages")
@@ -525,6 +591,7 @@ model GiftCard {
   updatedAt DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerHoldings CustomerGiftCardHolding[]
 
   @@index([tenantId])
   @@map("gift_cards")
@@ -570,6 +637,14 @@ model Customer {
   tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   departments  CustomerDepartment[]
   appointments Appointment[]
+  sales            Sale[]
+  packageHoldings     CustomerPackageHolding[]
+  valuePackageHoldings CustomerValuePackageHolding[]
+  giftCardHoldings    CustomerGiftCardHolding[]
+  customerPoints      CustomerPoint[]
+  outstandings        CustomerOutstanding[]
+  outstandingPayments CustomerOutstandingPayment[]
+  redemptions         CustomerRedemption[]
 
   /// Per-tenant email uniqueness. A customer with no email is unconstrained, which
   /// Postgres treats as satisfying a unique index for every such row.
@@ -651,8 +726,380 @@ model EmployeeCommission {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// Optional: a commission can be booked against a period rather than a single
+  /// sale. A commissioned line still points at its sale.
+  sale   Sale?  @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([userId])
   @@map("employee_commissions")
+}
+/// A sale.
+///
+/// Four deliberate departures from legacy `sales`, each recorded in
+/// `legacy/LEGACY-MAP.md` §4:
+///
+/// 1. **`paymenttype_id` is gone.** It pointed at a table no migration created,
+///    carried no constraint and was never assigned (Q1). `paymentMethod` types the
+///    live `payment_type` text against the enum that already existed.
+/// 2. **`sale_date` + `sale_time` become `soldAt`.** One timestamp, so the two
+///    copies that could disagree cannot.
+/// 3. **`sold_by_one..four` are gone.** Four fixed slots cannot express the
+///    redesign's per-line attribution, so credit lives on `SaleLine.staffId` and
+///    `staffId` here is simply who rang it up.
+/// 4. **`sale_id` (a string used as the pivot key) is gone.** Lines key on this
+///    row's own id.
+model Sale {
+  id       String @id @default(cuid())
+  tenantId String
+  /// Optional: a walk-in sale has no customer row, and forcing one would mean
+  /// inventing a "cash customer" per salon. Legacy made this column non-null.
+  customerId String?
+  /// Who rang the sale up. Per-line credit is on `SaleLine.staffId`.
+  staffId    String?
+  status     SaleStatus @default(HELD)
+
+  totalQuantity Int
+  totalAmount   Decimal @db.Decimal(12, 2)
+  paidAmount    Decimal @db.Decimal(12, 2)
+
+  paymentMethod PaymentMethod?
+  /// Gateway session id, for a card payment that settles later.
+  sessionId String?
+  /// Legacy `payment_status` (`0=unpaid, 1=paid`).
+  paymentStatus PaymentStatus @default(UNPAID)
+
+  /// Legacy `sale_date` + `sale_time`.
+  soldAt   DateTime
+  note     String?
+  /// When a `VOID` sale was voided, so the receipt can say why.
+  voidedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  staff      User?    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  lines      SaleLine[]
+  commissions EmployeeCommission[]
+  points      CustomerPoint[]
+  outstanding CustomerOutstanding?
+  outstandingPayments CustomerOutstandingPayment[]
+  redemptions CustomerRedemption[]
+  performances EmployeePerformance[]
+
+  @@index([tenantId, soldAt])
+  @@index([tenantId, status])
+  @@index([customerId, soldAt])
+  @@map("sales")
+}
+
+/// One priced line of a sale — the cart row.
+///
+/// Legacy had five line tables with the same columns; they are one table here
+/// with `itemType` saying which catalogue the `itemId` refers to.
+///
+/// **`itemId` deliberately has no foreign key.** A polymorphic reference cannot
+/// be one, and five nullable columns each pointing at a different table would be
+/// the legacy mistake repeated in a new dialect. The application resolves the id
+/// against the table named by `itemType`; `itemName` is the snapshot taken at
+/// sale time, exactly as legacy stored `name` on every line, so a receipt still
+/// reads correctly after the catalogue row is renamed or archived.
+model SaleLine {
+  id       String @id @default(cuid())
+  tenantId String
+  saleId   String
+
+  itemType SaleLineItemType
+  itemId   String
+  itemName String
+
+  quantity Int
+  /// What one unit sold for after any discount. Legacy's single `paid_price`
+  /// column is ambiguous about whether it is per unit or per line (Q27); both are
+  /// stored so the schema is right under either answer, and the importer fills
+  /// whichever it can prove.
+  unitPrice Decimal @db.Decimal(12, 2)
+  /// `quantity * unitPrice`, stored rather than derived so a later edit to either
+  /// factor cannot silently rewrite a historical total.
+  lineTotal Decimal @db.Decimal(12, 2)
+
+  /// Who this line is credited to. Null means uncredited — a product sale with no
+  /// stylist on it, which is the common case.
+  staffId   String?
+  createdAt DateTime @default(now())
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sale    Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  staff   User?  @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  packageHolding      CustomerPackageHolding[]
+  valuePackageHolding CustomerValuePackageHolding[]
+  giftCardHolding     CustomerGiftCardHolding[]
+
+  @@index([tenantId])
+  @@index([saleId])
+  @@index([tenantId, itemType])
+  @@map("sale_lines")
+}
+/// Sessions a customer bought and has not yet spent. Legacy `customer_packages`.
+///
+/// The three holding tables stay three rather than collapsing into one because
+/// they hold genuinely different things: this counts sessions, the value-package
+/// holding counts money, and the gift-card holding is money plus a code that
+/// identifies it at the till. One table would be nullable in every column.
+model CustomerPackageHolding {
+  id         String  @id @default(cuid())
+  tenantId   String
+  customerId String
+  packageId  String
+  /// The line that granted it. Legacy reached the sale through `sale_package_id`,
+  /// a row that no longer exists separately.
+  saleLineId String?
+
+  /// Sessions granted, and how many are left. Reduced by `CustomerRedemption`.
+  quantity          Int
+  quantityRemaining Int
+  expiresAt         DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  package  Package   @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  saleLine SaleLine? @relation(fields: [saleLineId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@map("customer_package_holdings")
+}
+
+/// Money a customer bought against a value package. Legacy `customer_valuepackages`.
+model CustomerValuePackageHolding {
+  id             String  @id @default(cuid())
+  tenantId       String
+  customerId     String
+  valuePackageId String
+  saleLineId     String?
+
+  /// Legacy `amount`. Widened from `decimal(8,2)`, which capped a holding at
+  /// 99,999.99.
+  amount          Decimal   @db.Decimal(12, 2)
+  amountRemaining Decimal   @db.Decimal(12, 2)
+  expiresAt       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer     Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  valuePackage ValuePackage @relation(fields: [valuePackageId], references: [id], onDelete: Cascade)
+  saleLine     SaleLine?    @relation(fields: [saleLineId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@map("customer_value_package_holdings")
+}
+
+/// A gift card a customer holds. Legacy `customer_giftcards`.
+model CustomerGiftCardHolding {
+  id         String  @id @default(cuid())
+  tenantId   String
+  customerId String
+  giftCardId String
+  saleLineId String?
+
+  /// Legacy `value`.
+  value          Decimal   @db.Decimal(12, 2)
+  valueRemaining Decimal   @db.Decimal(12, 2)
+  /// Legacy `qr_code`. Opaque: the issuing authority is the legacy system's
+  /// business, so this is stored and never interpreted.
+  reference  String?
+  expiresAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  giftCard GiftCard @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+  saleLine SaleLine? @relation(fields: [saleLineId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@map("customer_gift_card_holdings")
+}
+
+/// Points earned. Legacy `customer_points`, one row per sale.
+///
+/// An append-only ledger rather than a balance on the customer: the balance is
+/// `SUM(point)`, so correcting a mistaken earn is an offsetting row and never an
+/// edit to history.
+model CustomerPoint {
+  id         String  @id @default(cuid())
+  tenantId   String
+  customerId String
+  saleId     String?
+
+  /// Signed: a refund or a correction writes a negative row rather than editing
+  /// the original. Legacy stored a plain integer.
+  point     Int
+  createdAt DateTime @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sale     Sale?    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, customerId])
+  @@map("customer_points")
+}
+/// What a customer still owes on a sale. Legacy `customer_outstandings`.
+model CustomerOutstanding {
+  id         String  @id @default(cuid())
+  tenantId   String
+  customerId String
+  /// Unique: a sale has at most one outstanding balance against it. Legacy left
+  /// `sale_id` nullable and unconstrained, so duplicates were possible.
+  saleId String? @unique
+
+  /// Legacy `unpaid_amount` — widened from `decimal(8,2)`.
+  unpaidAmount Decimal  @db.Decimal(12, 2)
+  note         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sale     Sale?    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  /// Legacy `customer_paid_outstandings`, a separate table keyed off this row. It
+  /// is a child of the outstanding, so it belongs under it.
+  payments CustomerOutstandingPayment[]
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@map("customer_outstandings")
+}
+
+/// A payment against an outstanding balance. Legacy `customer_paid_outstandings`.
+///
+/// Legacy stored `paid_date` and `paid_time` separately; one timestamp here.
+model CustomerOutstandingPayment {
+  id            String  @id @default(cuid())
+  tenantId      String
+  customerId    String
+  outstandingId String
+  saleId        String?
+
+  paidAmount Decimal   @db.Decimal(12, 2)
+  paidAt     DateTime
+  note       String?
+  createdAt  DateTime  @default(now())
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer    Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  outstanding CustomerOutstanding @relation(fields: [outstandingId], references: [id], onDelete: Cascade)
+  sale        Sale?              @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, customerId])
+  @@index([outstandingId])
+  @@map("customer_outstanding_payments")
+}
+
+/// A holding spent against a sale.
+///
+/// The legacy system had three tables here — `customer_used_packages`,
+/// `customer_used_valuepackages` and `customer_used_giftcards` — that differ only
+/// in which catalogue the id points at and in one extra column. That is one event
+/// with a discriminator, so it is one table.
+///
+/// It points at the **catalogue item**, not at the holding row. The balance lives
+/// on the holding, and reporting asks "how many of this package were spent", not
+/// "which of the four rows a customer bought it through".
+model CustomerRedemption {
+  id         String @id @default(cuid())
+  tenantId   String
+  customerId String
+  saleId     String
+
+  itemType SaleLineItemType
+  itemId   String
+
+  /// Sessions drawn for a package redemption; `1` for the money kinds.
+  quantity Int     @default(1)
+  /// Money drawn, for the two money kinds. Null for a package session.
+  amount Decimal? @db.Decimal(12, 2)
+  /// Legacy `use_date` + `use_time`, plus the nullable `unuse_time` that recorded
+  /// when a session was given back — the same instant, so it is `revertedAt`.
+  usedAt     DateTime
+  revertedAt DateTime?
+  /// Legacy `signature`, a longText the till wrote. Opaque, stored as-is.
+  signature  String?
+  createdAt  DateTime  @default(now())
+
+  tenant   Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sale     Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, customerId])
+  @@index([tenantId, itemType, itemId])
+  @@map("customer_redemptions")
+}
+/// What a staff member sold, per sale, for the performance report.
+///
+/// Legacy `employee_performances`. `item_id` and `type` were both nullable
+/// strings with no constraint; here the type is an enum and the id is the
+/// polymorphic catalogue reference `SaleLine` already uses, so the two agree.
+model EmployeePerformance {
+  id       String @id @default(cuid())
+  tenantId String
+  userId   String
+  saleId   String
+
+  itemType SaleLineItemType
+  itemId   String?
+  /// Legacy `amount` was an **integer**, so any fraction was truncated.
+  amount    Decimal  @db.Decimal(12, 2)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@index([saleId])
+  @@map("employee_performances")
+}
+
+/// A staff absence. Legacy `employee_leaves`.
+///
+/// `from_date` and `to_date` were nullable **strings** there, so the importer has
+/// to parse them (Q6); they are dates here. `am_pm` disambiguated a half-day and
+/// is kept, because dropping it would merge a morning leave with a full day's.
+///
+/// Approval was stored lossily in `granted_by` (Q9): it holds either an approver's
+/// name or the literal string `"rejected"`. That is not a reliable key, so it is
+/// kept as the free text it is, and `status` states the outcome plainly rather
+/// than string-matching somebody's name.
+model EmployeeLeave {
+  id       String @id @default(cuid())
+  tenantId String
+  userId   String
+
+  fromDate DateTime?
+  toDate   DateTime?
+  /// Legacy `am_pm` — `AM`, `PM` or `FULLDAY`. Free text in the legacy table.
+  halfDay  String?
+  /// Derivable from `grantedBy` only by string-matching a name, which is why it
+  /// is explicit here (Q9).
+  status    LeaveStatus @default(PENDING)
+  /// Legacy `granted_by` — an approver's name, or `"rejected"`. Preserved
+  /// verbatim; it is not a foreign key and must not be treated as one.
+  grantedBy String?
+  comment   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId])
+  @@index([tenantId, fromDate])
+  @@map("employee_leaves")
 }

@@ -37,6 +37,8 @@
   --sp-green-bg:       #E7F8EF; /* success tint background */
   --sp-green-text:     #1B8A57; /* text/icons on green tint */
   --sp-red:            #E14B4B; /* destructive actions, badges */
+  --sp-amber-bg:       #FFF4DE; /* amber tint background — `.status.progress`, `.tier.gold` */
+  --sp-amber-text:     #B9740A; /* text/icons on amber tint */
   --sp-amber-grad-a:   #FFC94D; /* dashboard income tile gradient start */
   --sp-amber-grad-b:   #FFB020; /* dashboard income tile gradient end */
 

@@ -16,12 +16,14 @@ defines when a file has to be written.
 | 0005 | [The rail has no Services destination](0005-rail-has-no-services-destination.md)                        | Accepted |
 | 0006 | [Snap handoff values to tokens; record the delta](0006-snap-handoff-values-to-tokens.md)                | Accepted |
 | 0007 | [Logout revokes the refresh token, not the user](0007-logout-revokes-the-refresh-token-not-the-user.md) | Accepted |
+| 0008 | [The sign-in screen is composed from the delivered system](0008-login-screen-shape.md)                  | Accepted |
+| 0009 | [The amber badge tone joins the handoff token file](0009-amber-joins-the-handoff-token-file.md)         | Accepted |
 
 `0001` is unallocated: `0002` is referenced by name from
 [`../saas/TENANCY.md`](../saas/TENANCY.md) and
 [`../legacy/LEGACY-MAP.md`](../legacy/LEGACY-MAP.md), and renumbering a referenced
 decision is worse than leaving the first slot empty. The next new decision is
-`0008`.
+`0010`.
 
 ## Rules
 

@@ -40,6 +40,10 @@
   --color-success-soft: var(--sp-green-bg);
   --color-success-text: var(--sp-green-text);
   --color-danger: var(--sp-red);
+  /* Amber — added to the handoff token file to settle Q23, then re-copied.
+     `--sp-amber-grad-a/b` are the income-tile gradient and stay separate. */
+  --color-warning: var(--sp-amber-text);
+  --color-warning-soft: var(--sp-amber-bg);
 
   /* Typography */
   --font-sans: var(--sp-font-family);
