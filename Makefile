@@ -107,6 +107,16 @@ typecheck: ## Type-check every workspace
 test: ## Run every test suite
 	npm run test
 
+# The API's isolation suites are skipped unless DATABASE_URL is set, so a bare
+# `npm run test` proves far less than it appears to. This runs the same suites with
+# the dev database attached, which is the only way tenant isolation is actually
+# exercised.
+.PHONY: test-db
+test-db: env ## Run every suite, including the ones that need a live database
+	@set -a; . ./.env.docker; set +a; \
+	DATABASE_URL="postgresql://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@localhost:$${POSTGRES_PORT:-5433}/$${POSTGRES_DB}" \
+	npm run test
+
 .PHONY: verify
 verify: ## Format check + lint + typecheck + tests (what CI runs)
 	npm run verify

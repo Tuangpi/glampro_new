@@ -5,6 +5,7 @@ import { API_PREFIX } from "@glampro/shared";
 
 import { env } from "./lib/env.js";
 import { authRouter } from "./routes/auth.routes.js";
+import { customersRouter } from "./routes/customers.routes.js";
 import { healthRouter, readiness } from "./routes/health.routes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { apiLimiter } from "./middleware/rateLimit.js";
@@ -62,6 +63,7 @@ export function createApp(): Express {
 
   // Feature routes. Each phase mounts its router here.
   app.use(`${API_PREFIX}/auth`, authRouter);
+  app.use(`${API_PREFIX}/customers`, customersRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
