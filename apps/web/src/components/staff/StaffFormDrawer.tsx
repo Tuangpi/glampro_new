@@ -1,0 +1,369 @@
+/**
+ * Create and edit a staff member — the form half of handoff screen 09.
+ *
+ * **Creating a person creates a login.** A staff member *is* a `User` row (see
+ * `packages/shared/src/schemas/staff.ts`): there is no second table, and no way to add
+ * someone who cannot sign in. That is also why a duplicate address is a 409 —
+ * `users.email` is globally unique — and why it lands on the Email control rather than
+ * in a banner: the API answers it as `details: [{ path: "body.email", message }]` like
+ * any other field error.
+ *
+ * **No password box on edit.** Changing a password is
+ * `POST /api/auth/change-password`, which bumps `tokenVersion` and ends every session
+ * ([ADR 0007]); a box here would be a way round the one flow that does it correctly.
+ * Email is read-only on edit for the same reason — `updateStaffSchema` has no `email`
+ * field at all, so the address is shown as text rather than as an editor for a value
+ * the API would silently drop.
+ *
+ * **`disabled` is the archive, not a delete.** The checkbox appears on edit only: a
+ * disabled user keeps their appointments and their commission history, and a new
+ * account that is already disabled is a mistake rather than a state anyone wants.
+ *
+ * As in the catalogue's drawer, the local checks below only catch what is worth not
+ * round-tripping; nothing here re-declares a contract rule, and `PASSWORD_MIN_LENGTH`
+ * is the contract's own constant rather than a second copy of 8.
+ */
+import { useState } from "react";
+
+import { PASSWORD_MIN_LENGTH, type GlobalRole, type StaffDetail } from "@glampro/shared";
+
+import Button from "@/components/ui/Button";
+import Checkbox from "@/components/ui/Checkbox";
+import Drawer from "@/components/ui/Drawer";
+import Input from "@/components/ui/Input";
+import Select from "@/components/ui/Select";
+import { showToast } from "@/components/ui/toast-store";
+import { ROLE_OPTIONS } from "@/constants/staff";
+import { useDepartments } from "@/hooks/useDepartments";
+import { useCreateStaff, useUpdateStaff } from "@/hooks/useStaff";
+import { getErrorMessage, getValidationDetails } from "@/lib/api";
+
+interface FormState {
+  name: string;
+  email: string;
+  password: string;
+  globalRole: GlobalRole;
+  phone: string;
+  position: string;
+  startDate: string;
+  endDate: string;
+  disabled: boolean;
+  departmentIds: string[];
+}
+
+/**
+ * `globalRole` starts at `STAFF`, the least privileged role — the same default the
+ * contract applies server-side, so a form that is submitted untouched cannot mint
+ * something more powerful than the person filling it in meant to.
+ */
+const EMPTY_FORM: FormState = {
+  name: "",
+  email: "",
+  password: "",
+  globalRole: "STAFF",
+  phone: "",
+  position: "",
+  startDate: "",
+  endDate: "",
+  disabled: false,
+  departmentIds: [],
+};
+
+function toForm(staff: StaffDetail): FormState {
+  return {
+    name: staff.name,
+    email: staff.email,
+    // Never seeded from the record: the list response carries no password material,
+    // and a filled-in box would imply the existing password could be read back.
+    password: "",
+    globalRole: staff.globalRole,
+    phone: staff.phone ?? "",
+    position: staff.position ?? "",
+    // `startDate`/`endDate` cross the wire as `YYYY-MM-DD` (the service slices the
+    // timestamp), which is exactly what a date input reads and writes.
+    startDate: staff.startDate ?? "",
+    endDate: staff.endDate ?? "",
+    disabled: staff.disabled,
+    departmentIds: staff.departments.map((department) => department.id),
+  };
+}
+
+/** An empty box means "not supplied" on create. */
+function optional(value: string): string | undefined {
+  const trimmed = value.trim();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+/** An empty box means "clear it" on update — an explicit `null`, not an absent key. */
+function clearable(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+/** Adds or removes one branch without disturbing the rest of the selection. */
+function toggle(list: string[], id: string): string[] {
+  return list.includes(id) ? list.filter((entry) => entry !== id) : [...list, id];
+}
+
+export interface StaffFormDrawerProps {
+  open: boolean;
+  /** `null` creates; a person edits. */
+  staff: StaffDetail | null;
+  onClose: () => void;
+}
+
+export default function StaffFormDrawer({ open, staff, onClose }: StaffFormDrawerProps) {
+  // Seeded once, at mount. The page gives this component a `key` that changes when
+  // the record or the open state changes, so a cancelled edit cannot leak its
+  // unsaved text into the next one — without an effect copying props into state,
+  // which renders twice on every open.
+  const [form, setForm] = useState<FormState>(() => (staff ? toForm(staff) : EMPTY_FORM));
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const departments = useDepartments();
+  const createStaff = useCreateStaff();
+  const updateStaff = useUpdateStaff();
+  const isSaving = createStaff.isPending || updateStaff.isPending;
+  const isEditing = staff !== null;
+
+  function setField<K extends keyof FormState>(field: K, value: FormState[K]) {
+    setForm((previous) => ({ ...previous, [field]: value }));
+  }
+
+  /** The API prefixes paths with the request part; a form only knows field names. */
+  const fieldError = (field: string): string | undefined =>
+    fieldErrors[field] ?? fieldErrors[`body.${field}`];
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFieldErrors({});
+    setFormError(null);
+
+    const name = form.name.trim();
+    const email = form.email.trim();
+
+    // Caught here so the user is not made to wait for a round trip, with the
+    // contract's own wording where it has one. The *shape* of the email is left to
+    // `emailSchema` on the server rather than being re-declared as a regex here.
+    const localErrors: Record<string, string> = {};
+    if (name === "") localErrors["name"] = "Name is required";
+
+    if (!isEditing) {
+      if (email === "") localErrors["email"] = "Email is required";
+      if (form.password.length < PASSWORD_MIN_LENGTH) {
+        localErrors["password"] = `Password must be at least ${PASSWORD_MIN_LENGTH} characters`;
+      }
+    }
+
+    if (Object.keys(localErrors).length > 0) {
+      setFieldErrors(localErrors);
+      return;
+    }
+
+    try {
+      if (staff) {
+        await updateStaff.mutateAsync({
+          id: staff.id,
+          input: {
+            name,
+            globalRole: form.globalRole,
+            phone: clearable(form.phone),
+            position: clearable(form.position),
+            startDate: clearable(form.startDate),
+            endDate: clearable(form.endDate),
+            disabled: form.disabled,
+            // Sent even when empty: on update the list *replaces* the selection, so
+            // an empty array is how every branch is taken off someone.
+            departmentIds: form.departmentIds,
+          },
+        });
+        showToast("success", "Staff member updated.");
+      } else {
+        await createStaff.mutateAsync({
+          name,
+          email,
+          password: form.password,
+          globalRole: form.globalRole,
+          phone: optional(form.phone),
+          position: optional(form.position),
+          startDate: optional(form.startDate),
+          endDate: optional(form.endDate),
+          departmentIds: form.departmentIds,
+        });
+        showToast("success", "Staff member added.");
+      }
+
+      onClose();
+    } catch (error) {
+      const details = getValidationDetails(error);
+      if (Object.keys(details).length > 0) {
+        setFieldErrors(details);
+        return;
+      }
+      setFormError(getErrorMessage(error));
+    }
+  }
+
+  return (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title={isEditing ? "Edit staff member" : "Add staff member"}
+      description={
+        isEditing
+          ? "Update this person’s role, profile and branches. Their login email is not changed here."
+          : "This creates the person and their login — a name, an email and a password are what the contract asks for."
+      }
+      widthClassName="max-w-xl"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={isSaving}>
+            Cancel
+          </Button>
+          <Button type="submit" form="staff-form" loading={isSaving}>
+            {isEditing ? "Save changes" : "Add staff member"}
+          </Button>
+        </>
+      }
+    >
+      <form id="staff-form" onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+        {formError ? (
+          <p role="alert" className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
+            {formError}
+          </p>
+        ) : null}
+
+        <Input
+          label="Name"
+          required
+          value={form.name}
+          onChange={(event) => setField("name", event.target.value)}
+          error={fieldError("name")}
+          maxLength={200}
+          autoFocus
+        />
+
+        {isEditing ? (
+          // Text, not a disabled input: the contract has no `email` on update, so a
+          // greyed-out box would suggest a field that is merely locked when in fact
+          // nothing about it would ever be sent.
+          <div className="flex flex-col gap-1.5">
+            <p className="text-sm font-medium text-ink">Email</p>
+            <p className="text-sm text-ink-body">{staff.email}</p>
+            <p className="text-xs text-ink-muted">
+              The address they sign in with, so it is not changed from this form.
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              label="Email"
+              type="email"
+              required
+              value={form.email}
+              onChange={(event) => setField("email", event.target.value)}
+              error={fieldError("email")}
+              hint="The address they sign in with."
+              maxLength={200}
+            />
+            <Input
+              label="Password"
+              type="password"
+              required
+              value={form.password}
+              onChange={(event) => setField("password", event.target.value)}
+              error={fieldError("password")}
+              hint={`At least ${PASSWORD_MIN_LENGTH} characters.`}
+              maxLength={200}
+            />
+          </div>
+        )}
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Select
+            label="Role"
+            value={form.globalRole}
+            onChange={(event) => setField("globalRole", event.target.value as GlobalRole)}
+            error={fieldError("globalRole")}
+            options={ROLE_OPTIONS}
+            hint="Decides what they are allowed to change."
+          />
+          <Input
+            label="Position"
+            value={form.position}
+            onChange={(event) => setField("position", event.target.value)}
+            error={fieldError("position")}
+            hint="Job title shown when they are booked."
+            maxLength={120}
+          />
+        </div>
+
+        <Input
+          label="Phone"
+          value={form.phone}
+          onChange={(event) => setField("phone", event.target.value)}
+          error={fieldError("phone")}
+          maxLength={64}
+        />
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input
+            label="Start date"
+            type="date"
+            value={form.startDate}
+            onChange={(event) => setField("startDate", event.target.value)}
+            error={fieldError("startDate")}
+          />
+          <Input
+            label="End date"
+            type="date"
+            value={form.endDate}
+            onChange={(event) => setField("endDate", event.target.value)}
+            error={fieldError("endDate")}
+          />
+        </div>
+
+        {/* A fieldset rather than a stack of loose checkboxes: the group needs a name
+            of its own, and `legend` is the only element that gives it one. */}
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="text-sm font-medium text-ink">Departments</legend>
+          {departments.isPending ? (
+            <p className="text-xs text-ink-muted">Loading departments…</p>
+          ) : departments.data && departments.data.length > 0 ? (
+            <div className="flex flex-col gap-1">
+              {departments.data.map((department) => (
+                <Checkbox
+                  key={department.id}
+                  label={department.name}
+                  checked={form.departmentIds.includes(department.id)}
+                  onChange={() =>
+                    setField("departmentIds", toggle(form.departmentIds, department.id))
+                  }
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-ink-muted">
+              This salon has no departments yet, so nobody can be assigned to one.
+            </p>
+          )}
+          {fieldError("departmentIds") ? (
+            <p role="alert" className="text-xs text-danger">
+              {fieldError("departmentIds")}
+            </p>
+          ) : null}
+        </fieldset>
+
+        {isEditing ? (
+          <Checkbox
+            label="Disabled"
+            checked={form.disabled}
+            onChange={(event) => setField("disabled", event.target.checked)}
+            hint="A disabled account cannot sign in. Their appointments and their history stay."
+          />
+        ) : null}
+      </form>
+    </Drawer>
+  );
+}

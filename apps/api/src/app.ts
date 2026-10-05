@@ -10,6 +10,7 @@ import { departmentsRouter } from "./routes/departments.routes.js";
 import { healthRouter, readiness } from "./routes/health.routes.js";
 import { productsRouter } from "./routes/products.routes.js";
 import { servicesRouter } from "./routes/services.routes.js";
+import { staffRouter } from "./routes/staff.routes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { apiLimiter } from "./middleware/rateLimit.js";
 
@@ -72,6 +73,9 @@ export function createApp(): Express {
   app.use(`${API_PREFIX}/products`, productsRouter);
   app.use(`${API_PREFIX}/services`, servicesRouter);
   app.use(`${API_PREFIX}/departments`, departmentsRouter);
+  // Screen 09. Reads are open to the salon; the writes are the first routes in the
+  // app to mount `requireRole` (Q26).
+  app.use(`${API_PREFIX}/staff`, staffRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

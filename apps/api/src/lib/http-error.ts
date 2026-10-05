@@ -44,5 +44,13 @@ export const forbidden = (
 export const notFound = (message = "Not found", code = "NOT_FOUND"): HttpError =>
   new HttpError(404, message, { code });
 
-export const conflict = (message: string, code = "CONFLICT"): HttpError =>
-  new HttpError(409, message, { code });
+/**
+ * A 409, for a write that collides with something that already exists.
+ *
+ * `details` is the same `[{ path, message }]` shape a 422 carries, so the browser
+ * puts a conflict on the **control that caused it** rather than at the top of the
+ * form: the staff form is the first caller, and "that email already has an
+ * account" belongs on the email field, not in a banner.
+ */
+export const conflict = (message: string, code = "CONFLICT", details?: unknown): HttpError =>
+  new HttpError(409, message, { code, details });

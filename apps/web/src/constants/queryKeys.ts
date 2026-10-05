@@ -68,6 +68,12 @@ export const queryKeys = {
   staff: {
     list: () => ["staff", "list"] as const,
     detail: (id: string) => ["staff", "detail", id] as const,
+    /**
+     * Server-side aggregates for the screen's stat tiles, the same shape as the
+     * catalogue's `count` key: the filter object is appended by the caller, so the
+     * Active tile and the Disabled tile ask two questions and cache two answers.
+     */
+    count: () => ["staff", "count"] as const,
   },
 
   reports: {

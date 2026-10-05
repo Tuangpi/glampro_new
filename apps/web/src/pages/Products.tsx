@@ -44,6 +44,7 @@ import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import Pagination from "@/components/ui/Pagination";
 import Skeleton from "@/components/ui/Skeleton";
+import StatTile from "@/components/ui/StatTile";
 import Table, { type TableColumn } from "@/components/ui/Table";
 import Tabs, { type TabItem } from "@/components/ui/Tabs";
 import { useAuth } from "@/contexts/AuthContext";
@@ -55,16 +56,6 @@ import { cn, formatDuration, formatPrice } from "@/lib/utils";
 const PAGE_SIZE = 20;
 
 type CatalogueTab = "products" | "services";
-
-/**
- * The tile icon tints, taken from `Badge`'s own palette so a warning tile is the
- * same amber the warning badge is.
- */
-const TILE_TONES = {
-  purple: "bg-purple-soft text-purple",
-  warning: "bg-warning-soft text-warning",
-  danger: "bg-danger/10 text-danger",
-} as const;
 
 export default function Products() {
   const { isReadOnly } = useAuth();
@@ -356,38 +347,6 @@ export default function Products() {
           onClose={() => setDrawerOpen(false)}
         />
       )}
-    </div>
-  );
-}
-
-/**
- * A stat tile is presentational: it shows a count and never filters, which is what
- * the handoff draws. `undefined` renders as an em dash rather than `0`, so a tile
- * that has not answered yet cannot be read as "none".
- */
-interface StatTileProps {
-  icon: React.ReactNode;
-  value: number | undefined;
-  label: string;
-  tone?: keyof typeof TILE_TONES;
-}
-
-function StatTile({ icon, value, label, tone = "purple" }: StatTileProps) {
-  return (
-    <div className="flex items-center gap-3 rounded-card border border-line bg-surface px-4.5 py-3.5">
-      <span
-        aria-hidden
-        className={cn(
-          "flex size-9 shrink-0 items-center justify-center rounded-md",
-          TILE_TONES[tone],
-        )}
-      >
-        {icon}
-      </span>
-      <div className="min-w-0">
-        <p className="text-lg font-heavy leading-tight text-ink">{value ?? "—"}</p>
-        <p className="text-xs text-ink-muted">{label}</p>
-      </div>
     </div>
   );
 }
