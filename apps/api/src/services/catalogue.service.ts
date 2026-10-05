@@ -31,7 +31,7 @@ import {
   type UpdateServiceInput,
 } from "@glampro/shared";
 
-import { notFound } from "../lib/http-error.js";
+import { notFound, validationFailed } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";
 import { currentScope } from "../lib/tenant-context.js";
 import { paginated, parsePagination } from "../utils/pagination.js";
@@ -359,4 +359,33 @@ export async function updateService(id: string, input: UpdateServiceInput): Prom
   });
 
   return getService(id);
+}
+
+/**
+ * Refuses service ids that are not this salon's.
+ *
+ * The sibling of `assertDepartmentsExist`, and here for the same reason: a package
+ * is sold against a set of services (`PackageService`, from legacy
+ * `package_services`), and a forged id would otherwise become a cross-tenant link
+ * row. `Service` is tenant-scoped, so this query cannot see another salon's rows and
+ * a foreign id fails the count rather than linking.
+ *
+ * `validationFailed` rather than `notFound`, so the 422 carries `details[].path` and
+ * the package form puts the message on the control that caused it.
+ */
+export async function assertServicesExist(
+  ids: string[] | undefined,
+  path = "body.serviceIds",
+): Promise<void> {
+  if (!ids || ids.length === 0) return;
+
+  const wanted = [...new Set(ids)];
+  const found = await prisma.service.findMany({
+    where: { id: { in: wanted } },
+    select: { id: true },
+  });
+
+  if (found.length !== wanted.length) {
+    throw validationFailed([{ path, message: "One or more selected services do not exist." }]);
+  }
 }

@@ -1,13 +1,14 @@
 /**
  * Products & Inventory — handoff screen 08.
  *
- * **One catalogue, two tabs.** Products and Services are the tabs this screen
- * builds. The handoff also draws Packages and Gift cards, and neither is here
- * because the model has no package or gift-card catalogue to list yet — an empty
- * tab would read to a salon as "this salon has none", which is a different and
- * wrong statement (`docs/design/HANDOFF.md` §6 item 5). They arrive with the phase
- * that has the data behind them. There is no Services entry on the rail for the
- * same reason the tab exists (ADR 0005).
+ * **One catalogue, four tabs.** Products, Services, Packages and Gift cards are the
+ * tabs handoff screen 08 draws, and all four are here. The last two were held back
+ * until the phase that needed them, because an empty tab reads to a salon as "this
+ * salon has none" — a different and wrong statement (`docs/design/HANDOFF.md` §6
+ * item 5). They are **add-on modules**, so a salon that has not bought one gets a
+ * 403 `MODULE_NOT_ENTITLED` from the API and the tab says so, rather than showing a
+ * list that is empty for a reason the screen cannot see. There is no Services entry
+ * on the rail for the same reason the tab exists (ADR 0005).
  *
  * **The Cost column and the "Inventory value" tile are absent.** Neither the schema
  * nor the legacy database the schema was derived from ever held a cost, so both
@@ -30,15 +31,21 @@ import { useEffect, useState } from "react";
 
 import type {
   CatalogStatusValue,
+  GiftCardDetail,
+  GiftCardSummary,
+  PackageDetail,
+  PackageSummary,
   ProductDetail,
   ProductSummary,
   ServiceDetail,
   ServiceSummary,
 } from "@glampro/shared";
 
+import GiftCardFormDrawer from "@/components/catalogue/GiftCardFormDrawer";
+import PackageFormDrawer from "@/components/catalogue/PackageFormDrawer";
 import ProductFormDrawer from "@/components/catalogue/ProductFormDrawer";
 import ServiceFormDrawer from "@/components/catalogue/ServiceFormDrawer";
-import { AlertTriangle, Package, Scissors, Search } from "@/components/icons";
+import { AlertTriangle, Gift, Grid, Package, Scissors, Search } from "@/components/icons";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
@@ -48,14 +55,62 @@ import StatTile from "@/components/ui/StatTile";
 import Table, { type TableColumn } from "@/components/ui/Table";
 import Tabs, { type TabItem } from "@/components/ui/Tabs";
 import { useAuth } from "@/contexts/AuthContext";
+import { useGiftCardList } from "@/hooks/useGiftCards";
+import { usePackageList } from "@/hooks/usePackages";
 import { useProductCount, useProductList } from "@/hooks/useProducts";
 import { useServiceCount, useServiceList } from "@/hooks/useServices";
-import { get, getErrorMessage } from "@/lib/api";
-import { cn, formatDuration, formatPrice } from "@/lib/utils";
+import { get, getErrorCode, getErrorMessage } from "@/lib/api";
+import { cn, formatDate, formatDuration, formatPrice } from "@/lib/utils";
 
 const PAGE_SIZE = 20;
 
-type CatalogueTab = "products" | "services";
+type CatalogueTab = "products" | "services" | "packages" | "gift-cards";
+
+/**
+ * What each tab's rows are called, and what to say when there are none.
+ *
+ * One record rather than a chain of ternaries in the panel: four tabs of copy is
+ * past the point where a nested conditional stays readable, and the empty state's
+ * sentence is specific to the kind of row it is about.
+ */
+const NOUNS: Record<
+  CatalogueTab,
+  {
+    noun: string;
+    icon: React.ReactNode;
+    addLabel: string;
+    empty: string;
+    /** The add-on's display name, for a tab the salon may not have bought. */
+    addOn?: string;
+  }
+> = {
+  products: {
+    noun: "product",
+    icon: <Package />,
+    addLabel: "Add product",
+    empty: "Add your first product to start tracking what is on the shelf.",
+  },
+  services: {
+    noun: "service",
+    icon: <Scissors />,
+    addLabel: "Add service",
+    empty: "Add a service so it can be booked and sold.",
+  },
+  packages: {
+    noun: "package",
+    icon: <Grid />,
+    addLabel: "Add package",
+    empty: "Add a bundle of sessions a client can pay for up front.",
+    addOn: "Packages",
+  },
+  "gift-cards": {
+    noun: "gift card",
+    icon: <Gift />,
+    addLabel: "Add gift card",
+    empty: "Add a gift card so the salon can sell prepaid value.",
+    addOn: "Gift cards",
+  },
+};
 
 export default function Products() {
   const { isReadOnly } = useAuth();
@@ -66,6 +121,8 @@ export default function Products() {
   const [page, setPage] = useState(1);
   const [editingProduct, setEditingProduct] = useState<ProductDetail | null>(null);
   const [editingService, setEditingService] = useState<ServiceDetail | null>(null);
+  const [editingPackage, setEditingPackage] = useState<PackageDetail | null>(null);
+  const [editingGiftCard, setEditingGiftCard] = useState<GiftCardDetail | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   // Typing should not fire a query per keystroke, but the box must still feel
@@ -80,6 +137,8 @@ export default function Products() {
 
   const products = useProductList({ page, pageSize: PAGE_SIZE, search: search || undefined });
   const services = useServiceList({ page, pageSize: PAGE_SIZE, search: search || undefined });
+  const packages = usePackageList({ page, pageSize: PAGE_SIZE, search: search || undefined });
+  const giftCards = useGiftCardList({ page, pageSize: PAGE_SIZE, search: search || undefined });
 
   // Tiles. Each number is a server-side count over the whole catalogue (ADR 0010):
   // "Total items" adds the two catalogue counts together, and the low-stock count is
@@ -89,11 +148,11 @@ export default function Products() {
   const outOfStock = useProductCount({ lowStock: true, threshold: 0 });
   const serviceTotal = useServiceCount();
 
-  const isProducts = tab === "products";
-
   function openCreate() {
     setEditingProduct(null);
     setEditingService(null);
+    setEditingPackage(null);
+    setEditingGiftCard(null);
     setDrawerOpen(true);
   }
 
@@ -106,6 +165,16 @@ export default function Products() {
 
   async function openEditService(service: ServiceSummary) {
     setEditingService(await get<ServiceDetail>(`/services/${service.id}`));
+    setDrawerOpen(true);
+  }
+
+  async function openEditPackage(bundle: PackageSummary) {
+    setEditingPackage(await get<PackageDetail>(`/packages/${bundle.id}`));
+    setDrawerOpen(true);
+  }
+
+  async function openEditGiftCard(card: GiftCardSummary) {
+    setEditingGiftCard(await get<GiftCardDetail>(`/gift-cards/${card.id}`));
     setDrawerOpen(true);
   }
 
@@ -202,7 +271,107 @@ export default function Products() {
         ]),
   ];
 
-  // Each panel renders only while its tab is the active one, so the two lists are
+  /**
+   * A bundle row: what it holds and what it may be spent on. There is no stock
+   * column and no branch, because a package has neither — and no loyalty points,
+   * which the model does not carry for a bundle either.
+   */
+  const packageColumns: TableColumn<PackageSummary>[] = [
+    {
+      key: "item",
+      header: "Item",
+      cell: (row) => (
+        <div className="min-w-0">
+          <p className="truncate font-bold text-ink">{row.name}</p>
+          <p className="truncate text-xs text-ink-muted">{row.description ?? "No description"}</p>
+        </div>
+      ),
+    },
+    { key: "sessions", header: "Sessions", align: "right", cell: (row) => row.sessionCount },
+    {
+      key: "price",
+      header: "Price",
+      align: "right",
+      cell: (row) => formatPrice(row.nonmemberPrice),
+    },
+    {
+      key: "memberPrice",
+      header: "Member price",
+      align: "right",
+      cell: (row) => formatPrice(row.memberPrice),
+    },
+    {
+      key: "services",
+      header: "Covers",
+      align: "right",
+      cell: (row) =>
+        row.serviceCount === 0
+          ? "Any service"
+          : `${row.serviceCount} ${row.serviceCount === 1 ? "service" : "services"}`,
+    },
+    { key: "status", header: "Status", cell: (row) => <StatusCell status={row.status} /> },
+    ...(isReadOnly
+      ? []
+      : [
+          {
+            key: "actions",
+            header: "Edit",
+            align: "right" as const,
+            cell: (row: PackageSummary) => (
+              <Button variant="secondary" size="sm" onClick={() => void openEditPackage(row)}>
+                Edit
+              </Button>
+            ),
+          },
+        ]),
+  ];
+
+  /**
+   * A gift-card row.
+   *
+   * **There is no Status column**, and that is a decision rather than an oversight:
+   * the handoff draws one for this tab and `GiftCard` has no status column, so a
+   * badge here would be an invented state. The same rule keeps the Cost column off
+   * the Products tab and the Shifts column off screen 09, and
+   * `catalogue.test.ts` asserts the field is absent so a later "fix" cannot add one
+   * back.
+   */
+  const giftCardColumns: TableColumn<GiftCardSummary>[] = [
+    {
+      key: "item",
+      header: "Item",
+      cell: (row) => (
+        <div className="min-w-0">
+          <p className="truncate font-bold text-ink">{row.name}</p>
+          <p className="truncate text-xs text-ink-muted">{row.remark ?? "No remark"}</p>
+        </div>
+      ),
+    },
+    { key: "value", header: "Value", align: "right", cell: (row) => formatPrice(row.value) },
+    {
+      key: "expires",
+      header: "Expires",
+      align: "right",
+      // "Never" rather than a dash: no expiry is a product decision, not missing data.
+      cell: (row) => (row.expiresAt === null ? "Never" : formatDate(row.expiresAt)),
+    },
+    ...(isReadOnly
+      ? []
+      : [
+          {
+            key: "actions",
+            header: "Edit",
+            align: "right" as const,
+            cell: (row: GiftCardSummary) => (
+              <Button variant="secondary" size="sm" onClick={() => void openEditGiftCard(row)}>
+                Edit
+              </Button>
+            ),
+          },
+        ]),
+  ];
+
+  // Each panel renders only while its tab is the active one, so the four lists are
   // never asked for at once and each panel is handed its own tab's state.
   const tabs: TabItem[] = [
     {
@@ -210,9 +379,8 @@ export default function Products() {
       label: "Products",
       content: (
         <CataloguePanel<ProductSummary>
-          noun="product"
+          tab="products"
           caption="Products in this salon"
-          addLabel="Add product"
           columns={productColumns}
           rows={products.data?.data ?? []}
           search={search}
@@ -235,9 +403,8 @@ export default function Products() {
       label: "Services",
       content: (
         <CataloguePanel<ServiceSummary>
-          noun="service"
+          tab="services"
           caption="Services in this salon"
-          addLabel="Add service"
           columns={serviceColumns}
           rows={services.data?.data ?? []}
           search={search}
@@ -249,6 +416,54 @@ export default function Products() {
           total={services.data?.total ?? 0}
           page={services.data?.page ?? page}
           pageCount={services.data?.pageCount ?? 1}
+          onAdd={openCreate}
+          onPageChange={setPage}
+          onClearSearch={() => setSearchInput("")}
+        />
+      ),
+    },
+    {
+      id: "packages",
+      label: "Packages",
+      content: (
+        <CataloguePanel<PackageSummary>
+          tab="packages"
+          caption="Packages in this salon"
+          columns={packageColumns}
+          rows={packages.data?.data ?? []}
+          search={search}
+          isReadOnly={isReadOnly}
+          isPending={packages.isPending}
+          isFetching={packages.isFetching}
+          isError={packages.isError}
+          error={packages.error}
+          total={packages.data?.total ?? 0}
+          page={packages.data?.page ?? page}
+          pageCount={packages.data?.pageCount ?? 1}
+          onAdd={openCreate}
+          onPageChange={setPage}
+          onClearSearch={() => setSearchInput("")}
+        />
+      ),
+    },
+    {
+      id: "gift-cards",
+      label: "Gift cards",
+      content: (
+        <CataloguePanel<GiftCardSummary>
+          tab="gift-cards"
+          caption="Gift cards in this salon"
+          columns={giftCardColumns}
+          rows={giftCards.data?.data ?? []}
+          search={search}
+          isReadOnly={isReadOnly}
+          isPending={giftCards.isPending}
+          isFetching={giftCards.isFetching}
+          isError={giftCards.isError}
+          error={giftCards.error}
+          total={giftCards.data?.total ?? 0}
+          page={giftCards.data?.page ?? page}
+          pageCount={giftCards.data?.pageCount ?? 1}
           onAdd={openCreate}
           onPageChange={setPage}
           onClearSearch={() => setSearchInput("")}
@@ -287,7 +502,7 @@ export default function Products() {
           </div>
 
           <Button onClick={openCreate} disabled={isReadOnly}>
-            {isProducts ? "Add product" : "Add service"}
+            {NOUNS[tab].addLabel}
           </Button>
         </div>
       </header>
@@ -329,21 +544,36 @@ export default function Products() {
         }}
       />
 
-      {isProducts ? (
+      {/* One drawer at a time, chosen by the active tab. The `key` remounting on
+          open and on record change is what clears the form — an effect copying props
+          into state would render twice on every open, and resetting the record alone
+          would leave a stale edit behind on reopen. */}
+      {tab === "products" ? (
         <ProductFormDrawer
-          // Remounting on open and on record change is what clears the form. An
-          // effect copying props into state would render twice on every open, and
-          // resetting the record alone would leave a stale edit behind on reopen.
           key={`product:${editingProduct?.id ?? "new"}:${drawerOpen}`}
           open={drawerOpen}
           product={editingProduct}
           onClose={() => setDrawerOpen(false)}
         />
-      ) : (
+      ) : tab === "services" ? (
         <ServiceFormDrawer
           key={`service:${editingService?.id ?? "new"}:${drawerOpen}`}
           open={drawerOpen}
           service={editingService}
+          onClose={() => setDrawerOpen(false)}
+        />
+      ) : tab === "packages" ? (
+        <PackageFormDrawer
+          key={`package:${editingPackage?.id ?? "new"}:${drawerOpen}`}
+          open={drawerOpen}
+          bundle={editingPackage}
+          onClose={() => setDrawerOpen(false)}
+        />
+      ) : (
+        <GiftCardFormDrawer
+          key={`gift-card:${editingGiftCard?.id ?? "new"}:${drawerOpen}`}
+          open={drawerOpen}
+          card={editingGiftCard}
           onClose={() => setDrawerOpen(false)}
         />
       )}
@@ -391,11 +621,10 @@ function StatusCell({ status }: { status: CatalogStatusValue }) {
  * screen 08.
  */
 interface CataloguePanelProps<T extends { id: string }> {
-  /** Singular noun for a row; pluralised for the copy. */
-  noun: "product" | "service";
+  /** Which tab this is, for the row's noun, its icon and the empty-state copy. */
+  tab: CatalogueTab;
   /** Accessible name for the table and its pager. */
   caption: string;
-  addLabel: string;
   columns: TableColumn<T>[];
   rows: T[];
   search: string;
@@ -413,9 +642,8 @@ interface CataloguePanelProps<T extends { id: string }> {
 }
 
 function CataloguePanel<T extends { id: string }>({
-  noun,
+  tab,
   caption,
-  addLabel,
   columns,
   rows,
   search,
@@ -431,8 +659,15 @@ function CataloguePanel<T extends { id: string }>({
   onPageChange,
   onClearSearch,
 }: CataloguePanelProps<T>) {
+  const { noun, icon, addLabel, empty, addOn } = NOUNS[tab];
   const plural = `${noun}s`;
-  const icon = noun === "product" ? <Package /> : <Scissors />;
+  /**
+   * An add-on tab this salon has not bought answers `403 MODULE_NOT_ENTITLED`.
+   * "The list could not be loaded" would name the wrong problem — nothing failed —
+   * and an empty list would claim the salon has none, which is a different and false
+   * statement. The API's own message says which add-on to enable.
+   */
+  const needsAddOn = getErrorCode(error) === "MODULE_NOT_ENTITLED";
 
   return (
     <section
@@ -455,10 +690,20 @@ function CataloguePanel<T extends { id: string }>({
         </div>
       ) : isError ? (
         <EmptyState
-          title={`The ${plural} list could not be loaded`}
+          title={
+            needsAddOn
+              ? `The ${addOn ?? plural} add-on is not enabled`
+              : `The ${plural} list could not be loaded`
+          }
           description={getErrorMessage(error)}
           icon={icon}
-          action={<Button onClick={() => window.location.reload()}>Try again</Button>}
+          // A refusal is not a failure to retry: reloading asks the same question and
+          // gets the same answer until the salon buys the module.
+          action={
+            needsAddOn ? undefined : (
+              <Button onClick={() => window.location.reload()}>Try again</Button>
+            )
+          }
         />
       ) : (
         <>
@@ -483,11 +728,7 @@ function CataloguePanel<T extends { id: string }>({
               ) : (
                 <EmptyState
                   title={`No ${plural} yet`}
-                  description={
-                    noun === "product"
-                      ? "Add your first product to start tracking what is on the shelf."
-                      : "Add a service so it can be booked and sold."
-                  }
+                  description={empty}
                   icon={icon}
                   action={
                     <Button onClick={onAdd} disabled={isReadOnly}>

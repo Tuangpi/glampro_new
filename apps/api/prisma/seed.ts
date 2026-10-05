@@ -181,6 +181,38 @@ async function seedModules(): Promise<void> {
   console.log(`  ✔ ${MODULE_CODES.length} modules (${coreCount} core)`);
 }
 
+/**
+ * Grants the demo salon the add-ons screen 08's last two tabs need.
+ *
+ * A `TenantModule` row is how entitlement is recorded, and **nothing creates one
+ * yet** — the platform console does that, and it has no phase (see `docs/roadmap.md`
+ * → Not scheduled yet). Seeding them keeps a fresh `db:reset` showing the Packages
+ * and Gift cards tabs rather than a 403 that reads as "this feature is broken" when
+ * the truth is "this salon has not bought it".
+ *
+ * Development only: `SEED_MODE=production` seeds the module catalogue and one
+ * administrator, and grants nobody anything.
+ */
+async function seedEntitlements(tenantId: string): Promise<void> {
+  for (const code of ["packages", "giftCards"] as const) {
+    // `seedModules()` has already created the row; this upsert is here so the
+    // function is correct on its own rather than depending on call order.
+    const module = await prisma.module.upsert({
+      where: { code },
+      update: {},
+      create: { code, name: MODULE_NAMES[code], category: "Add-on", isCore: false },
+    });
+
+    await prisma.tenantModule.upsert({
+      where: { tenantId_moduleId: { tenantId, moduleId: module.id } },
+      update: { expiresAt: null },
+      create: { tenantId, moduleId: module.id },
+    });
+  }
+
+  console.log("  ✔ entitlements — packages, giftCards (demo salon)");
+}
+
 async function main(): Promise<void> {
   const users = SEED_MODE === "production" ? [resolveAdmin()] : [resolveAdmin(), ...DEMO_USERS];
 
@@ -204,6 +236,10 @@ async function main(): Promise<void> {
   }
 
   await runAsPlatform(seedModules);
+
+  if (SEED_MODE === "development") {
+    await runAsPlatform(() => seedEntitlements(tenantId));
+  }
 
   console.log("Seed complete.");
 }

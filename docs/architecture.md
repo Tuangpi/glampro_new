@@ -367,19 +367,18 @@ Developer-experience details worth knowing:
 
 ## 12. Roadmap and current status
 
-| Phase | Scope                                                              | Status                                               |
-| ----- | ------------------------------------------------------------------ | ---------------------------------------------------- |
-| 0     | Monorepo, tooling, Docker, health endpoints, docs                  | **Complete**                                         |
-| 1     | Design system: handoff tokens, icon port, UI primitives, app shell | **Complete**                                         |
-| 2     | Full data model: catalogue, customers, staff, appointments, sales  | Models done; ADR 0002 importer remains               |
-| 3     | Auth: login / refresh / logout, roles, protected routes            | Complete — API and web both landed; Q25/Q26 unproven |
-| 4     | Master data screens: customers, products, services, staff          | Not started                                          |
-| 5     | POS Sale + confirmation (handoff screens 01–02)                    | Not started                                          |
-| 6     | Appointments and calendar (handoff screens 03, 06)                 | Not started                                          |
-| 7     | Dashboard and reports (handoff screens 05, 10)                     | Not started                                          |
-| 8     | Settings and integrations (handoff screen 11)                      | Not started                                          |
-| 9     | Hardening and the live MySQL → PostgreSQL data migration           | Not started                                          |
+| Phase | Scope                                                              | Status                                                                  |
+| ----- | ------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| 0     | Monorepo, tooling, Docker, health endpoints, docs                  | **Complete**                                                            |
+| 1     | Design system: handoff tokens, icon port, UI primitives, app shell | **Complete**                                                            |
+| 2     | Full data model: catalogue, customers, staff, appointments, sales  | Models done; ADR 0002 importer remains                                  |
+| 3     | Auth: login / refresh / logout, roles, protected routes            | Complete — Q26 closed in Phase 4c; Q25 (realm enforcement) still open   |
+| 4     | Master data screens: customers, products, services, staff          | **Complete** (4a, 4b, 4c) — Q28 (customer archive) still a decision     |
+| 5     | POS Sale + confirmation (handoff screens 01–02)                    | In progress — 5a (packages and gift cards) landed; the sale API is next |
+| 6     | Appointments and calendar (handoff screens 03, 06)                 | Not started                                                             |
+| 7     | Dashboard and reports (handoff screens 05, 10)                     | Not started                                                             |
+| 8     | Settings and integrations (handoff screen 11)                      | Not started                                                             |
+| 9     | Hardening and the live MySQL → PostgreSQL data migration           | Not started                                                             |
 
-`GET /api/auth/me` already exists so the session plumbing (token verification,
-database re-validation) is exercised end to end. Login, refresh and logout land
-in Phase 3.
+`GET /api/auth/me` exists so the session plumbing (token verification, database
+re-validation) is exercised end to end; login, refresh and logout landed with Phase 3.

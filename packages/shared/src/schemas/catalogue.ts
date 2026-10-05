@@ -184,3 +184,139 @@ export const updateServiceSchema = z.object({
 });
 
 export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;
+
+/**
+ * Packages and gift cards — the last two tabs of handoff screen 08.
+ *
+ * Both are **add-ons**, not core features (`MODULE_CODES`: `packages`,
+ * `giftCards`), so each has its own mount and its own module code even though the
+ * handoff draws them as two more tabs of this one screen. A salon that has not
+ * bought one is refused by `requireModule` with `MODULE_NOT_ENTITLED` rather than
+ * shown an empty tab — "you have none" and "you do not have this" are different
+ * statements and only one of them is true.
+ *
+ * Money is a **string on the wire** here for the same reason it is on a product:
+ * the column is `Decimal(12,2)` and a JSON float has already lost the cent.
+ */
+
+/**
+ * Sessions a package grants. Zero is a migrated state (legacy `no_of_time`
+ * defaulted to it) and must survive a read; a *new* package that grants nothing is
+ * a name with a price, so create asks for at least one.
+ */
+const sessionCountSchema = z.coerce.number().int().min(0).max(10_000);
+
+/** A bundle of sessions. Legacy `packages`. */
+export const packageSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  status: catalogStatusSchema,
+  /** Sessions the bundle contains. Legacy `no_of_time`. */
+  sessionCount: z.number().int(),
+  memberPrice: z.string(),
+  nonmemberPrice: z.string(),
+  description: z.string().nullable(),
+  /**
+   * How many services the bundle may be spent on — the count, not the list,
+   * because the table has one column for it and only the editor needs the ids.
+   */
+  serviceCount: z.number().int(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type PackageSummary = z.infer<typeof packageSummarySchema>;
+
+/** The same row plus the services it covers, which only the editor reads. */
+export const packageDetailSchema = packageSummarySchema.extend({
+  services: z.array(z.object({ id: z.string(), name: z.string() })),
+});
+
+export type PackageDetail = z.infer<typeof packageDetailSchema>;
+
+export const createPackageSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200),
+  sessionCount: sessionCountSchema.min(1, "A package has to include at least one session"),
+  memberPrice: moneySchema,
+  nonmemberPrice: moneySchema,
+  description: z.string().trim().max(2000).optional(),
+  status: catalogStatusSchema.optional(),
+  /**
+   * The services this bundle covers. `PackageService` exists because legacy
+   * `package_services` did, and an id from another salon is refused rather than
+   * linked — see `assertServicesExist`.
+   */
+  serviceIds: z.array(z.string().min(1).max(64)).max(200).optional(),
+});
+
+export type CreatePackageInput = z.infer<typeof createPackageSchema>;
+
+/**
+ * Updating a package. `serviceIds` follows the same rule as every other field
+ * here — **absent means unchanged** — with an empty array as the way to say
+ * "covers nothing", because `[]` is a value an absent key is not.
+ */
+export const updatePackageSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200).optional(),
+  sessionCount: sessionCountSchema.optional(),
+  memberPrice: moneySchema.optional(),
+  nonmemberPrice: moneySchema.optional(),
+  description: z.string().trim().max(2000).nullable().optional(),
+  status: catalogStatusSchema.optional(),
+  serviceIds: z.array(z.string().min(1).max(64)).max(200).optional(),
+});
+
+export type UpdatePackageInput = z.infer<typeof updatePackageSchema>;
+
+/**
+ * A gift-card **template**. Legacy `giftcards`.
+ *
+ * The card a customer holds is a `CustomerGiftCardHolding`, not this row: this is
+ * the shelf item the salon sells, which is why it carries a `value` and no
+ * customer. The QR payload lives here because legacy kept `qr_code` on the
+ * template.
+ *
+ * **There is no `status` column**, so the gift-card tab draws no Status cell and
+ * `?status=` is ignored rather than rejected — the tabs share one toolbar, which
+ * is the same arrangement as a service ignoring `?lowStock`.
+ */
+export const giftCardSummarySchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  value: z.string(),
+  /** Null means "never expires". Legacy `expired_date` was a **string** (Q6). */
+  expiresAt: z.string().nullable(),
+  remark: z.string().nullable(),
+  /** Payload for the client's QR renderer, not an image. */
+  qrPayload: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export type GiftCardSummary = z.infer<typeof giftCardSummarySchema>;
+
+export const giftCardDetailSchema = giftCardSummarySchema;
+
+export type GiftCardDetail = z.infer<typeof giftCardDetailSchema>;
+
+export const createGiftCardSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200),
+  value: moneySchema,
+  /** Absent means the card never expires, which is not the same as today. */
+  expiresAt: z.iso.date().optional(),
+  remark: z.string().trim().max(2000).optional(),
+  qrPayload: z.string().trim().max(2000).optional(),
+});
+
+export type CreateGiftCardInput = z.infer<typeof createGiftCardSchema>;
+
+export const updateGiftCardSchema = z.object({
+  name: z.string().trim().min(1, "Name is required").max(200).optional(),
+  value: moneySchema.optional(),
+  /** `null` removes an expiry date; absent leaves the existing one alone. */
+  expiresAt: z.iso.date().nullable().optional(),
+  remark: z.string().trim().max(2000).nullable().optional(),
+  qrPayload: z.string().trim().max(2000).nullable().optional(),
+});
+
+export type UpdateGiftCardInput = z.infer<typeof updateGiftCardSchema>;

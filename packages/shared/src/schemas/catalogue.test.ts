@@ -3,9 +3,13 @@ import { describe, it } from "node:test";
 
 import {
   catalogueListQuerySchema,
+  createGiftCardSchema,
+  createPackageSchema,
   createProductSchema,
   createServiceSchema,
+  giftCardSummarySchema,
   productSummarySchema,
+  updatePackageSchema,
 } from "./catalogue.js";
 
 describe("catalogueListQuerySchema", () => {
@@ -105,5 +109,96 @@ describe("productSummarySchema", () => {
 
   it("rejects a numeric price, so the mistake fails at the boundary", () => {
     assert.equal(productSummarySchema.safeParse({ ...row, memberPrice: 12.5 }).success, false);
+  });
+});
+
+describe("createPackageSchema", () => {
+  it("requires at least one session, because a bundle that grants none is a price", () => {
+    assert.equal(
+      createPackageSchema.safeParse({
+        name: "Starter",
+        sessionCount: 0,
+        memberPrice: 100,
+        nonmemberPrice: 120,
+      }).success,
+      false,
+    );
+
+    assert.equal(
+      createPackageSchema.safeParse({
+        name: "Starter",
+        sessionCount: 1,
+        memberPrice: 100,
+        nonmemberPrice: 120,
+      }).success,
+      true,
+    );
+  });
+
+  it("coerces a session count typed into a form", () => {
+    const parsed = createPackageSchema.parse({
+      name: "Starter",
+      sessionCount: "10",
+      memberPrice: "250.00",
+      nonmemberPrice: 300,
+    });
+
+    assert.equal(parsed.sessionCount, 10);
+    assert.equal(parsed.memberPrice, 250);
+  });
+});
+
+describe("updatePackageSchema", () => {
+  it("accepts an empty serviceIds as a value, distinct from omitting it", () => {
+    // `[]` means "this bundle covers nothing now"; an absent key means "do not touch
+    // the list". Both must parse, and they must stay distinguishable.
+    assert.deepEqual(updatePackageSchema.parse({ serviceIds: [] }).serviceIds, []);
+    assert.equal(updatePackageSchema.parse({}).serviceIds, undefined);
+  });
+});
+
+describe("giftCardSummarySchema", () => {
+  const row = {
+    id: "g1",
+    name: "Aloha Card",
+    value: "100.00",
+    expiresAt: null,
+    remark: null,
+    qrPayload: null,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  };
+
+  it("leaves expiresAt null rather than defaulting a date in", () => {
+    // A card with no expiry is a real product, so the contract has to be able to say
+    // so — a defaulted date would expire every migrated card (Q6).
+    assert.equal(giftCardSummarySchema.parse(row).expiresAt, null);
+  });
+
+  it("rejects a numeric value, so a Decimal never arrives as a float", () => {
+    assert.equal(giftCardSummarySchema.safeParse({ ...row, value: 100 }).success, false);
+  });
+
+  it("has no status field at all, because the model has no column behind it", () => {
+    // Screen 08 draws a Status cell for this tab; the field must not exist, or the
+    // screen would render an invented state (`docs/design/HANDOFF.md` §6).
+    assert.equal("status" in giftCardSummarySchema.parse({ ...row, status: "ACTIVE" }), false);
+  });
+});
+
+describe("createGiftCardSchema", () => {
+  it("takes a date-only expiry and rejects a localised one", () => {
+    assert.equal(
+      createGiftCardSchema.safeParse({ name: "Card", value: 50, expiresAt: "2027-01-31" }).success,
+      true,
+    );
+    assert.equal(
+      createGiftCardSchema.safeParse({ name: "Card", value: 50, expiresAt: "31/01/2027" }).success,
+      false,
+    );
+  });
+
+  it("leaves the expiry optional, which is what never-expiring means", () => {
+    assert.equal(createGiftCardSchema.safeParse({ name: "Card", value: 50 }).success, true);
   });
 });

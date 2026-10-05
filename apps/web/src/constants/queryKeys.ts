@@ -65,6 +65,24 @@ export const queryKeys = {
     count: () => ["services", "count"] as const,
   },
 
+  /**
+   * Screen 08's third and fourth tabs.
+   *
+   * There is no `count` key for either, and that is deliberate: `packages` and
+   * `giftCards` are **add-on** modules, so the screen's stat tiles — which describe
+   * the shelf every salon has — must not report a number that a salon without the
+   * add-on could not have.
+   */
+  packages: {
+    list: () => ["packages", "list"] as const,
+    detail: (id: string) => ["packages", "detail", id] as const,
+  },
+
+  giftCards: {
+    list: () => ["giftCards", "list"] as const,
+    detail: (id: string) => ["giftCards", "detail", id] as const,
+  },
+
   staff: {
     list: () => ["staff", "list"] as const,
     detail: (id: string) => ["staff", "detail", id] as const,

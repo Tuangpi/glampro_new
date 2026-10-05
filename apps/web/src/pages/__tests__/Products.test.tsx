@@ -10,6 +10,8 @@
  *   screen: the low-stock tile and the rail badge ask the same question (ADR 0010).
  * - The two tabs the model cannot back — Packages and Gift cards — are absent.
  * - A 422 from the server puts its message on the **control that caused it**.
+ * - The Packages and Gift-card tabs exist, and a salon that has not bought the add-on
+ *   is told **that**, rather than shown an empty list that reads as "you have none".
  */
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -24,8 +26,15 @@ const {
   useUpdateProduct,
   useCreateService,
   useUpdateService,
+  usePackageList,
+  useGiftCardList,
+  useCreatePackage,
+  useUpdatePackage,
+  useCreateGiftCard,
+  useUpdateGiftCard,
   useDepartments,
   getErrorMessage,
+  getErrorCode,
   getValidationDetails,
 } = vi.hoisted(() => ({
   useProductList: vi.fn(),
@@ -36,12 +45,24 @@ const {
   useUpdateProduct: vi.fn(),
   useCreateService: vi.fn(),
   useUpdateService: vi.fn(),
+  usePackageList: vi.fn(),
+  useGiftCardList: vi.fn(),
+  useCreatePackage: vi.fn(),
+  useUpdatePackage: vi.fn(),
+  useCreateGiftCard: vi.fn(),
+  useUpdateGiftCard: vi.fn(),
   useDepartments: vi.fn(),
   getErrorMessage: vi.fn<() => string>(() => "Something went wrong."),
+  getErrorCode: vi.fn<() => string | undefined>(() => undefined),
   getValidationDetails: vi.fn<() => Record<string, string>>(() => ({})),
 }));
 
-vi.mock("@/lib/api", () => ({ get: vi.fn(), getErrorMessage, getValidationDetails }));
+vi.mock("@/lib/api", () => ({
+  get: vi.fn(),
+  getErrorMessage,
+  getErrorCode,
+  getValidationDetails,
+}));
 
 vi.mock("@/hooks/useProducts", () => ({
   useProductList,
@@ -55,6 +76,18 @@ vi.mock("@/hooks/useServices", () => ({
   useServiceCount,
   useCreateService,
   useUpdateService,
+}));
+
+vi.mock("@/hooks/usePackages", () => ({
+  usePackageList,
+  useCreatePackage,
+  useUpdatePackage,
+}));
+
+vi.mock("@/hooks/useGiftCards", () => ({
+  useGiftCardList,
+  useCreateGiftCard,
+  useUpdateGiftCard,
 }));
 
 vi.mock("@/hooks/useDepartments", () => ({ useDepartments }));
@@ -146,8 +179,17 @@ beforeEach(() => {
   useUpdateProduct.mockReturnValue({ mutateAsync: updateMutate, isPending: false });
   useCreateService.mockReturnValue({ mutateAsync: createServiceMutate, isPending: false });
   useUpdateService.mockReturnValue({ mutateAsync: updateServiceMutate, isPending: false });
+  // The two add-on tabs answer like any other list by default; the tests that care
+  // about the refusal override the packages one with a 403.
+  usePackageList.mockReturnValue(queryResult());
+  useGiftCardList.mockReturnValue(queryResult());
+  useCreatePackage.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
+  useUpdatePackage.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
+  useCreateGiftCard.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
+  useUpdateGiftCard.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
   useDepartments.mockReturnValue({ data: [], isPending: false });
   getErrorMessage.mockReturnValue("Something went wrong.");
+  getErrorCode.mockReturnValue(undefined);
   getValidationDetails.mockReturnValue({});
   createMutate.mockReset().mockResolvedValue({});
   updateMutate.mockReset().mockResolvedValue({});
@@ -228,13 +270,86 @@ describe("the tiles", () => {
 });
 
 describe("the tabs", () => {
-  it("offers Products and Services, and nothing the model cannot back", () => {
+  it("offers all four tabs the handoff draws", () => {
     render(<Products />);
 
     expect(screen.getByRole("tab", { name: "Products" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Services" })).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: /packages/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: /gift cards/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Packages" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Gift cards" })).toBeInTheDocument();
+  });
+
+  it("tells a salon the add-on is missing rather than that it has no packages", async () => {
+    const user = userEvent.setup();
+    // What the API answers for an add-on the salon has not bought: the row set is
+    // empty, but the reason is entitlement — and "you have none" would be false.
+    getErrorCode.mockReturnValue("MODULE_NOT_ENTITLED");
+    usePackageList.mockReturnValue(
+      queryResult({ isError: true, error: new Error('This feature needs the "packages" add-on.') }),
+    );
+
+    render(<Products />);
+    await user.click(screen.getByRole("tab", { name: "Packages" }));
+
+    expect(screen.getByText(/add-on is not enabled/i)).toBeInTheDocument();
+    // No retry button: reloading asks the same question and gets the same answer.
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
+  it("lists a bundle's sessions and what it covers", async () => {
+    const user = userEvent.setup();
+    usePackageList.mockReturnValue(
+      listOf([
+        {
+          id: "pk1",
+          name: "Ten-session bundle",
+          status: "ACTIVE",
+          sessionCount: 10,
+          memberPrice: "250.00",
+          nonmemberPrice: "300.00",
+          description: null,
+          serviceCount: 2,
+          createdAt: "2021-03-04T00:00:00.000Z",
+          updatedAt: "2021-03-04T00:00:00.000Z",
+        },
+      ]),
+    );
+
+    render(<Products />);
+    await user.click(screen.getByRole("tab", { name: "Packages" }));
+
+    const row = screen.getAllByRole("row")[1]!;
+    expect(within(row).getByText("Ten-session bundle")).toBeInTheDocument();
+    expect(within(row).getByText("10")).toBeInTheDocument();
+    expect(within(row).getByText("2 services")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add package" })).toBeInTheDocument();
+  });
+
+  it("draws no Status column for gift cards, because the model has none", async () => {
+    const user = userEvent.setup();
+    useGiftCardList.mockReturnValue(
+      listOf([
+        {
+          id: "g1",
+          name: "S$100 gift card",
+          value: "100.00",
+          expiresAt: null,
+          remark: null,
+          qrPayload: null,
+          createdAt: "2021-03-04T00:00:00.000Z",
+          updatedAt: "2021-03-04T00:00:00.000Z",
+        },
+      ]),
+    );
+
+    render(<Products />);
+    await user.click(screen.getByRole("tab", { name: "Gift cards" }));
+
+    const row = screen.getAllByRole("row")[1]!;
+    expect(within(row).getByText("S$100 gift card")).toBeInTheDocument();
+    // "Never" rather than a dash: no expiry is a product decision, not missing data.
+    expect(within(row).getByText("Never")).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: "Status" })).not.toBeInTheDocument();
   });
 
   it("swaps the row for a service row: a duration, and no stock at all", async () => {

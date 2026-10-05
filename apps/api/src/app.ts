@@ -7,7 +7,9 @@ import { env } from "./lib/env.js";
 import { authRouter } from "./routes/auth.routes.js";
 import { customersRouter } from "./routes/customers.routes.js";
 import { departmentsRouter } from "./routes/departments.routes.js";
+import { giftCardsRouter } from "./routes/gift-cards.routes.js";
 import { healthRouter, readiness } from "./routes/health.routes.js";
+import { packagesRouter } from "./routes/packages.routes.js";
 import { productsRouter } from "./routes/products.routes.js";
 import { servicesRouter } from "./routes/services.routes.js";
 import { staffRouter } from "./routes/staff.routes.js";
@@ -76,6 +78,11 @@ export function createApp(): Express {
   // Screen 09. Reads are open to the salon; the writes are the first routes in the
   // app to mount `requireRole` (Q26).
   app.use(`${API_PREFIX}/staff`, staffRouter);
+  // Screen 08's last two tabs. Both are **add-ons**, so these two mounts are the
+  // first routes whose `requireModule` can actually refuse: every other module they
+  // sit beside is core and passes as soon as the tenant exists.
+  app.use(`${API_PREFIX}/packages`, packagesRouter);
+  app.use(`${API_PREFIX}/gift-cards`, giftCardsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
