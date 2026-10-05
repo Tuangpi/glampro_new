@@ -39,15 +39,30 @@ export const queryKeys = {
     detail: (id: string) => ["customers", "detail", id] as const,
   },
 
+  /**
+   * Branches. Not paginated and not filtered, so there is one key: a picker has no
+   * page 2 and no search box, and every caller wants the same whole list.
+   */
+  departments: {
+    list: () => ["departments", "list"] as const,
+  },
+
   products: {
     list: () => ["products", "list"] as const,
     detail: (id: string) => ["products", "detail", id] as const,
-    lowStock: () => ["products", "lowStock"] as const,
+    /**
+     * Server-side aggregates — the stat tiles and the rail badge read `total`. The
+     * filter object is appended by the caller, so the Low-stock tile and the badge
+     * (both `{ lowStock: true }`) share one entry.
+     */
+    count: () => ["products", "count"] as const,
   },
 
   services: {
     list: () => ["services", "list"] as const,
     detail: (id: string) => ["services", "detail", id] as const,
+    /** The services half of the screen's "Total items" tile. */
+    count: () => ["services", "count"] as const,
   },
 
   staff: {

@@ -23,9 +23,12 @@ import {
   type UpdateCustomerInput,
 } from "@glampro/shared";
 
-import { notFound, validationFailed } from "../lib/http-error.js";
+import { notFound } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";
 import { paginated, parsePagination } from "../utils/pagination.js";
+// The branch check is shared with the catalogue and staff services rather than
+// copied: the rule is one rule, and it was about to grow four copies.
+import { assertDepartmentsExist } from "./department.service.js";
 
 /**
  * Columns the screen needs. `passwordHash`, `otpHash` and `otpExpiresAt` are
@@ -99,28 +102,6 @@ function toDetail(row: CustomerRow): CustomerDetail {
     cardNumber: row.cardNumber,
     departments: row.departments.map((link) => link.department),
   });
-}
-
-/**
- * Refuses branch ids that are not this salon's.
- *
- * `Department` is tenant-scoped, so this query cannot see another tenant's rows and
- * a forged id fails the comparison rather than creating a cross-tenant link row.
- */
-async function assertDepartmentsExist(ids: string[] | undefined): Promise<void> {
-  if (!ids || ids.length === 0) return;
-
-  const wanted = [...new Set(ids)];
-  const found = await prisma.department.findMany({
-    where: { id: { in: wanted } },
-    select: { id: true },
-  });
-
-  if (found.length !== wanted.length) {
-    throw validationFailed([
-      { path: "body.departmentIds", message: "One or more selected branches do not exist." },
-    ]);
-  }
 }
 
 /**

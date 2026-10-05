@@ -15,7 +15,7 @@ Facts below were read out of the tree, not copied from a plan.
 
 |                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current phase    | **4, part 1 of 3.** Phase 4a — Customers (handoff screen 07) — is landed and verified: the shared contracts, `GET/POST /api/customers` and `GET/PATCH /api/customers/:id`, and the screen with list, search, pagination, create and edit. Phase 4b (products and services, screen 08) and 4c (staff, screen 09) are next. Phase 2's one open acceptance row is still [ADR 0002](decisions/0002-tenant-id-equals-owner-id.md)'s importer and it can proceed alongside them.                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Current phase    | **4, part 2 of 3.** Phase 4a (Customers, screen 07) and 4b (the catalogue — products and services, screen 08, plus the rail's low-stock badge) are landed and verified: shared contracts, `GET`/`POST`/`PATCH` for `/api/customers` and for `/api/products` + `/api/services`, a read-only `/api/departments`, and both screens with list, search, pagination, create and edit. Phase 4c (staff, screen 09) is next, and it carries the first admin-only write, which closes **Q26**. Phase 2's one open acceptance row is still [ADR 0002](decisions/0002-tenant-id-equals-owner-id.md)'s importer and it can proceed alongside them.                                                                                                                                                                                                                                                                  |
 | Last commit      | Not pinned here on purpose — run `git log -1 --oneline`. Pinning a hash in this file is what made it go stale twice; this file is updated in the same commit as the work it describes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | Working tree     | Clean at the Phase 2 commit B close. Phase 1 delivered: the token copy, the 41-icon port, the 17 primitives with tests, the reconciled `AppShell` (item geometry, gaps, 8.5px/700 label, purple active state), a `Staff` nav entry answering Q15 and the removal of the rail's `Services` entry ([ADR 0005](decisions/0005-rail-has-no-services-destination.md)). Phase 2A added migration `20261002042444_tenant_plane`, the seven tenant-plane models, the `AsyncLocalStorage` scoping extension, the `requireModule` guard and the module-catalogue seed; Phase 2B added migration `20261002060110_domain_models` (department, customer, service, product, package, value package, gift card, appointment, commission) and Phase 2C migration `20261003091356_sale_and_customer_ledgers` (the POS and the customer ledgers). Measurements are in [`design/HANDOFF.md`](design/HANDOFF.md) §2 and §7. |
 | `npm run verify` | Exit 0 at the Phase 2 commit C close: format, lint, type-check, **88 API tests** (19 suites — 12 tenant-isolation, 6 `requireModule`, the sale-and-ledger suite, the web-session suite, plus the Phase 0/1 suites), 6 shared, **24 web test files / 169 tests**. The isolation, entitlement, ledger and session suites need a database; they **skip with a message** when `DATABASE_URL` is unset, so a bare `npm run verify` on the host passes but has not proved isolation. Run with `DATABASE_URL` pointed at the compose Postgres to get the 88. They were run green against the compose stack at this commit.                                                                                                                                                                                                                                                                                     |
@@ -40,7 +40,47 @@ Facts below were read out of the tree, not copied from a plan.
 | Legacy application  | **Not in this repository.** `docs/legacy/` is the transcription of it: the API surface (154 registrations, 151 live routes) and the schema, plus the gaps worth knowing before migrating                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | Docs                | `architecture.md`, `CONTEXT.md`, `roadmap.md`, `STATE.md`, `decisions/` (0002–0007 + index), `legacy/` (LEGACY-MAP, API-INVENTORY, reference/legacy-schema), `saas/TENANCY.md`, `design/HANDOFF.md`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
-## 3. Next up — Phase 4b and 4c, and ADR 0002's importer
+## 3. Next up — Phase 4c, and ADR 0002's importer
+
+### Closed with Phase 4b — the catalogue (screen 08)
+
+Products and services as two tabs on one screen, with the rail's low-stock badge. The
+first slice where a screen's **drawing** and its **model** disagreed in a way that had
+to be answered with a decision rather than a workaround.
+
+| Piece     | Where                                                            | What it does                                                                                                                                                                                                                      |
+| --------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contracts | `packages/shared/src/schemas/catalogue.ts`                       | List query (`?search=&status=&departmentId=&lowStock=&threshold=`), product/service summary + detail, create and update inputs. Prices are **strings on the wire**                                                                |
+| Service   | `apps/api/src/services/catalogue.service.ts`                     | List/read/create/update for both kinds; `lowStock` is a server-side filter (`quantity <= threshold`) so a count never depends on which page the browser happens to hold                                                           |
+| Service   | `apps/api/src/services/department.service.ts`                    | `listDepartments` + `assertDepartmentExists`, so a form cannot save a branch that does not exist                                                                                                                                  |
+| Routes    | `apps/api/src/routes/{products,services,departments}.routes.ts`  | `GET`/`POST /api/products`, `GET`/`PATCH /api/products/:id`, the same for `/api/services`, and a read-only `GET /api/departments` — all behind `auth` + `requireModule("catalogue")`; writes also carry `requireWritableTenant()` |
+| Schema    | `apps/api/prisma/schema.prisma`                                  | `Tenant.lowStockThreshold Int @default(5)` — [ADR 0010](decisions/0010-low-stock-threshold-is-per-tenant.md)                                                                                                                      |
+| Web data  | `apps/web/src/hooks/{useProducts,useServices,useDepartments}.ts` | List queries keyed by filters, `useProductCount` for the tiles and the badge, and create/update mutations that invalidate list + count together                                                                                   |
+| Web UI    | `apps/web/src/pages/Products.tsx`, `components/catalogue/*`      | Handoff 08: three stat tiles, a two-tab catalogue, debounced search, server pagination, and a create/edit drawer per tab                                                                                                          |
+
+Decisions worth keeping:
+
+- **The low-stock threshold is a per-tenant column, not a constant** ([ADR 0010](decisions/0010-low-stock-threshold-is-per-tenant.md)).
+  `?threshold=` overrides it for one query, which is how the "Out of stock" tile asks
+  the same question pinned to zero. Without an override the service reads
+  `currentScope().tenantId` — no argument, so there is nothing to forge.
+- **The tiles are server-side counts, not sums over the rows on screen.** The rail
+  badge and the Low-stock tile are the _same_ query, so they cannot disagree and the
+  API is asked once. A test asserts the filters each tile sends.
+- **Screens 08's Cost column and "Inventory value" tile are omitted**, and so are the
+  Packages and Gift-card tabs: the schema has no cost and no package/gift-card
+  catalogue to list. `design/HANDOFF.md` §6 item 5 — the screen changes where it
+  disagrees with the model. Tests assert all four stay absent, so a later "fix"
+  cannot quietly render a zero or an empty tab.
+- **`formatPrice` is a separate function from `formatMoney`.** A `Decimal(12,2)`
+  arrives as a major-unit string (`"12.50"`) while `formatMoney` takes minor units
+  (cents); the difference is a factor of a hundred and the wrong one renders
+  `$0.13` — silently and plausibly.
+- **A service is not stock.** `serviceSummarySchema` has no `quantity` and the API
+  ignores `?lowStock` rather than rejecting it, so both tabs can share one toolbar.
+
+**Not built:** Package and Gift-card tabs, and the Products cost/valuation figures.
+Noted here rather than invented (`design/HANDOFF.md` §6).
 
 ### Closed with Phase 4a — Customers (screen 07)
 
@@ -369,12 +409,13 @@ These are ours to decide; none of them needs production data.
 ## 5. Verify status
 
 `npm run verify` is `format:check` → `lint` → `typecheck` → `test`. Last full run:
-**exit 0**, 2026-10-04, with Phase 4a (Customers) in the tree: **181 web + 44 API +
+**exit 0**, 2026-10-05, with Phase 4a and 4b in the tree: **192 web + 44 API +
 37 shared**, no failures. The three steps before the tests passed with no warnings.
 
 **The API's database-backed suites are skipped unless `DATABASE_URL` is set**, so
-that count of 44 is the unit half only. Run them against the dev database to
-exercise all **100**, which is what actually proves tenant isolation:
+that count of 44 is the unit half only. Run them against a live database to
+exercise all **122** — which is what actually proves tenant isolation, and the
+catalogue suite Phase 4b added is one of them:
 
 ```bash
 make test-db   # DATABASE_URL from .env.docker, host port 5433

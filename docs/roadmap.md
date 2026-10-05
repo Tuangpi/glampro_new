@@ -86,7 +86,7 @@ tested but has no caller (**Q26**, closes with the first admin-only write in
 Phase 4 or 8). Everything else is covered by tests, and the web session was built
 without inventing a design: see [ADR 0008](decisions/0008-login-screen-shape.md).
 
-## Phase 4 — Master data screens · **In progress (Customers done)**
+## Phase 4 — Master data screens · **In progress (Customers and the catalogue done)**
 
 Customers, products and staff — handoff screens 07, 08 and 09. There is no separate
 services screen; services are managed from the same list pattern (and appear in the
@@ -95,12 +95,12 @@ sale flow and the appointment flow), and the rail carries no Services entry
 edit and archive a record of each kind against the real API, with list search,
 pagination and server-side validation errors surfaced on the field that caused them.
 
-| Slice          | Deliverable                                                                                                                                                | State                                                                        |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Contracts      | Zod schemas for customers, the catalogue and staff in `packages/shared`, exported from the index                                                           | **Done**                                                                     |
-| 4a — Customers | `GET/POST /api/customers`, `GET/PATCH /api/customers/:id`, and the screen 07 list with search, pagination, a create/edit drawer, field-level server errors | **Done** — archive is not; `Customer` has no archived flag ([Q28](STATE.md)) |
-| 4b — Catalogue | Products and services as two tabs on `/products`, plus the rail's low-stock badge                                                                          | **Next**                                                                     |
-| 4c — Staff     | `/staff` against `User` rows, including the first admin-only write, which closes **Q26**                                                                   | **Next**                                                                     |
+| Slice          | Deliverable                                                                                                                                                | State                                                                            |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Contracts      | Zod schemas for customers, the catalogue and staff in `packages/shared`, exported from the index                                                           | **Done**                                                                         |
+| 4a — Customers | `GET/POST /api/customers`, `GET/PATCH /api/customers/:id`, and the screen 07 list with search, pagination, a create/edit drawer, field-level server errors | **Done** — archive is not; `Customer` has no archived flag ([Q28](STATE.md))     |
+| 4b — Catalogue | Products and services as two tabs on `/products`, plus the rail's low-stock badge                                                                          | **Done** — Packages/Gift cards and the cost column are omitted ([Q29](STATE.md)) |
+| 4c — Staff     | `/staff` against `User` rows, including the first admin-only write, which closes **Q26**                                                                   | **Next**                                                                         |
 
 ## Phase 5 — POS sale and confirmation
 

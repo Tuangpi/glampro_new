@@ -249,6 +249,11 @@ model Tenant {
   status  TenantStatus @default(ACTIVE)
   /// Bumped on suspension, which invalidates every access token for the tenant.
   tokenVersion Int     @default(0)
+  /// Stock at or below this is "low", for the Products rail badge and the
+  /// `?lowStock=true` filter. Deliberately per tenant rather than a constant:
+  /// "low" is a salon's own judgement, and a shop that holds forty bottles of
+  /// shampoo does not agree with one that holds four. See ADR 0010.
+  lowStockThreshold Int @default(5)
   /// Ownership is this relation. There is deliberately no `OWNER` role.
   ///
   /// Nullable because of a real foreign-key cycle: `users.tenantId` points at

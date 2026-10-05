@@ -9,6 +9,7 @@ import { lazyRoute } from "@/components/layouts/RouteWrapper";
 const Login = lazy(() => import("@/pages/Login"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
 const Customers = lazy(() => import("@/pages/Customers"));
+const Products = lazy(() => import("@/pages/Products"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // ── Route tree ─────────────────────────────────────────────────────
@@ -31,6 +32,7 @@ const routes: RouteObject[] = [
     children: [
       { index: true, element: lazyRoute(<Dashboard />) },
       { path: "customers", element: lazyRoute(<Customers />) },
+      { path: "products", element: lazyRoute(<Products />) },
       { path: "*", element: lazyRoute(<NotFound />) },
     ],
   },

@@ -50,6 +50,29 @@ export function formatMoney(
   return new Intl.NumberFormat(locale, { style: "currency", currency }).format(minorUnits / 100);
 }
 
+/**
+ * Formats a price **as the API sends it** — a `Decimal` serialised in major units
+ * (`"12.50"`), which is a different number from what `formatMoney` takes.
+ *
+ * They are two functions rather than one with a flag because the difference is a
+ * factor of a hundred and nothing downstream could tell: handing `"12.50"` to
+ * `formatMoney` renders `$0.13`, silently and plausibly. Prices cross the wire as
+ * strings so no cent is lost to a float (`productSummarySchema`), and this is the
+ * one place that turns one back into a display string.
+ */
+export function formatPrice(
+  value: string | number | null | undefined,
+  currency = "USD",
+  locale = "en-US",
+): string {
+  // `Number("")` is 0, which would print a price for a blank field, so empty is
+  // checked before the coercion rather than after it.
+  if (value === null || value === undefined || value === "") return EMPTY;
+  const amount = typeof value === "string" ? Number(value) : value;
+  if (!Number.isFinite(amount)) return EMPTY;
+  return new Intl.NumberFormat(locale, { style: "currency", currency }).format(amount);
+}
+
 /** "1h 15m" / "45m" from a duration in minutes. */
 export function formatDuration(minutes: number | null | undefined): string {
   if (minutes === null || minutes === undefined || !Number.isFinite(minutes)) return EMPTY;

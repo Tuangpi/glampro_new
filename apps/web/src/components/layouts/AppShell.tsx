@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation } from "react-router";
 import { Bell, LogOut, Plus, Search } from "@/components/icons";
 import { activeNavItem, visibleNavItems } from "@/constants/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLowStockCount } from "@/hooks/useProducts";
 import { cn, getInitials } from "@/lib/utils";
 
 /**
@@ -25,6 +26,13 @@ export default function AppShell() {
   const items = visibleNavItems(user?.globalRole, entitlements);
   const current = activeNavItem(location.pathname, user?.globalRole, entitlements);
   const [search, setSearch] = useState("");
+
+  // The rail's live counter. It is asked for only when the Products entry is
+  // actually on the rail — role first, then entitlement — because a hidden entry
+  // must not cost a request. The count is server-side: the badge counts the whole
+  // catalogue while the browser only ever holds one page of it (ADR 0010).
+  const lowStock = useLowStockCount(items.some((item) => item.badge === "lowStock"));
+  const lowStockTotal = lowStock.data?.total ?? 0;
 
   return (
     <div className="flex min-h-screen bg-bg">
@@ -52,6 +60,22 @@ export default function AppShell() {
               <span className="text-[length:var(--app-rail-label)] font-bold tracking-[var(--app-rail-tracking)]">
                 {item.label}
               </span>
+
+              {/* The handoff's `.nav-badge`: a 16px disc in `--sp-danger` with a
+                  2px ring in the rail's own navy, so it reads as a separate token
+                  on a coloured item. The number is capped because a salon with
+                  hundreds of low items must not stretch the pill. */}
+              {item.badge === "lowStock" && lowStockTotal > 0 ? (
+                <>
+                  <span
+                    aria-hidden
+                    className="absolute top-0.5 right-2.5 flex h-4 min-w-4 items-center justify-center rounded-pill border-2 border-navy bg-danger px-1 text-2xs font-heavy text-white"
+                  >
+                    {lowStockTotal > 99 ? "99+" : lowStockTotal}
+                  </span>
+                  <span className="sr-only">, {lowStockTotal} low on stock</span>
+                </>
+              ) : null}
             </NavLink>
           ))}
         </nav>
