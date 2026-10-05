@@ -80,7 +80,8 @@ Decisions worth keeping:
 **Not built:** the **Shifts** and **Rating** columns screen 09 draws. There is no rota
 table (scheduling arrives with the appointment phase) and no reviews table in the schema
 or in the legacy database. Asserted absent by a test, so a later "fix" cannot render an
-empty column that reads as "nobody is rostered".
+empty column that reads as "nobody is rostered". Both are scheduled in
+[`roadmap.md`](roadmap.md) → _Deferred from Phase 4_.
 
 ### Closed with Phase 4b — the catalogue (screen 08)
 
@@ -120,7 +121,8 @@ Decisions worth keeping:
   ignores `?lowStock` rather than rejecting it, so both tabs can share one toolbar.
 
 **Not built:** Package and Gift-card tabs, and the Products cost/valuation figures.
-Noted here rather than invented (`design/HANDOFF.md` §6).
+Noted here rather than invented (`design/HANDOFF.md` §6), and scheduled in
+[`roadmap.md`](roadmap.md) → _Deferred from Phase 4_.
 
 ### Closed with Phase 4a — Customers (screen 07)
 
@@ -151,7 +153,9 @@ Decisions worth keeping:
   asserted absent by a test so nobody "fixes" the screen by rendering a zero.
 
 **Not built:** archive. See Q28 — the `Customer` model has no archived flag, so
-"create, edit and archive" from the Phase 4 criterion is only two-thirds met.
+"create, edit and archive" from the Phase 4 criterion is only two-thirds met. It needs a
+decision rather than a slice, and is one of the five entries in
+[`roadmap.md`](roadmap.md) → _Deferred from Phase 4_.
 
 ### Closed with Phase 2 (the remaining models)
 
