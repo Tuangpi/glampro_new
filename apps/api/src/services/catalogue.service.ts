@@ -113,8 +113,11 @@ type ServiceRow = NonNullable<Awaited<ReturnType<typeof findServiceRow>>>;
  *
  * An explicit `?threshold=` skips the read entirely, which makes the rail badge's
  * request one query cheaper than the table's.
+ *
+ * Exported because the POS item search computes the same badge for a product row and
+ * an answer of its own would be a second opinion about one number.
  */
-async function resolveLowStockThreshold(override?: number): Promise<number> {
+export async function resolveLowStockThreshold(override?: number): Promise<number> {
   if (override !== undefined) return override;
 
   const scope = currentScope();

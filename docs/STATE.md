@@ -13,20 +13,20 @@ Facts below were read out of the tree, not copied from a plan.
 
 ## 1. Snapshot
 
-|                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Current phase    | **5, in progress (5a landed).** Phase 4a (Customers, screen 07) and 4b (the catalogue — products and services, screen 08, plus the rail's low-stock badge) are landed and verified: shared contracts, `GET`/`POST`/`PATCH` for `/api/customers` and for `/api/products` + `/api/services`, a read-only `/api/departments`, and both screens with list, search, pagination, create and edit. Phase 4c (staff, screen 09) is landed too: `/api/staff` (list, one person, create, update), with `requireRole("SUPER_ADMIN", "MANAGER")` on the two writes — the guard's first caller, which closes **Q26** — and the screen's tiles, three-way status filter, list and create/edit drawer. Phase 5a — the packages and gift-card catalogue, which screen 08's last two tabs needed — is landed: `/api/packages` and `/api/gift-cards` (list, one, create, update) with `PackageFormDrawer`, `GiftCardFormDrawer` and the two tabs. They are the first mounts whose `requireModule` can actually refuse, because `packages` and `giftCards` are **add-ons** rather than core modules. The rest of Phase 5 (the sale API, then screens 01–02) is next. Phase 2's one open acceptance row is still [ADR 0002](decisions/0002-tenant-id-equals-owner-id.md)'s importer and it can proceed alongside them. |
-| Last commit      | Not pinned here on purpose — run `git log -1 --oneline`. Pinning a hash in this file is what made it go stale twice; this file is updated in the same commit as the work it describes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Working tree     | Clean at the Phase 2 commit B close. Phase 1 delivered: the token copy, the 41-icon port, the 17 primitives with tests, the reconciled `AppShell` (item geometry, gaps, 8.5px/700 label, purple active state), a `Staff` nav entry answering Q15 and the removal of the rail's `Services` entry ([ADR 0005](decisions/0005-rail-has-no-services-destination.md)). Phase 2A added migration `20261002042444_tenant_plane`, the seven tenant-plane models, the `AsyncLocalStorage` scoping extension, the `requireModule` guard and the module-catalogue seed; Phase 2B added migration `20261002060110_domain_models` (department, customer, service, product, package, value package, gift card, appointment, commission) and Phase 2C migration `20261003091356_sale_and_customer_ledgers` (the POS and the customer ledgers). Measurements are in [`design/HANDOFF.md`](design/HANDOFF.md) §2 and §7.                                                                                                                                                                                                                                                                                                                                                                                            |
-| `npm run verify` | Exit 0 at the Phase 2 commit C close: format, lint, type-check, **88 API tests** (19 suites — 12 tenant-isolation, 6 `requireModule`, the sale-and-ledger suite, the web-session suite, plus the Phase 0/1 suites), 6 shared, **24 web test files / 169 tests**. The isolation, entitlement, ledger and session suites need a database; they **skip with a message** when `DATABASE_URL` is unset, so a bare `npm run verify` on the host passes but has not proved isolation. Run with `DATABASE_URL` pointed at the compose Postgres to get the 88. They were run green against the compose stack at this commit.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Dev stack        | `make up-d` → API `:9100`, web `:5173`, Postgres `:5433` (`compose.yaml`, ports documented in `README.Docker.md`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Runtime          | Node 24, npm workspaces (no pnpm), Postgres 17, Prisma 7                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+|                  |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Current phase    | **5, in progress (5a and 5b.1 landed).** Phase 4a (Customers, screen 07) and 4b (the catalogue — products and services, screen 08, plus the rail's low-stock badge) are landed and verified: shared contracts, `GET`/`POST`/`PATCH` for `/api/customers` and for `/api/products` + `/api/services`, a read-only `/api/departments`, and both screens with list, search, pagination, create and edit. Phase 4c (staff, screen 09) is landed too: `/api/staff` (list, one person, create, update), with `requireRole("SUPER_ADMIN", "MANAGER")` on the two writes — the guard's first caller, which closes **Q26** — and the screen's tiles, three-way status filter, list and create/edit drawer. Phase 5a — the packages and gift-card catalogue, which screen 08's last two tabs needed — is landed: `/api/packages` and `/api/gift-cards` (list, one, create, update) with `PackageFormDrawer`, `GiftCardFormDrawer` and the two tabs. They are the first mounts whose `requireModule` can actually refuse, because `packages` and `giftCards` are **add-ons** rather than core modules. Phase 5b.1 — the POS item search, `GET /api/sales/items`, the first half of screens 01–02 — is landed: one endpoint searches all five sellable kinds and is **entitlement aware**, so an add-on the salon has not bought shrinks the list (`searchableKinds`) rather than refusing the request. The rest of Phase 5 (the cart write and the receipt, then the two screens) is next. Phase 2's one open acceptance row is still [ADR 0002](decisions/0002-tenant-id-equals-owner-id.md)'s importer and it can proceed alongside them. |
+| Last commit      | Not pinned here on purpose — run `git log -1 --oneline`. Pinning a hash in this file is what made it go stale twice; this file is updated in the same commit as the work it describes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Working tree     | Clean at the Phase 2 commit B close. Phase 1 delivered: the token copy, the 41-icon port, the 17 primitives with tests, the reconciled `AppShell` (item geometry, gaps, 8.5px/700 label, purple active state), a `Staff` nav entry answering Q15 and the removal of the rail's `Services` entry ([ADR 0005](decisions/0005-rail-has-no-services-destination.md)). Phase 2A added migration `20261002042444_tenant_plane`, the seven tenant-plane models, the `AsyncLocalStorage` scoping extension, the `requireModule` guard and the module-catalogue seed; Phase 2B added migration `20261002060110_domain_models` (department, customer, service, product, package, value package, gift card, appointment, commission) and Phase 2C migration `20261003091356_sale_and_customer_ledgers` (the POS and the customer ledgers). Measurements are in [`design/HANDOFF.md`](design/HANDOFF.md) §2 and §7.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `npm run verify` | Exit 0 at the Phase 5b.1 close: format, lint, type-check, **44 API tests** and **55 shared** without a database — the API figure is **194** with `DATABASE_URL` set (§5) — and **27 web test files / 209 tests**. The API's database-gated suites (isolation, entitlement, sale and the route suites) **skip with a message** when `DATABASE_URL` is unset, so a bare `npm run verify` on the host passes but has not proved isolation. Run `make test-db` to get the 194; it was green against the compose Postgres at this close.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| Dev stack        | `make up-d` → API `:9100`, web `:5173`, Postgres `:5433` (`compose.yaml`, ports documented in `README.Docker.md`)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Runtime          | Node 24, npm workspaces (no pnpm), Postgres 17, Prisma 7                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 
 ## 2. What actually exists today
 
 | Area                | State of the tree                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| API routes          | Ten mount points: the health pair (`GET /health`, `GET /health/ready`) plus `GET /api/health`; the `auth` session endpoints (`GET /me`, `POST /login`, `POST /refresh`, `POST /logout`, `POST /change-password`); and the resources Phase 4 and 5a added — `customers`, `products`, `services`, `departments` (read-only), `staff`, `packages` and `gift-cards`. Everything else in the product is still to be built.                                                                                                                                                                                                                                                                                                                                                                            |
+| API routes          | Eleven mount points: the health pair (`GET /health`, `GET /health/ready`) plus `GET /api/health`; the `auth` session endpoints (`GET /me`, `POST /login`, `POST /refresh`, `POST /logout`, `POST /change-password`); and the resources Phase 4, 5a and 5b.1 added — `customers`, `products`, `services`, `departments` (read-only), `staff`, `packages`, `gift-cards` and `sales` (the POS item search, `GET /api/sales/items`). Everything else in the product is still to be built.                                                                                                                                                                                                                                                                                                            |
 | API structure       | `createApp()` factory (no port binding, so tests run over real HTTP), Zod validation middleware, error handler, rate limiting, JWT helpers                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | Schema              | **33 models.** The session pair (`User`, `RefreshToken`), the tenant plane (`PlatformAdmin`, `Tenant`, `Module`, `TenantModule`, `Subscription`, `Payment`, `AuditLog`), the core domain (`Department`, `StaffDepartment`, `Service`, `Product`, `Package`, `PackageService`, `ValuePackage`, `ValuePackageService`, `GiftCard`, `Customer`, `CustomerDepartment`, `Appointment`), and the POS and ledgers landed in migration `20261003091356`: `Sale`, `SaleLine`, `CustomerPackageHolding`, `CustomerValuePackageHolding`, `CustomerGiftCardHolding`, `CustomerPoint`, `CustomerOutstanding`, `CustomerOutstandingPayment`, `CustomerRedemption`, `EmployeeCommission`, `EmployeePerformance`, `EmployeeLeave`. Enums add `SaleStatus`, `SaleLineItemType`, `PaymentStatus` and `LeaveStatus` |
 | Tenancy in the code | **Landed.** `tenantId` on `User` and every domain model, the `TENANT_SCOPED_MODELS` extension over `AsyncLocalStorage`, `runAsTenant` / `runAsPlatform`, and the `requireModule` / `requireWritableTenant` guards. The access token carries the `tenantId` claim and `auth` enters `runAsTenant` for the rest of the request.                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
@@ -41,6 +41,70 @@ Facts below were read out of the tree, not copied from a plan.
 | Docs                | `architecture.md`, `CONTEXT.md`, `roadmap.md`, `STATE.md`, `decisions/` (0002–0007 + index), `legacy/` (LEGACY-MAP, API-INVENTORY, reference/legacy-schema), `saas/TENANCY.md`, `design/HANDOFF.md`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 ## 3. Next up — Phase 5 (the POS), and ADR 0002's importer
+
+### Closed with Phase 5b.1 — the POS item search (`GET /api/sales/items`)
+
+The first half of handoff screens 01–02: what a cashier types into **before** anything is in
+the cart. One endpoint searches all five sellable kinds, so the picker makes one request
+rather than five. **No migration and no write** — this slice is contract and read only. The
+cart write, the ledgers it fills, the receipt number and **Q16**'s idempotency key are
+5b.2, and the key needs the migration that slice brings.
+
+| Piece     | Where                                                           | What it does                                                                                                                                                                                                                                                        |
+| --------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Contracts | `packages/shared/src/schemas/sales.ts`                          | `SALE_ITEM_KINDS` (the `SaleLineItemType` enum, in the picker's tab order), a `saleItemSchema` **discriminated union** in which each kind carries only the columns it actually has, and the `?search=&kind=&limit=` query. No `createSaleSchema` yet — that is 5b.2 |
+| Shared    | `apps/api/src/lib/entitlements.ts`                              | `moduleEntitlements()` → `{ known, entitled }`. The guard's rule, extracted so a second caller can ask it rather than re-derive it, and asserted to run inside a tenant scope so it can never read every salon's grants                                             |
+| Service   | `apps/api/src/services/sale.service.ts`                         | Five readers merged into one name-sorted list; the product reader computes `lowStock` through 4b's now-exported `resolveLowStockThreshold`; each function throws outside a tenant scope                                                                             |
+| Routes    | `apps/api/src/routes/sales.routes.ts`                           | `GET /api/sales/items` behind `auth` + `requireModule("sales")`. `sales` is **core**, so the guard is mounted for the refusal shape and the tenant scope, not because anyone is billed for it                                                                       |
+| API       | `apps/api/src/middleware/requireModule.ts`                      | Now consumes `moduleEntitlements()` instead of its own two reads. Behaviour is unchanged; what changed is that the guard and the search can no longer disagree about a lapsed grant                                                                                 |
+| Constants | `packages/shared/src/constants.ts`                              | `DEFAULT_SALE_ITEM_LIMIT` (20) and `MAX_SALE_ITEM_LIMIT` (50) — counted **per kind**, and deliberately low                                                                                                                                                          |
+| Tests     | `sale.service.test.ts`, `sales.routes.test.ts`, `sales.test.ts` | 14 + 9 + 10 cases: the omission (not refusal) of an unentitled kind, the lapsed grant, per-tenant `lowStock`, cross-tenant isolation, "one search twice reads the same", and the schema's per-kind columns                                                          |
+
+Decisions worth keeping:
+
+- **An add-on inside a core feature is omitted, not refused.** `requireModule` returns
+  `403 MODULE_NOT_ENTITLED` when the whole route _is_ the add-on — which is right for
+  `/api/packages`. The till is different: two of its five kinds are add-ons inside a
+  **core** feature, and a cashier at a salon with no Packages add-on still has to ring up a
+  shampoo. So an unentitled kind is left out of `searchableKinds` and contributes no rows,
+  and "you have none" and "you do not have this" stay different statements — the rule the
+  catalogue tabs already keep.
+- **`requireModule` had one rule written in two reads; now it has one.** The extraction is
+  the point: the guard compares `known`/`entitled`, the search filters kinds by `entitled`,
+  and neither owns the definition of "effective". A lapsed `TenantModule` is refused by
+  both because both ask the same function, which the service suite asserts by setting
+  `expiresAt` in the past.
+- **`known` is returned alongside `entitled` on purpose.** A typo in a route's
+  `requireModule("catologue")` and a salon that has not bought `catalogue` must fail
+  differently — one is a bug, the other is a bill — and a single set could not tell them
+  apart.
+- **The limit is per kind, not per list.** Five catalogues merge into one list, so a single
+  budget would let a salon's 400 products crowd out its four services. The ceiling is 50
+  rather than a page size because a cashier narrows by typing.
+- **`searchableKinds` does not shrink with `?kind=`.** `?kind=` narrows `items` only; a
+  client switching tabs must not watch its own capabilities shrink request by request.
+- **Both prices come back together.** Whether the member price applies depends on the
+  customer attached to the sale, which can change _after_ the search, so the response
+  carries the non-member price and the member price (`null` for the kinds with only one)
+  and the cart can re-price a line without searching again.
+- **The till's box matches the name; the catalogue's matches the name or the description.**
+  Screen 08's placeholder is "Search items…"; the till is a cashier typing what the customer
+  asked for, so a description match would put a row on screen whose name the cashier did not
+  type.
+- **A kind is filtered to `status: ACTIVE` wherever a status column exists.** Archiving a
+  product has to take it off the till. `GiftCard` has no status column, so a card template
+  is always sellable here; whether an _expired_ template should be is a till rule 5b.2 has
+  to make, and inventing one in the search would hide a row screen 08 still shows.
+- **`VALUE_PACKAGE` rides the `packages` add-on.** `MODULE_CODES` has no value-package code,
+  and prepaid credit is bought and sold exactly like a bundle of sessions, so a salon has
+  both or neither; a fifteenth code would be an entitlement nobody's contract mentions.
+- **A gift card's face value is its price.** `GiftCard` has one money column, so the search
+  returns it once as `price` rather than adding a `value` field that could disagree with it.
+
+**Not built:** `POST /api/sales`, `GET /api/sales/:id`, the cart's ledgers and the receipt
+number — 5b.2, along with **Q16**'s idempotency key (the first migration since Phase 4) and
+**Q27**'s per-line `paid_price`, which the schema already holds both halves of (`unitPrice`
+_and_ `lineTotal`) and only the importer is missing a rule for.
 
 ### Closed with Phase 5a — the packages and gift-card catalogue (screen 08's last two tabs)
 
@@ -501,33 +565,44 @@ These are ours to decide; none of them needs production data.
 ## 5. Verify status
 
 `npm run verify` is `format:check` → `lint` → `typecheck` → `test`. Last full run:
-**exit 0**, 2026-10-05, with Phase 4a, 4b, 4c and 5a in the tree: **209 web + 44 API +
-45 shared**, no failures. The three steps before the tests passed with no warnings.
-(The stages were also run individually at the Phase 5a close — `prettier --check`,
-`eslint`, `tsc` and each suite — because the full pipeline's own output is not always
-capturable through the editor's shell.)
+**exit 0**, 2026-10-05, with Phase 4a, 4b, 4c, 5a and 5b.1 in the tree: **209 web + 44 API +
+55 shared**, no failures. The three steps before the tests passed with no warnings.
+(The pipeline was re-run end to end at the Phase 5b.1 close, with and without
+`DATABASE_URL`, and its stages were also run individually — `prettier --check`, `eslint`,
+`tsc` and each suite — because its output is not always capturable through the editor's
+shell.)
 
 **The API's database-backed suites are skipped unless `DATABASE_URL` is set**, so
 that count of 44 is the unit half only. Run them against a live database to
-exercise all **171** — which is what actually proves tenant isolation, and the
-catalogue, staff, packages, gift-card and both route suites are among them:
+exercise all **194** — which is what actually proves tenant isolation, and the
+catalogue, staff, packages, gift-card, sale and every route suite are among them:
 
 ```bash
 make test-db   # DATABASE_URL from .env.docker, host port 5433
 ```
 
-`make smoke` also passes against the running stack (both probes 200, the web proxy
-200, and `POST /api/auth/login` returns a usable token).
-steps before the tests passed with no warnings. The Phase 4c close reports:
+`make smoke` also passes against the running stack, re-checked at this close:
+`GET /health` → `{"status":"ok"}`, `GET /api/health` → `ok` with `"database":"up"`, the Vite
+page 200, and the web→API proxy 200. `/api/health` is the **same handler** as
+`GET /health/ready`, so both probes are covered. The login round-trip is not part of
+`make smoke`; the API's web-session suite is what exercises that.
+
+The Phase 5b.1 close reports:
 
 | Step           | Result                                                               |
 | -------------- | -------------------------------------------------------------------- |
 | `format:check` | Pass — every matched file already Prettier-formatted                 |
 | `lint`         | Pass — no errors or warnings in any workspace                        |
 | `typecheck`    | Pass — `@glampro/shared`, `@glampro/api`, `@glampro/web`             |
-| API tests      | **44 passed, 0 failed** in `verify`; **141** with `DATABASE_URL` set |
-| Shared tests   | **37 passed, 0 failed** (3 suites)                                   |
-| Web tests      | **27 files, 206 tests passed** (Vitest)                              |
+| API tests      | **44 passed, 0 failed** in `verify`; **194** with `DATABASE_URL` set |
+| Shared tests   | **55 passed, 0 failed** (5 files)                                    |
+| Web tests      | **27 files, 209 tests passed** (Vitest)                              |
+
+**One flake to expect on a loaded host.** A `verify` run taken while this machine sat at
+load average 8 failed two web files with `Test timed out in 5000ms`
+(`Products.test.tsx`, `Staff.test.tsx`); both passed on their own re-run in 8 s, on the same
+tree as the clean run above. Vitest's default timeout is 5 s and these pages render a lot of
+DOM, so read a lone 5 s timeout on an unrelated file as load rather than as a regression.
 
 The web half of Phase 3 added 3 files and 29 tests to that suite:
 `contexts/__tests__/AuthContext.test.tsx` (6), `lib/api.test.ts` (4),
@@ -539,35 +614,51 @@ apps/web/src/styles/tokens.css` exits 0 — the sign-in screen introduced no
 colour, radius or spacing of its own (ADR 0008).
 
 **`npm run verify` does not exercise the database-backed suites**, and that is easy to
-mistake for coverage. Three of them — `tenant isolation`, `requireModule` and `web session
-endpoints` — are gated on `DATABASE_URL` and report
+mistake for coverage. The database-gated ones — `tenant isolation`, `requireModule`, the
+web session endpoints, and the service/route suites for customers, catalogue, staff,
+packages, gift cards and sales — are gated on `DATABASE_URL` and report
 
 ```
 ﹣ web session endpoints # DATABASE_URL is not set
 ```
 
-when it is absent, which is why the API figure above is 44 rather than 141. They were run
-separately, and this is the observed result at the Phase 4c close:
+when it is absent, which is why the API figure above is 44 rather than 194. They were run
+separately, and this is the observed result at the Phase 5b.1 close:
 
 ```
-DATABASE_URL='postgresql://glampro:…@127.0.0.1:5433/glampro_test' \
-JWT_SECRET='<the value in .env.docker>' npm test --workspace @glampro/api
-→ 141 tests, 141 pass, 0 fail, 0 skipped, 35.6s, exit 0
+$ make test-db
+  API    → 194 tests, 194 pass, 0 fail, 0 skipped, 40 suites, 45.9s
+  web    →  27 files, 209 tests, all passed (Vitest)
+  shared →  55 tests,  55 pass, 0 fail, 0 skipped, 21 suites, 1.5s
+exit 0
 ```
 
 The tests that appear only in that run are the database-gated suites: tenant isolation,
-`requireModule`, the five `/api/auth` routes, and the customers, catalogue and staff route
-suites. They need a migrated database: `glampro_test` was created on
-the Docker Postgres (host port **5433**) and `prisma migrate deploy` applied all three
-migrations to it first. **The dev `glampro` database is not migrated to
-`20261002060110_domain_models`**, so these suites fail against it — use `glampro_test`, or
-migrate `glampro` first.
+`requireModule`, the five `/api/auth` routes, and the service and route suites for
+customers, catalogue, staff, packages, gift cards and sales — the last two of which are
+what Phase 5 adds. They need a migrated database. Both databases on the Docker Postgres
+(host port **5433**) are now fully migrated — all five migrations through
+`20261005030037_tenant_low_stock_threshold`:
 
-**What the Phase 1 close did not re-verify.** The run recorded above covers the unit suites,
-lint, type-check and formatting only. The Docker stack was **not** started at the close, so
-`GET /health`, `GET /health/ready` and `make smoke` carry the earlier session's result and
-were not re-confirmed here. If the stack matters to your change, run `make up-d && make
-smoke` before trusting those endpoints.
+- `glampro` — the dev database, and what `make test-db` points at, because the Makefile
+  builds `DATABASE_URL` from `POSTGRES_DB` in `.env.docker`. The green `make test-db` that
+  produced the 194 above ran against this database.
+- `glampro_test` — the scratch database the earlier closes used explicitly; run
+  `prisma migrate deploy` against it before pointing `DATABASE_URL` at it.
+
+Earlier closes said to use `glampro_test` because `glampro` stopped at
+`20261002060110_domain_models`. Phase 4b's low-stock migration was applied to both, so
+either works now, and `make test-db` — the documented path — uses the dev one.
+
+**What this close did not re-verify.** One thing, stated rather than glossed: **no single
+run covers everything at once.** `make test-db` runs all three suites against a live
+database but not the format check, lint or type-check; `npm run verify` runs all four but
+skips the database-gated suites. The table above is those two runs together, and both are
+green.
+
+Everything else was checked rather than assumed: the dev stack was up at this close and
+`make smoke` exited 0, and the migrated state of the two databases came from querying
+`_prisma_migrations` rather than from trusting a container's start banner.
 
 ### Two Prisma 7 behaviours that cost real time, and will cost it again
 

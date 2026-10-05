@@ -1,7 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 
+import { moduleEntitlements } from "../lib/entitlements.js";
 import { forbidden, unauthorized } from "../lib/http-error.js";
-import { prisma } from "../lib/prisma.js";
 import { currentScope } from "../lib/tenant-context.js";
 
 /**
@@ -16,9 +16,11 @@ import { currentScope } from "../lib/tenant-context.js";
  * module code in `details`, so the UI can render "this needs the Packages add-on"
  * rather than a bare "forbidden".
  *
- * Both entitlement queries are scoped by the Prisma extension, so this cannot
- * read another tenant's `TenantModule` even if the tenant filter were dropped
- * here by mistake.
+ * The rule and the two reads live in `lib/entitlements.ts`, because the POS item
+ * search needs the same answer for a different reason — it omits a kind the salon has
+ * not bought instead of refusing the request. Both entitlement queries are scoped by
+ * the Prisma extension, so neither can read another tenant's `TenantModule` even if
+ * the tenant filter were dropped here by mistake.
  */
 export function requireModule(code: string): RequestHandler {
   return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
@@ -38,33 +40,18 @@ export function requireModule(code: string): RequestHandler {
     }
 
     try {
-      const module = await prisma.module.findUnique({
-        where: { code },
-        select: { id: true, isCore: true },
-      });
+      const { known, entitled } = await moduleEntitlements();
 
-      if (!module) {
+      if (!known.has(code)) {
         // A typo in a route's module code must fail loudly rather than quietly
-        // granting access, so this is a refusal and not a pass.
+        // granting access, so this is a refusal and not a pass. It is a different
+        // refusal from "your salon has not bought this", which is why `known` is
+        // returned alongside `entitled`.
         next(forbidden(`Unknown module "${code}".`, "MODULE_UNKNOWN"));
         return;
       }
 
-      if (module.isCore) {
-        next();
-        return;
-      }
-
-      const entitlement = await prisma.tenantModule.findFirst({
-        where: { moduleId: module.id },
-        select: { expiresAt: true },
-      });
-
-      const isEffective =
-        entitlement !== null &&
-        (entitlement.expiresAt === null || entitlement.expiresAt > new Date());
-
-      if (!isEffective) {
+      if (!entitled.has(code)) {
         next(
           forbidden(`This feature needs the "${code}" add-on.`, "MODULE_NOT_ENTITLED", {
             module: code,

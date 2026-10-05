@@ -57,6 +57,18 @@ export const CORE_MODULE_CODES = [
 export const DEFAULT_PAGE_SIZE = 20;
 export const MAX_PAGE_SIZE = 200;
 
+/**
+ * The POS item search returns at most this many rows **per item kind**, not in
+ * total.
+ *
+ * Five kinds are merged into one list, so a single budget would let the first kind
+ * crowd the others out — a salon with 400 products would never see its four
+ * services. A cashier narrows the list by typing, which is why the ceiling is low
+ * rather than a page size.
+ */
+export const DEFAULT_SALE_ITEM_LIMIT = 20;
+export const MAX_SALE_ITEM_LIMIT = 50;
+
 /** Access tokens are short-lived; refresh tokens are rotated on every use. */
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 export const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;

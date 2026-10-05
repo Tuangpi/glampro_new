@@ -11,6 +11,7 @@ import { giftCardsRouter } from "./routes/gift-cards.routes.js";
 import { healthRouter, readiness } from "./routes/health.routes.js";
 import { packagesRouter } from "./routes/packages.routes.js";
 import { productsRouter } from "./routes/products.routes.js";
+import { salesRouter } from "./routes/sales.routes.js";
 import { servicesRouter } from "./routes/services.routes.js";
 import { staffRouter } from "./routes/staff.routes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
@@ -83,6 +84,11 @@ export function createApp(): Express {
   // sit beside is core and passes as soon as the tenant exists.
   app.use(`${API_PREFIX}/packages`, packagesRouter);
   app.use(`${API_PREFIX}/gift-cards`, giftCardsRouter);
+  // Screens 01–02. The till's item search (5b.1) is the first route that has to decide
+  // what to do about an add-on it *partly* needs: two of the five kinds it searches are
+  // add-ons, so it omits them and says so rather than refusing the whole request the way
+  // the two mounts above do.
+  app.use(`${API_PREFIX}/sales`, salesRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
