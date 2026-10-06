@@ -254,6 +254,16 @@ model Tenant {
   /// "low" is a salon's own judgement, and a shop that holds forty bottles of
   /// shampoo does not agree with one that holds four. See ADR 0010.
   lowStockThreshold Int @default(5)
+  /// The last receipt number this salon has issued. `receiptNumber` on `Sale` is a
+  /// per-tenant sequence rather than legacy's `random_int(100000, 999999)`, which no
+  /// constraint protected (ADR 0011).
+  ///
+  /// A **column on the tenant, not a Postgres sequence**: a `SERIAL` is global, so
+  /// two salons would hand out interleaved numbers and each salon would see gaps and
+  /// another's figures in its own receipts. The till increments this inside the same
+  /// transaction that writes the sale, which is also what makes two tills rung up at
+  /// once take different numbers rather than the same one.
+  receiptCounter Int @default(0)
   /// Ownership is this relation. There is deliberately no `OWNER` role.
   ///
   /// Nullable because of a real foreign-key cycle: `users.tenantId` points at
@@ -292,6 +302,7 @@ model Tenant {
   employeeCommissions EmployeeCommission[]
   sales               Sale[]
   saleLines           SaleLine[]
+  salePayments        SalePayment[]
   packageHoldings     CustomerPackageHolding[]
   valuePackageHoldings CustomerValuePackageHolding[]
   giftCardHoldings    CustomerGiftCardHolding[]
@@ -754,6 +765,9 @@ model EmployeeCommission {
 ///    `staffId` here is simply who rang it up.
 /// 4. **`sale_id` (a string used as the pivot key) is gone.** Lines key on this
 ///    row's own id.
+/// 5. **`payment_type` and `session_id` moved to `SalePayment`.** Legacy held one
+///    tender per sale, so `splitPay()` stored the string `"cash_50_card_25"` in the
+///    text column — a sale no report can sum. The tenders are rows now (ADR 0012).
 model Sale {
   id       String @id @default(cuid())
   tenantId String
@@ -768,11 +782,24 @@ model Sale {
   totalAmount   Decimal @db.Decimal(12, 2)
   paidAmount    Decimal @db.Decimal(12, 2)
 
-  paymentMethod PaymentMethod?
-  /// Gateway session id, for a card payment that settles later.
-  sessionId String?
   /// Legacy `payment_status` (`0=unpaid, 1=paid`).
   paymentStatus PaymentStatus @default(UNPAID)
+
+  /// The reference the screen prints — legacy's `sales.sale_id`, which
+  /// `random_int(100000, 999999)` wrote and no constraint protected. This is a
+  /// per-tenant sequence instead (ADR 0011), so it is unique per salon and
+  /// allocated inside the write.
+  ///
+  /// Nullable because a row that predates the column — a migrated sale, or one
+  /// written while the importer is still running — has no number yet, and inventing
+  /// one on read would be worse than saying "not assigned".
+  receiptNumber Int?
+
+  /// **Q16.** The till's key for this write. A double-tap posts the same key twice
+  /// and the second one reads back the sale the first already made, rather than
+  /// charging the customer again. Unique per tenant; a `null` key (the legacy
+  /// importer) is unconstrained, which Postgres allows for any number of rows.
+  idempotencyKey String?
 
   /// Legacy `sale_date` + `sale_time`.
   soldAt   DateTime
@@ -786,6 +813,7 @@ model Sale {
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
   staff      User?    @relation(fields: [staffId], references: [id], onDelete: Cascade)
   lines      SaleLine[]
+  payments    SalePayment[]
   commissions EmployeeCommission[]
   points      CustomerPoint[]
   outstanding CustomerOutstanding?
@@ -793,10 +821,53 @@ model Sale {
   redemptions CustomerRedemption[]
   performances EmployeePerformance[]
 
+  /// One receipt reference per salon. Legacy wrote `random_int(100000, 999999)`
+  /// into a nullable string with **no constraint at all**, so two sales could share
+  /// a printed number (ADR 0011). A `null` is unconstrained, which is what lets a
+  /// migrated sale sit here before the importer assigns one.
+  @@unique([tenantId, receiptNumber])
+  /// Q16. The same nullability argument: the importer posts without a key, and any
+  /// number of unkeyed sales may coexist.
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId, soldAt])
   @@index([tenantId, status])
   @@index([customerId, soldAt])
   @@map("sales")
+}
+
+/// One tender a sale was paid with.
+///
+/// Legacy had one `payment_type` text and one `session_id` on the sale row, which
+/// can express exactly **one** tender. `splitPay()` charged the card half through
+/// Stripe and then stored the whole thing as the free text `"cash_50_card_25"` in
+/// `sales.payment_type`, so a split sale could not be summed, counted or reported by
+/// any query. It is one row per tender here, and a split is two rows rather than a
+/// special case (ADR 0012).
+///
+/// `sessionId` moves off the sale row onto the tender it belongs to: with one
+/// `sales.session_id` there was no way to say which half of a split a gateway
+/// session paid for.
+model SalePayment {
+  id       String @id @default(cuid())
+  tenantId String
+  saleId   String
+
+  /// Typed against the `PaymentMethod` enum rather than stored as legacy's free
+  /// text, so `sum(amount) where method = CASH` is a query rather than a guess about
+  /// spelling. The importer maps legacy's text onto this enum.
+  method PaymentMethod
+  amount Decimal        @db.Decimal(12, 2)
+
+  /// Gateway session, for a card tender that settles later.
+  sessionId String?
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([saleId])
+  @@map("sale_payments")
 }
 
 /// One priced line of a sale — the cart row.
@@ -820,6 +891,17 @@ model SaleLine {
   itemName String
 
   quantity Int
+  /// The line's place in the cart, 0-based.
+  ///
+  /// The cart is an ordered list and the receipt has to reprint it **in the order it
+  /// was rung up** — a customer disputing line three needs to see the same line
+  /// three. Legacy had five line tables and no order in any of them, so it could
+  /// only ever print them per-kind.
+  ///
+  /// Stored rather than derived from `createdAt`: a whole cart is written in one
+  /// statement, so every row carries the same timestamp and the receipt would come
+  /// back in an arbitrary order.
+  position Int @default(0)
   /// What one unit sold for after any discount. Legacy's single `paid_price`
   /// column is ambiguous about whether it is per unit or per line (Q27); both are
   /// stored so the schema is right under either answer, and the importer fills

@@ -1,17 +1,30 @@
 /**
- * The POS item search, against the real database.
+ * The POS item search **and** the sale write, against the real database.
  *
- * Three things can only be shown here rather than in the route test:
+ * The search half (5b.1) asserts three things that can only be shown here rather than in
+ * the route test:
  *
- * - **An unentitled kind is omitted, not refused.** The salon's own gift-card row
- *   exists and stays invisible while the add-on is unpaid, and `searchableKinds` says
- *   so — which is what lets the picker draw four tabs instead of five or, worse, five
- *   tabs one of which is always empty.
+ * - **An unentitled kind is omitted, not refused.** The salon's own gift-card row exists
+ *   and stays invisible while the add-on is unpaid, and `searchableKinds` says so —
+ *   which is what lets the picker draw four tabs instead of five or, worse, five tabs
+ *   one of which is always empty.
  * - **A lapsed grant is not a grant.** The same row with `expiresAt` in the past must
  *   behave like no row at all, because that is what `requireModule` does and the two
  *   must not disagree.
  * - **`lowStock` is this salon's judgement.** The two tenants are seeded with the same
  *   quantities and different thresholds, so a hard-coded five would fail here.
+ *
+ * The write half (5b.2) asserts the rules a browser cannot be trusted with: that the
+ * price came from the catalogue, that a replayed idempotency key does not charge twice,
+ * that the ledgers are filled, and that nothing crosses a tenant. Two of them are the
+ * point of the whole slice:
+ *
+ * - **An expired gift card is refused by the write but still offered by the search.**
+ *   `GiftCard` has no status column, so 5b.1 could not hide it; if the write did not
+ *   refuse it either, the two halves of the till would disagree about what is for sale.
+ * - **The write refuses an unentitled kind where the search omitted it.** Omission is
+ *   right for a tab and wrong for a line: dropping the line would sell a haircut and
+ *   lose a shampoo, then report success.
  *
  * Everything is namespaced by tenant, so a leak shows up as a foreign name in the list
  * rather than as a passing count.
@@ -34,7 +47,7 @@ import {
 import { SaleLineItemType } from "../../generated/prisma/enums.js";
 import { prisma } from "../lib/prisma.js";
 import { runAsPlatform, runAsTenant } from "../lib/tenant-context.js";
-import { searchSaleItems } from "./sale.service.js";
+import { createSale, getSale, searchSaleItems } from "./sale.service.js";
 
 const databaseUrl = process.env["DATABASE_URL"];
 
@@ -67,6 +80,25 @@ async function purge(): Promise<void> {
     await prisma.giftCard.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
     await prisma.product.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
     await prisma.service.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
+
+    // Children first: the sale-ledgers rows hang off the sale, and the sale's own
+    // child rows off it, so a partial tree from a failed run still clears.
+    await prisma.customerOutstandingPayment.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
+    await prisma.customerOutstanding.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
+    await prisma.customerRedemption.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
+    await prisma.customerPoint.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
+    await prisma.customerPackageHolding.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
+    await prisma.customerValuePackageHolding.deleteMany({
+      where: { tenantId: { in: TENANT_IDS } },
+    });
+    await prisma.customerGiftCardHolding.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
+    await prisma.employeePerformance.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
+    await prisma.employeeCommission.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
+    await prisma.salePayment.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
+    await prisma.saleLine.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
+    await prisma.sale.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
+    await prisma.customer.deleteMany({ where: { tenantId: { in: TENANT_IDS } } });
+    await prisma.user.deleteMany({ where: { email: { contains: "@sale-write.test" } } });
     await prisma.tenant.deleteMany({ where: { id: { in: TENANT_IDS } } });
   });
 }
@@ -195,6 +227,42 @@ async function seed(): Promise<void> {
       // No expiry: the wire has to keep "never expires" distinct from "expired".
       await prisma.giftCard.create({
         data: { tenantId, name: nameOf(tenantId, "Aloha Card"), value: "150.00" },
+      });
+
+      // Expired in the past. The search still shows it (`GiftCard` has no status
+      // column), so this is the row that proves the **write** refuses it — the rule
+      // `sale.service.ts` says 5b.1 had to leave open.
+      await prisma.giftCard.create({
+        data: {
+          tenantId,
+          name: nameOf(tenantId, "Lapsed Card"),
+          value: "50.00",
+          expiresAt: new Date("2020-01-01T00:00:00Z"),
+        },
+      });
+
+      // Two staff to attribute lines to, so per-line credit is testable.
+      await prisma.user.create({
+        data: {
+          tenantId,
+          email: `staff-${tenantId}@sale-write.test`,
+          name: `Staff ${tenantId}`,
+          passwordHash: "not-a-real-hash",
+        },
+      });
+
+      // An ordinary customer and a member. The member carries `memberId`, which is
+      // the whole membership rule legacy left behind (free text, no tier table).
+      await prisma.customer.create({
+        data: { tenantId, name: `Walk In ${tenantId}`, email: `plain-${tenantId}@sale-write.test` },
+      });
+      await prisma.customer.create({
+        data: {
+          tenantId,
+          name: `Member ${tenantId}`,
+          email: `member-${tenantId}@sale-write.test`,
+          memberId: "GOLD",
+        },
       });
     }
   });
@@ -460,6 +528,557 @@ describe(
     it("refuses to run outside a tenant scope, where it would read every salon's grants", async () => {
       await assert.rejects(
         runAsPlatform(() => searchSaleItems(NO_FILTERS)),
+        /tenant scope/,
+      );
+    });
+  },
+);
+
+/** A catalogue row's id in this salon, by the name the seed gave it. */
+async function idOf(tenantId: string, name: string): Promise<string> {
+  const rows = await runAsTenant(tenantId, () =>
+    prisma.service.findMany({ where: { name }, select: { id: true } }),
+  );
+  const found = rows[0];
+  if (!found) throw new Error(`no service named "${name}"`);
+  return found.id;
+}
+
+/** One of this salon's customers, preferring the one carrying `memberId`. */
+async function customerIdOf(tenantId: string, member: boolean): Promise<string> {
+  const rows = await runAsTenant(tenantId, () =>
+    prisma.customer.findMany({
+      where: member ? { memberId: { not: null } } : { memberId: null },
+      select: { id: true },
+    }),
+  );
+  const found = rows[0];
+  if (!found) throw new Error(`no ${member ? "member" : "ordinary"} customer for ${tenantId}`);
+  return found.id;
+}
+
+async function staffIdOf(tenantId: string): Promise<string> {
+  const rows = await runAsTenant(tenantId, () =>
+    prisma.user.findMany({
+      where: { email: { endsWith: "@sale-write.test" } },
+      select: { id: true },
+    }),
+  );
+  const found = rows[0];
+  if (!found) throw new Error(`no staff for ${tenantId}`);
+  return found.id;
+}
+
+/** A catalogue id by name, for the tables that are not `service`. */
+async function productIdOf(tenantId: string, name: string): Promise<string> {
+  const rows = await runAsTenant(tenantId, () =>
+    prisma.product.findMany({ where: { name }, select: { id: true } }),
+  );
+  const found = rows[0];
+  if (!found) throw new Error(`no product named "${name}"`);
+  return found.id;
+}
+
+async function packageIdOf(tenantId: string, name: string): Promise<string> {
+  const rows = await runAsTenant(tenantId, () =>
+    prisma.package.findMany({ where: { name }, select: { id: true } }),
+  );
+  const found = rows[0];
+  if (!found) throw new Error(`no package named "${name}"`);
+  return found.id;
+}
+
+async function giftCardIdOf(tenantId: string, name: string): Promise<string> {
+  const rows = await runAsTenant(tenantId, () =>
+    prisma.giftCard.findMany({ where: { name }, select: { id: true } }),
+  );
+  const found = rows[0];
+  if (!found) throw new Error(`no gift card named "${name}"`);
+  return found.id;
+}
+
+/** The error's `code`, so a refusal asserts *which* refusal it was. */
+function hasCode(code: string) {
+  return (error: unknown) =>
+    typeof error === "object" && error !== null && "code" in error && error.code === code;
+}
+
+describe(
+  "sale.service the write, against the database",
+  { skip: databaseUrl ? false : "DATABASE_URL is not set" },
+  () => {
+    before(seed);
+    after(purge);
+
+    it("prices from the catalogue, not from the request", async () => {
+      // The contract has no price field at all, so this can only pass if the server read
+      // the catalogue — a hand-posted `unitPrice` is not even accepted.
+      const cutId = await idOf(TENANT_A, nameOf(TENANT_A, "Cut"));
+      const receipt = await runAsTenant(TENANT_A, () =>
+        createSale({
+          lines: [{ itemType: "SERVICE", itemId: cutId, quantity: 2 }],
+          payments: [{ method: "CASH", amount: 100 }],
+        }),
+      );
+
+      // 50.00 non-member × 2.
+      assert.equal(receipt.totalAmount, "100.00");
+      assert.equal(receipt.lines[0]?.unitPrice, "50.00");
+      assert.equal(receipt.lines[0]?.lineTotal, "100.00");
+      assert.equal(receipt.paymentStatus, "PAID");
+    });
+
+    it("gives a member the member price and an ordinary customer the other one", async () => {
+      const cutId = await idOf(TENANT_A, nameOf(TENANT_A, "Cut"));
+      const memberId = await customerIdOf(TENANT_A, true);
+      const plainId = await customerIdOf(TENANT_A, false);
+
+      const forMember = await runAsTenant(TENANT_A, () =>
+        createSale({
+          customerId: memberId,
+          lines: [{ itemType: "SERVICE", itemId: cutId, quantity: 1 }],
+          payments: [{ method: "CASH", amount: 40 }],
+        }),
+      );
+      const forPlain = await runAsTenant(TENANT_A, () =>
+        createSale({
+          customerId: plainId,
+          lines: [{ itemType: "SERVICE", itemId: cutId, quantity: 1 }],
+          payments: [{ method: "CASH", amount: 50 }],
+        }),
+      );
+
+      assert.equal(forMember.lines[0]?.unitPrice, "40.00");
+      assert.equal(forPlain.lines[0]?.unitPrice, "50.00");
+    });
+
+    it("gives each salon its own receipt numbers, in order, with no repeats", async () => {
+      const cutId = await idOf(TENANT_A, nameOf(TENANT_A, "Cut"));
+      const cutIdB = await idOf(TENANT_B, nameOf(TENANT_B, "Cut"));
+
+      // Read each counter first rather than assuming it starts at zero: earlier tests in
+      // this suite have already rung sales up for A, and the assertion is about the
+      // *sequence*, not about a fresh database.
+      const counterOf = (tenantId: string) =>
+        runAsTenant(tenantId, () =>
+          prisma.tenant.findFirstOrThrow({
+            where: { id: tenantId },
+            select: { receiptCounter: true },
+          }),
+        );
+
+      const counterA = (await counterOf(TENANT_A)).receiptCounter;
+      const counterB = (await counterOf(TENANT_B)).receiptCounter;
+
+      const first = await runAsTenant(TENANT_A, () =>
+        createSale({
+          lines: [{ itemType: "SERVICE", itemId: cutId, quantity: 1 }],
+          payments: [{ method: "CASH", amount: 50 }],
+        }),
+      );
+      const second = await runAsTenant(TENANT_A, () =>
+        createSale({
+          lines: [{ itemType: "SERVICE", itemId: cutId, quantity: 1 }],
+          payments: [{ method: "CASH", amount: 50 }],
+        }),
+      );
+      const other = await runAsTenant(TENANT_B, () =>
+        createSale({
+          lines: [{ itemType: "SERVICE", itemId: cutIdB, quantity: 1 }],
+          payments: [{ method: "CASH", amount: 50 }],
+        }),
+      );
+
+      // Consecutive and gap-free within a salon, and **independent across salons** —
+      // B's first sale is numbered from B's own counter, not from a global sequence
+      // (ADR 0011). Legacy's `random_int(100000, 999999)` had neither property, and no
+      // uniqueness at all, so two sales could print the same reference.
+      assert.equal(first.receiptNumber, counterA + 1);
+      assert.equal(second.receiptNumber, counterA + 2);
+      assert.equal(other.receiptNumber, counterB + 1);
+    });
+
+    it("returns the same sale for a repeated idempotency key instead of charging twice", async () => {
+      const cutId = await idOf(TENANT_A, nameOf(TENANT_A, "Cut"));
+      const key = "double-tap-key-0001";
+      const body = {
+        lines: [{ itemType: "SERVICE" as const, itemId: cutId, quantity: 1 }],
+        payments: [{ method: "CASH" as const, amount: 50 }],
+        idempotencyKey: key,
+      };
+
+      const first = await runAsTenant(TENANT_A, () => createSale(body));
+      const second = await runAsTenant(TENANT_A, () => createSale(body));
+
+      // Q16. Legacy's `pay-by-cash` had no key anywhere, so this double-charged.
+      assert.equal(second.id, first.id);
+      assert.equal(second.receiptNumber, first.receiptNumber);
+
+      const sales = await runAsTenant(TENANT_A, () =>
+        prisma.sale.findMany({ where: { idempotencyKey: key }, select: { id: true } }),
+      );
+      assert.equal(sales.length, 1, "a replay must not write a second sale");
+    });
+
+    it("records a split as two tenders a report can sum", async () => {
+      const cutId = await idOf(TENANT_A, nameOf(TENANT_A, "Cut"));
+      const receipt = await runAsTenant(TENANT_A, () =>
+        createSale({
+          lines: [{ itemType: "SERVICE", itemId: cutId, quantity: 1 }],
+          payments: [
+            { method: "CASH", amount: 20 },
+            { method: "CARD", amount: 30, sessionId: "cs_test_123" },
+          ],
+        }),
+      );
+
+      assert.equal(receipt.totalAmount, "50.00");
+      assert.equal(receipt.paidAmount, "50.00");
+      assert.equal(receipt.payments.length, 2);
+
+      // Legacy stored this as the free text `"cash_20_card_30"`, which no query can sum.
+      // `CASH` before `CARD` because Postgres orders an enum by **declaration** order
+      // (`CASH` is declared first), not alphabetically.
+      const stored = await runAsTenant(TENANT_A, () =>
+        prisma.salePayment.findMany({
+          where: { saleId: receipt.id },
+          select: { method: true, amount: true, sessionId: true },
+          orderBy: { method: "asc" },
+        }),
+      );
+      assert.deepEqual(
+        stored.map((row) => [row.method, row.amount.toFixed(2)]),
+        [
+          ["CASH", "20.00"],
+          ["CARD", "30.00"],
+        ],
+      );
+      // The gateway session belongs to the card half, which is the point of moving it
+      // off the sale row.
+      assert.equal(stored.find((row) => row.method === "CARD")?.sessionId, "cs_test_123");
+    });
+
+    it("takes stock off the product and refuses to oversell it", async () => {
+      await grant(TENANT_A, "catalogue");
+      const shampoo = await productIdOf(TENANT_A, nameOf(TENANT_A, "Shampoo"));
+
+      const before = await runAsTenant(TENANT_A, () =>
+        prisma.product.findFirstOrThrow({ where: { id: shampoo }, select: { quantity: true } }),
+      );
+
+      await runAsTenant(TENANT_A, () =>
+        createSale({
+          lines: [{ itemType: "PRODUCT", itemId: shampoo, quantity: 2 }],
+          payments: [{ method: "CASH", amount: 30 }],
+        }),
+      );
+
+      const after = await runAsTenant(TENANT_A, () =>
+        prisma.product.findFirstOrThrow({ where: { id: shampoo }, select: { quantity: true } }),
+      );
+      assert.equal(after.quantity, before.quantity - 2);
+
+      // One more than remains: refused, and nothing written.
+      await assert.rejects(
+        runAsTenant(TENANT_A, () =>
+          createSale({
+            lines: [{ itemType: "PRODUCT", itemId: shampoo, quantity: after.quantity + 1 }],
+            payments: [{ method: "CASH", amount: 99 }],
+          }),
+        ),
+        /in stock/,
+      );
+
+      const unchanged = await runAsTenant(TENANT_A, () =>
+        prisma.product.findFirstOrThrow({ where: { id: shampoo }, select: { quantity: true } }),
+      );
+      assert.equal(unchanged.quantity, after.quantity, "a refused sale must not move stock");
+    });
+
+    it("credits a customer for a package, and refuses to issue credit to nobody", async () => {
+      await grant(TENANT_A, "packages");
+      const bundle = await packageIdOf(TENANT_A, nameOf(TENANT_A, "Aloha Bundle"));
+      const customerId = await customerIdOf(TENANT_A, false);
+
+      await runAsTenant(TENANT_A, () =>
+        createSale({
+          customerId,
+          lines: [{ itemType: "PACKAGE", itemId: bundle, quantity: 1 }],
+          payments: [{ method: "CASH", amount: 300 }],
+        }),
+      );
+
+      const holdings = await runAsTenant(TENANT_A, () =>
+        prisma.customerPackageHolding.findMany({
+          where: { customerId },
+          select: { quantity: true, quantityRemaining: true, saleLineId: true },
+        }),
+      );
+      // 10 sessions granted by the seed, unspent at the moment of sale.
+      assert.equal(holdings.length, 1);
+      assert.equal(holdings[0]?.quantity, 10);
+      assert.equal(holdings[0]?.quantityRemaining, 10);
+      assert.ok(holdings[0]?.saleLineId, "the holding must name the line that granted it");
+
+      // The same bundle, no customer: refused rather than credited to nobody.
+      await assert.rejects(
+        runAsTenant(TENANT_A, () =>
+          createSale({
+            lines: [{ itemType: "PACKAGE", itemId: bundle, quantity: 1 }],
+            payments: [{ method: "CASH", amount: 300 }],
+          }),
+        ),
+        /needs a customer/,
+      );
+    });
+
+    it("refuses a kind whose add-on the salon has not bought", async () => {
+      await revoke(TENANT_A, "packages");
+      const bundle = await packageIdOf(TENANT_A, nameOf(TENANT_A, "Aloha Bundle"));
+      const customerId = await customerIdOf(TENANT_A, false);
+
+      // The search omits this kind; the write refuses it. Silently dropping the line
+      // would sell nothing and report a success.
+      await assert.rejects(
+        runAsTenant(TENANT_A, () =>
+          createSale({
+            customerId,
+            lines: [{ itemType: "PACKAGE", itemId: bundle, quantity: 1 }],
+            payments: [{ method: "CASH", amount: 300 }],
+          }),
+        ),
+        hasCode("MODULE_NOT_ENTITLED"),
+      );
+
+      await grant(TENANT_A, "packages");
+    });
+
+    it("refuses an expired gift card template the search still offers", async () => {
+      await grant(TENANT_A, "giftCards");
+      const lapsed = await giftCardIdOf(TENANT_A, nameOf(TENANT_A, "Lapsed Card"));
+      const customerId = await customerIdOf(TENANT_A, false);
+
+      // The search returns it — `GiftCard` has no status column — so the two halves of
+      // the till must not disagree about whether it is for sale.
+      const offered = await runAsTenant(TENANT_A, () =>
+        searchSaleItems({ ...NO_FILTERS, kind: "GIFT_CARD" }),
+      );
+      assert.ok(
+        offered.items.some((item) => item.id === lapsed),
+        "the search still shows an expired template, which is why the write must refuse it",
+      );
+
+      await assert.rejects(
+        runAsTenant(TENANT_A, () =>
+          createSale({
+            customerId,
+            lines: [{ itemType: "GIFT_CARD", itemId: lapsed, quantity: 1 }],
+            payments: [{ method: "CASH", amount: 50 }],
+          }),
+        ),
+        /expired/,
+      );
+    });
+
+    it("records an unpaid balance against the customer and the points earned", async () => {
+      const cutId = await idOf(TENANT_A, nameOf(TENANT_A, "Cut"));
+      const customerId = await customerIdOf(TENANT_A, false);
+
+      const receipt = await runAsTenant(TENANT_A, () =>
+        createSale({
+          customerId,
+          lines: [{ itemType: "SERVICE", itemId: cutId, quantity: 1 }],
+          payments: [{ method: "CASH", amount: 20 }],
+        }),
+      );
+
+      assert.equal(receipt.paymentStatus, "UNPAID");
+      assert.equal(receipt.outstandingAmount, "30.00");
+      // 5 points on the seeded cut.
+      assert.equal(receipt.pointsEarned, 5);
+
+      const outstanding = await runAsTenant(TENANT_A, () =>
+        prisma.customerOutstanding.findMany({
+          where: { saleId: receipt.id },
+          select: { unpaidAmount: true },
+        }),
+      );
+      assert.equal(outstanding.length, 1);
+      assert.equal(outstanding[0]?.unpaidAmount.toFixed(2), "30.00");
+    });
+
+    it("never shows a negative balance when the customer overpays", async () => {
+      const cutId = await idOf(TENANT_A, nameOf(TENANT_A, "Cut"));
+      const customerId = await customerIdOf(TENANT_A, false);
+      const receipt = await runAsTenant(TENANT_A, () =>
+        createSale({
+          customerId,
+          lines: [{ itemType: "SERVICE", itemId: cutId, quantity: 1 }],
+          // Change given: a hundred for a fifty.
+          payments: [{ method: "CASH", amount: 100 }],
+        }),
+      );
+
+      assert.equal(receipt.totalAmount, "50.00");
+      assert.equal(receipt.paidAmount, "100.00");
+      assert.equal(receipt.outstandingAmount, "0.00");
+      assert.equal(receipt.paymentStatus, "PAID");
+
+      const outstanding = await runAsTenant(TENANT_A, () =>
+        prisma.customerOutstanding.count({ where: { saleId: receipt.id } }),
+      );
+      assert.equal(outstanding, 0, "overpayment is change, not a negative debt");
+    });
+
+    it("attributes each line to the stylist it names, and records nothing for the rest", async () => {
+      const cutId = await idOf(TENANT_A, nameOf(TENANT_A, "Cut"));
+      const serum = await productIdOf(TENANT_A, nameOf(TENANT_A, "Serum"));
+      const staffId = await staffIdOf(TENANT_A);
+
+      const receipt = await runAsTenant(TENANT_A, () =>
+        createSale({
+          staffId,
+          lines: [
+            { itemType: "SERVICE", itemId: cutId, quantity: 2, staffId },
+            { itemType: "PRODUCT", itemId: serum, quantity: 1 },
+          ],
+          payments: [{ method: "CASH", amount: 135 }],
+        }),
+      );
+
+      assert.equal(receipt.lines[0]?.staffId, staffId);
+      assert.equal(receipt.lines[0]?.staffName, `Staff ${TENANT_A}`);
+      assert.equal(receipt.lines[1]?.staffId, null, "an unattributed line is uncredited");
+
+      // One performance row for the attributed line only, at the **line total**.
+      const performance = await runAsTenant(TENANT_A, () =>
+        prisma.employeePerformance.findMany({
+          where: { saleId: receipt.id },
+          select: { itemType: true, amount: true },
+        }),
+      );
+      assert.equal(performance.length, 1);
+      assert.equal(performance[0]?.itemType, "SERVICE");
+      assert.equal(performance[0]?.amount.toFixed(2), "100.00");
+    });
+
+    it("reprints a receipt in the order it was rung up", async () => {
+      const cutId = await idOf(TENANT_A, nameOf(TENANT_A, "Cut"));
+      const serum = await productIdOf(TENANT_A, nameOf(TENANT_A, "Serum"));
+
+      // Deliberately not alphabetical, so an order-by-name implementation fails here.
+      const receipt = await runAsTenant(TENANT_A, () =>
+        createSale({
+          lines: [
+            { itemType: "PRODUCT", itemId: serum, quantity: 1 },
+            { itemType: "SERVICE", itemId: cutId, quantity: 1 },
+          ],
+          payments: [{ method: "CASH", amount: 85 }],
+        }),
+      );
+
+      assert.deepEqual(
+        receipt.lines.map((line) => line.itemType),
+        ["PRODUCT", "SERVICE"],
+      );
+      // The same order on a re-read, which is what `GET /api/sales/:id` promises.
+      const reread = await runAsTenant(TENANT_A, () => getSale(receipt.id));
+      assert.deepEqual(
+        reread.lines.map((line) => line.itemType),
+        ["PRODUCT", "SERVICE"],
+      );
+    });
+
+    it("keeps another salon's sale unreadable, and one of its customers unsellable-to", async () => {
+      const cutIdB = await idOf(TENANT_B, nameOf(TENANT_B, "Cut"));
+      const theirs = await runAsTenant(TENANT_B, () =>
+        createSale({
+          lines: [{ itemType: "SERVICE", itemId: cutIdB, quantity: 1 }],
+          payments: [{ method: "CASH", amount: 50 }],
+        }),
+      );
+
+      await assert.rejects(
+        runAsTenant(TENANT_A, () => getSale(theirs.id)),
+        hasCode("SALE_NOT_FOUND"),
+      );
+
+      // B's customer is simply not found for A — never "forbidden", which would confirm
+      // that the id exists somewhere.
+      const bCustomer = await customerIdOf(TENANT_B, false);
+      await assert.rejects(
+        runAsTenant(TENANT_A, () =>
+          createSale({
+            customerId: bCustomer,
+            lines: [{ itemType: "SERVICE", itemId: cutIdB, quantity: 1 }],
+            payments: [{ method: "CASH", amount: 50 }],
+          }),
+        ),
+        hasCode("CUSTOMER_NOT_FOUND"),
+      );
+    });
+
+    it("refuses a stylist that is not this salon's, before anything is written", async () => {
+      const cutId = await idOf(TENANT_A, nameOf(TENANT_A, "Cut"));
+      const foreignStylist = await staffIdOf(TENANT_B);
+      const salesBefore = await runAsTenant(TENANT_A, () => prisma.sale.count());
+
+      // B's stylist is a row that exists, so the foreign key would have accepted this
+      // link and another salon's user would have been credited for A's performance.
+      // The scoped read finds no such person for A — the same answer a bogus id gets,
+      // and deliberately indistinguishable from it, for the same reason the customer
+      // lookup is: "forbidden" would confirm the id exists somewhere.
+      await assert.rejects(
+        runAsTenant(TENANT_A, () =>
+          createSale({
+            lines: [{ itemType: "SERVICE", itemId: cutId, quantity: 1, staffId: foreignStylist }],
+            payments: [{ method: "CASH", amount: 50 }],
+          }),
+        ),
+        (error: unknown) => {
+          assert.equal((error as { code?: string }).code, "BAD_REQUEST");
+          const details = (error as { details?: { path?: string }[] }).details;
+          assert.ok(
+            details?.some((detail) => detail.path === "body.lines.0.staffId"),
+            `expected a detail on the offending line, got ${JSON.stringify(details)}`,
+          );
+          return true;
+        },
+      );
+
+      // The sale-level id (who rang it up) is refused the same way, at its own path.
+      await assert.rejects(
+        runAsTenant(TENANT_A, () =>
+          createSale({
+            staffId: "no-such-stylist",
+            lines: [{ itemType: "SERVICE", itemId: cutId, quantity: 1 }],
+            payments: [{ method: "CASH", amount: 50 }],
+          }),
+        ),
+        (error: unknown) => {
+          const details = (error as { details?: { path?: string }[] }).details;
+          assert.ok(
+            details?.some((detail) => detail.path === "body.staffId"),
+            `expected a detail for body.staffId, got ${JSON.stringify(details)}`,
+          );
+          return true;
+        },
+      );
+
+      // A refused cart writes nothing at all — not a sale with a null credit line.
+      const salesAfter = await runAsTenant(TENANT_A, () => prisma.sale.count());
+      assert.equal(salesAfter, salesBefore);
+    });
+
+    it("refuses to write outside a tenant scope", async () => {
+      const cutId = await idOf(TENANT_A, nameOf(TENANT_A, "Cut"));
+      await assert.rejects(
+        runAsPlatform(() =>
+          createSale({
+            lines: [{ itemType: "SERVICE", itemId: cutId, quantity: 1 }],
+            payments: [{ method: "CASH", amount: 50 }],
+          }),
+        ),
         /tenant scope/,
       );
     });

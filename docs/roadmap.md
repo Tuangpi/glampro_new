@@ -124,20 +124,24 @@ landed — Phase 5a built the catalogue behind them.)
 Handoff screens 01–02. Criterion: a sale containing services, products, packages and
 a gift card can be taken end to end — item search, cart, per-line staff attribution,
 payment — and the confirmation screen _is_ the receipt rather than a second page.
-Payment endpoints must be idempotent (see [`STATE.md`](STATE.md), open questions).
+Payment endpoints must be idempotent (**Q16** — closed in 5b.2, see [`STATE.md`](STATE.md)).
 
-| Slice                     | Scope                                                                                                                                                                                       | Status                                                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| 5a — the add-on catalogue | `/api/packages` and `/api/gift-cards` (list, one, create, update) and screen 08's last two tabs, which the deferral table above promised to this phase                                      | **Done** — the first mounts whose `requireModule` can refuse, since both modules are add-ons |
-| 5b.1 — the item search    | `GET /api/sales/items`: one endpoint over all five sellable kinds, entitlement-aware, so an add-on the salon has not bought is **omitted** from the result rather than refusing the request | **Done** — no migration and no write; contract and search only                               |
-| 5b.2 — the sale           | `POST /api/sales` (lines, per-line `staffId`, `payments[]`), the ledgers it fills, `GET /api/sales/:id` as the receipt, and **Q16**'s idempotency key — which needs a migration             | Not started                                                                                  |
-| 5c — screen 01            | `/sale`: category tabs, the item grid with the cart visible at all times                                                                                                                    | Not started                                                                                  |
-| 5d — screen 02            | The confirmation step inside `/sale`, which is the receipt                                                                                                                                  | Not started                                                                                  |
+| Slice                     | Scope                                                                                                                                                                                       | Status                                                                                                                                                                                                                                     |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 5a — the add-on catalogue | `/api/packages` and `/api/gift-cards` (list, one, create, update) and screen 08's last two tabs, which the deferral table above promised to this phase                                      | **Done** — the first mounts whose `requireModule` can refuse, since both modules are add-ons                                                                                                                                               |
+| 5b.1 — the item search    | `GET /api/sales/items`: one endpoint over all five sellable kinds, entitlement-aware, so an add-on the salon has not bought is **omitted** from the result rather than refusing the request | **Done** — no migration and no write; contract and search only                                                                                                                                                                             |
+| 5b.2 — the sale           | `POST /api/sales` (lines, per-line `staffId`, `payments[]`), the ledgers it fills, `GET /api/sales/:id` as the receipt, and **Q16**'s idempotency key — which needs a migration             | **Done** — migration `20261005201500_sale_tenders_receipt_number_and_idempotency` committed and applied to both databases; Q16 closed; the receipt number settled by [ADR 0011](decisions/0011-receipt-number-is-a-per-tenant-sequence.md) |
+| 5c — screen 01            | `/sale`: category tabs, the item grid with the cart visible at all times                                                                                                                    | Not started                                                                                                                                                                                                                                |
+| 5d — screen 02            | The confirmation step inside `/sale`, which is the receipt                                                                                                                                  | Not started                                                                                                                                                                                                                                |
 
-Two things 5b.2 has to settle rather than assume: **the receipt number** (screen 02 draws
-`Receipt #24418` and legacy had a human-readable `sales.sale_id`, but the rebuilt `Sale`
-carries only a cuid — a schema decision, not a screen one) and **per-line pricing**, where
-[Q27](STATE.md) leaves `paid_price` ambiguous for the importer but not for the schema.
+Both things 5b.2 had to settle rather than assume are now settled: **the receipt
+number** (screen 02 draws `Receipt #24418` and legacy had a human-readable
+`sales.sale_id`, but the rebuilt `Sale` carried only a cuid) is a **per-tenant
+sequence** — [ADR 0011](decisions/0011-receipt-number-is-a-per-tenant-sequence.md) —
+and **per-line pricing** is answered on the write side by never taking a price from
+the request at all: `unitPrice` and `lineTotal` are computed from the catalogue
+inside the transaction. [Q27](STATE.md)'s `paid_price` ambiguity therefore remains an
+**importer** question (Phase 9) only.
 
 5b.1 settled a third question on its own, because a search has to answer it before a cart
 exists: **what a till does when the salon has not bought one of the kinds it sells.**

@@ -69,6 +69,57 @@ export const MAX_PAGE_SIZE = 200;
 export const DEFAULT_SALE_ITEM_LIMIT = 20;
 export const MAX_SALE_ITEM_LIMIT = 50;
 
+/**
+ * Mirrors the `PaymentMethod` database enum — how a customer paid.
+ *
+ * Codes, not labels: the till names the tender and the API stores it. `CARD`
+ * covers a card-present charge and a gateway session alike; `sessionId` on the
+ * payment row is what tells the two apart.
+ *
+ * The enum predates this phase — it was declared for the platform `Payment`
+ * model — and `SalePayment` reuses it rather than declaring a second list that
+ * could drift from the first.
+ */
+export const PAYMENT_METHODS = ["CASH", "CARD", "BANK_TRANSFER", "CHEQUE", "OTHER"] as const;
+
+export type PaymentMethodCode = (typeof PAYMENT_METHODS)[number];
+
+/**
+ * Mirrors the `SaleStatus` database enum.
+ *
+ * `VOID` exists because a sale that has been rung up and then found to be wrong
+ * needs a recorded state; deleting the row would delete the receipt with it.
+ */
+export const SALE_STATUSES = ["HELD", "COMPLETED", "VOID"] as const;
+
+export type SaleStatusCode = (typeof SALE_STATUSES)[number];
+
+/** Mirrors the `PaymentStatus` database enum. Legacy `payment_status` `0=unpaid 1=paid`. */
+export const PAYMENT_STATUSES = ["UNPAID", "PAID"] as const;
+
+export type PaymentStatusCode = (typeof PAYMENT_STATUSES)[number];
+
+/**
+ * Ceilings for one sale.
+ *
+ * A sale is posted whole — lines, tenders and all — in a single request, so the
+ * array bounds are what stop one request from being unbounded work. A hundred
+ * lines is far past any real till receipt; ten tenders is past any real split.
+ */
+export const MAX_SALE_LINES = 100;
+export const MAX_SALE_PAYMENTS = 10;
+
+/**
+ * The highest receipt number a salon can reach.
+ *
+ * Legacy wrote `random_int(100000, 999999)` into `sales.sale_id` — a
+ * human-readable reference with no uniqueness constraint, so two sales could
+ * share one. The rebuild assigns a per-tenant sequence instead
+ * ([ADR 0011](../../decisions/0011-receipt-number-is-a-per-tenant-sequence.md));
+ * this is the ceiling that keeps a sequence number inside an `Int` column.
+ */
+export const MAX_RECEIPT_NUMBER = 999_999_999;
+
 /** Access tokens are short-lived; refresh tokens are rotated on every use. */
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 export const REFRESH_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60;

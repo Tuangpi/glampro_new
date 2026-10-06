@@ -1,19 +1,35 @@
 /**
  * Sale contracts — handoff screens 01–02, `/api/sales`.
  *
- * The sale flow has three steps and this file starts with the first: the item
- * search a cashier types into **before** anything is in the cart (Phase 5b.1). The
- * cart write, its ledgers and the receipt number arrive in 5b.2, so there is no
- * `createSaleSchema` here yet.
+ * The sale flow has three steps and this file holds two of them: the item search a
+ * cashier types into **before** anything is in the cart (Phase 5b.1), and the
+ * write that turns the cart into a receipt (Phase 5b.2). The third — printing the
+ * receipt — is the same `saleDetailSchema` read back, so it needs no third shape.
  *
  * The five kinds below are the `SaleLineItemType` database enum, on purpose. The
  * cart stores one `SaleLine` per kind with that discriminator, so a search result
  * and the line it becomes speak one vocabulary and nothing has to guess which
  * catalogue an id came from.
+ *
+ * **The search and the write are deliberately asymmetric.** A search result carries
+ * both prices, because which one applies depends on the customer attached to the
+ * sale and that can change after the search. A write carries **no price at all**:
+ * the server prices the cart from the catalogue, so a browser cannot name its own
+ * price.
  */
 import { z } from "zod";
 
-import { DEFAULT_SALE_ITEM_LIMIT, MAX_SALE_ITEM_LIMIT } from "../constants.js";
+import {
+  DEFAULT_SALE_ITEM_LIMIT,
+  MAX_RECEIPT_NUMBER,
+  MAX_SALE_ITEM_LIMIT,
+  MAX_SALE_LINES,
+  MAX_SALE_PAYMENTS,
+  PAYMENT_METHODS,
+  PAYMENT_STATUSES,
+  SALE_STATUSES,
+} from "../constants.js";
+import { moneySchema } from "./common.js";
 
 /**
  * Mirrors the `SaleLineItemType` enum. The order is the order the picker draws its
@@ -170,3 +186,166 @@ export const saleItemSearchResultSchema = z.object({
 });
 
 export type SaleItemSearchResult = z.infer<typeof saleItemSearchResultSchema>;
+
+/**
+ * How the money was handed over. Mirrors the `PaymentMethod` database enum.
+ *
+ * The same enum the platform `Payment` model already used, reused rather than
+ * redeclared: a second list of tender codes would be a second thing to keep in
+ * step with the database.
+ */
+export const paymentMethodSchema = z.enum(PAYMENT_METHODS);
+
+export type SalePaymentMethod = z.infer<typeof paymentMethodSchema>;
+
+/** Mirrors `SaleStatus`. A sale is completed when it is rung up; `HELD` is not drawn yet. */
+export const saleStatusSchema = z.enum(SALE_STATUSES);
+
+export const paymentStatusSchema = z.enum(PAYMENT_STATUSES);
+
+/**
+ * One cart line, as the till posts it.
+ *
+ * **No price.** The request says *what* was sold and *how many*; the server reads
+ * the catalogue and decides what it costs. Legacy did the opposite — the browser
+ * posted `newPrice` per line and the API stored it unexamined
+ * (`SaleController::insert*`), so the price a salon charged was the price a
+ * browser chose. `SaleLine.unitPrice` is therefore not a field a client can set.
+ *
+ * `staffId` is the redesign's addition: legacy could attribute at most four
+ * stylists to a whole sale (`sold_by_one..four`), while a cart attributes each
+ * line.
+ */
+export const saleLineInputSchema = z.object({
+  itemType: saleItemKindSchema,
+  itemId: z.string().min(1).max(64),
+  /** A line of zero is not a line; the till removes it instead of posting it. */
+  quantity: z.coerce.number().int().min(1).max(10_000),
+  staffId: z.string().min(1).max(64).optional(),
+});
+
+export type SaleLineInput = z.infer<typeof saleLineInputSchema>;
+
+/**
+ * One tender.
+ *
+ * `payments[]` is what collapses legacy's three endpoints — `pay-by-cash`,
+ * `pay-by-card` and `split-pay` — into one write, so a split is not a special
+ * case but two rows. Legacy had no place to put a split: `splitPay()` charged the
+ * card half through Stripe and then stored the whole thing as the free text
+ * `"cash_50_card_25"` in `sales.payment_type`, which no report can sum.
+ *
+ * `sessionId` is a gateway session for a card tender that settles later; it moves
+ * off the sale row (where legacy kept one `sales.session_id`) onto the tender it
+ * belongs to.
+ */
+export const salePaymentInputSchema = z.object({
+  method: paymentMethodSchema,
+  /** An **input**, so coerced by `moneySchema`; it comes back out as a string. */
+  amount: moneySchema,
+  sessionId: z.string().trim().max(255).optional(),
+});
+
+export type SalePaymentInput = z.infer<typeof salePaymentInputSchema>;
+
+/**
+ * `POST /api/sales` — the whole sale in one request.
+ *
+ * `customerId` is optional because the till draws a **Walk-in** chip: a walk-in
+ * sale has no customer row, and the legacy schema's non-null `customer_id` is how
+ * that system ended up needing an invented "cash customer" per salon. The lines
+ * that **grant** something (a package, a value package, a gift card) do need an
+ * owner, and the service refuses those without one rather than silently issuing
+ * credit to nobody.
+ *
+ * `idempotencyKey` is **Q16**. Legacy's `pay-by-cash` posts a payment with no key
+ * anywhere, so a double-tap charges twice; the key is stored on the sale and a
+ * replay returns the sale that already exists instead of writing a second one.
+ */
+export const createSaleSchema = z.object({
+  customerId: z.string().min(1).max(64).optional(),
+  staffId: z.string().min(1).max(64).optional(),
+  note: z.string().trim().max(1000).optional(),
+  lines: z.array(saleLineInputSchema).min(1).max(MAX_SALE_LINES),
+  payments: z.array(salePaymentInputSchema).max(MAX_SALE_PAYMENTS).default([]),
+  idempotencyKey: z.string().trim().min(8).max(128).optional(),
+});
+
+export type CreateSaleInput = z.infer<typeof createSaleSchema>;
+
+/**
+ * A line of a stored sale — the receipt's row.
+ *
+ * Money is a **string** here and a number in `saleLineInputSchema`, which is the
+ * convention every contract in this package keeps: `Decimal(12,2)` goes in
+ * coerced and comes out formatted, because a JSON float has already lost the cent
+ * it is carrying.
+ */
+export const saleLineSchema = z.object({
+  id: z.string(),
+  itemType: saleItemKindSchema,
+  /** The catalogue row's id, which the receipt does not need and history does. */
+  itemId: z.string(),
+  /** The name **snapshotted at sale time**, so archiving a service keeps the receipt. */
+  itemName: z.string(),
+  quantity: z.number().int(),
+  unitPrice: z.string(),
+  lineTotal: z.string(),
+  /** Who this line is credited to; `null` is uncredited, which is the product case. */
+  staffId: z.string().nullable(),
+  staffName: z.string().nullable(),
+});
+
+export type SaleLine = z.infer<typeof saleLineSchema>;
+
+/** A stored tender. */
+export const salePaymentSchema = z.object({
+  method: paymentMethodSchema,
+  amount: z.string(),
+  sessionId: z.string().nullable(),
+});
+
+export type SalePayment = z.infer<typeof salePaymentSchema>;
+
+/**
+ * The receipt — what `POST /api/sales` returns and `GET /api/sales/:id` re-reads.
+ *
+ * One shape for both, because the confirmation screen *is* the receipt
+ * (`docs/roadmap.md` → Phase 5d): a second representation for the just-created
+ * case is a second thing that can disagree with the stored one.
+ *
+ * `outstandingAmount` comes back rather than being left for the client to
+ * subtract: whether a balance is owed is the server's judgement (`paidAmount <
+ * totalAmount`), and a client that subtracts two strings gets a float.
+ */
+export const saleDetailSchema = z.object({
+  id: z.string(),
+  /**
+   * The receipt number, unique per salon. Nullable because a row that predates the
+   * column — a migrated sale, or one written while the importer is still running —
+   * has no number yet, and inventing one on read would be worse than saying "not
+   * assigned".
+   */
+  receiptNumber: z.number().int().min(1).max(MAX_RECEIPT_NUMBER).nullable(),
+  status: saleStatusSchema,
+  paymentStatus: paymentStatusSchema,
+  /** ISO 8601. Legacy's `sale_date` + `sale_time`, which were two columns. */
+  soldAt: z.string(),
+  customerId: z.string().nullable(),
+  customerName: z.string().nullable(),
+  /** Who rang it up. Per-line credit is on each line's `staffId`. */
+  staffId: z.string().nullable(),
+  staffName: z.string().nullable(),
+  note: z.string().nullable(),
+  totalQuantity: z.number().int(),
+  totalAmount: z.string(),
+  paidAmount: z.string(),
+  /** `totalAmount - paidAmount`, never negative. Non-zero means a `CustomerOutstanding`. */
+  outstandingAmount: z.string(),
+  /** The points this sale earned its customer; `0` for a walk-in. */
+  pointsEarned: z.number().int(),
+  lines: z.array(saleLineSchema),
+  payments: z.array(salePaymentSchema),
+});
+
+export type SaleDetail = z.infer<typeof saleDetailSchema>;

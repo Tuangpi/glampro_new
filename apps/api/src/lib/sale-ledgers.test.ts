@@ -96,10 +96,15 @@ async function seed(): Promise<void> {
           totalQuantity: 3,
           totalAmount: "230.00",
           paidAmount: "230.00",
-          paymentMethod: "CARD",
           paymentStatus: "PAID",
           soldAt: new Date("2026-04-01T11:00:00Z"),
         },
+      });
+
+      // The tender is a row, not a column on the sale (ADR 0012), so the seed has to
+      // write one — which is the whole point of the change.
+      await prisma.salePayment.create({
+        data: { tenantId: id, saleId: sale.id, method: "CARD", amount: "230.00" },
       });
 
       const packageLine = await prisma.saleLine.create({

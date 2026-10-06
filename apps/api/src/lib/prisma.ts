@@ -50,6 +50,9 @@ export const TENANT_SCOPED_MODELS = [
   // because a line is queried on its own (the cart) as well as through its sale.
   "Sale",
   "SaleLine",
+  // A tender is queried on its own for the day's takings by method, not only through
+  // its sale, so it is scoped in its own right.
+  "SalePayment",
   // Customer holdings and their ledgers. Every one carries `tenantId` in its own
   // right: a redemption is read per customer, not only through its sale.
   "CustomerPackageHolding",

@@ -19,12 +19,13 @@ defines when a file has to be written.
 | 0008 | [The sign-in screen is composed from the delivered system](0008-login-screen-shape.md)                      | Accepted |
 | 0009 | [The amber badge tone joins the handoff token file](0009-amber-joins-the-handoff-token-file.md)             | Accepted |
 | 0010 | [The low-stock threshold is a per-tenant column, not a constant](0010-low-stock-threshold-is-per-tenant.md) | Accepted |
+| 0011 | [The receipt number is a per-tenant sequence](0011-receipt-number-is-a-per-tenant-sequence.md)              | Accepted |
 
 `0001` is unallocated: `0002` is referenced by name from
 [`../saas/TENANCY.md`](../saas/TENANCY.md) and
 [`../legacy/LEGACY-MAP.md`](../legacy/LEGACY-MAP.md), and renumbering a referenced
 decision is worse than leaving the first slot empty. The next new decision is
-`0011`.
+`0012`.
 
 ## Rules
 

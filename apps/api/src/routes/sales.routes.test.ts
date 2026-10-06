@@ -4,9 +4,11 @@ import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
 
 /**
- * Integration tests for the POS item search mount — the first half of screens 01–02.
+ * Integration tests for the sales mount — screens 01–02 end to end: the item search
+ * a cashier types into **before** anything is in the cart (5b.1), and the write that
+ * rings that cart up plus the receipt it answers with (5b.2).
  *
- * The assertion that matters most is the **opposite** of the one
+ * For the search, the assertion that matters most is the **opposite** of the one
  * `packages.routes.test.ts` makes. There, an add-on the salon has not bought must
  * refuse the route. Here the add-on is one kind among five inside a core feature, so
  * the request must still succeed — with a shorter list and a `searchableKinds` that
@@ -180,6 +182,29 @@ interface SearchBody {
   items: { kind: string; name: string; price: string; memberPrice: string | null }[];
 }
 
+/** The receipt — `POST /api/sales` and `GET /api/sales/:id` answer with the same one. */
+interface ReceiptBody {
+  id: string;
+  receiptNumber: number | null;
+  status: string;
+  paymentStatus: string;
+  totalQuantity: number;
+  totalAmount: string;
+  paidAmount: string;
+  outstandingAmount: string;
+  staffId: string | null;
+  staffName: string | null;
+  lines: {
+    itemType: string;
+    itemName: string;
+    quantity: number;
+    unitPrice: string;
+    lineTotal: string;
+    staffId: string | null;
+  }[];
+  payments: { method: string; amount: string; sessionId: string | null }[];
+}
+
 async function envelope(response: Response): Promise<Envelope> {
   return (await response.json()) as Envelope;
 }
@@ -188,6 +213,44 @@ async function dataOf<T>(response: Response): Promise<T> {
   const body = await envelope(response);
   assert.ok(body.data !== undefined, `expected a data envelope, got ${JSON.stringify(body)}`);
   return body.data as T;
+}
+
+/**
+ * An id from **this** salon's seeded catalogue, read through the platform scope the
+ * way `purge` does. Scoped to `TENANT_A` by name rather than trusting the first row,
+ * so another suite seeding an "Aloha Cut" cannot hand this one a foreign id.
+ */
+async function seededIdOf(kind: "SERVICE" | "PRODUCT"): Promise<string> {
+  if (kind === "SERVICE") {
+    const row = await runAsPlatform(() =>
+      prisma.service.findFirstOrThrow({
+        where: { tenantId: TENANT_A, name: "Aloha Cut" },
+        select: { id: true },
+      }),
+    );
+    return row.id;
+  }
+  const row = await runAsPlatform(() =>
+    prisma.product.findFirstOrThrow({
+      where: { tenantId: TENANT_A, name: "Aloha Shampoo" },
+      select: { id: true },
+    }),
+  );
+  return row.id;
+}
+
+/**
+ * A body the contract accepts: one cut and one shampoo, paid in full in cash — the
+ * walk-in case, so nothing here needs a customer. Non-member prices: 50 + 15 = 65.
+ */
+async function cartBody(): Promise<Record<string, unknown>> {
+  return {
+    lines: [
+      { itemType: "SERVICE", itemId: await seededIdOf("SERVICE"), quantity: 1 },
+      { itemType: "PRODUCT", itemId: await seededIdOf("PRODUCT"), quantity: 1 },
+    ],
+    payments: [{ method: "CASH", amount: 65 }],
+  };
 }
 
 let baseUrl = "";
@@ -200,11 +263,37 @@ async function request(method: "GET", path: string, accessToken?: string): Promi
   });
 }
 
+/**
+ * A JSON write, in the same shape as the other route suites here.
+ *
+ * `token` is separate from `body` so the "not signed in" case can post a valid body with
+ * no token — otherwise a 401 and a 422 would be indistinguishable.
+ */
+async function send(
+  method: "POST" | "PATCH",
+  path: string,
+  body: unknown,
+  accessToken?: string,
+): Promise<Response> {
+  return fetch(`${baseUrl}${path}`, {
+    method,
+    headers: {
+      "content-type": "application/json",
+      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+}
+
 describe(
   "sales item search endpoint",
   { skip: databaseUrl ? false : "DATABASE_URL is not set" },
   () => {
     let token = "";
+    /** The signed-in owner's id, so "who rang it up" defaults can be asserted. */
+    let ownerId = "";
+    /** The receipt the write test above produced, re-read by the receipt test below. */
+    let ringedUp: ReceiptBody | undefined;
 
     before(async () => {
       await purge();
@@ -222,6 +311,11 @@ describe(
       });
       assert.equal(response.status, 200, "could not sign in as the owner");
       token = (await dataOf<{ accessToken: string }>(response)).accessToken;
+      ownerId = (
+        await runAsPlatform(() =>
+          prisma.user.findUniqueOrThrow({ where: { email: EMAIL }, select: { id: true } }),
+        )
+      ).id;
     });
 
     after(async () => {
@@ -341,6 +435,128 @@ describe(
         false,
         "tenant B's service must never appear in tenant A's till",
       );
+    });
+
+    /*
+     * ── The write (5b.2) ──────────────────────────────────────────────────────
+     *
+     * What a route suite can show that `sale.service.test.ts` cannot: that the mount
+     * exists behind `auth`, that a contract refusal arrives as a 422 with the path the
+     * browser marks, that the sale-level `staffId` **defaults to the signed-in
+     * cashier** (a rule that lives in the handler, not the service), and that a
+     * suspended salon is refused by `requireWritableTenant` on this very path while
+     * its read stays open.
+     */
+
+    it("mounts the write behind auth — a valid body still gets a 401", async () => {
+      // The body is valid on purpose: a 401 that a malformed body would also produce
+      // would not prove the mount exists rather than the contract refusing first.
+      const response = await send("POST", "/api/sales", await cartBody());
+
+      assert.equal(response.status, 401);
+    });
+
+    it("refuses a cart with no lines, naming the field the till must mark", async () => {
+      const response = await send("POST", "/api/sales", { lines: [], payments: [] }, token);
+      const body = await envelope(response);
+
+      assert.equal(response.status, 422);
+      assert.equal(body.code, "VALIDATION_FAILED");
+      assert.ok(
+        body.details?.some((detail) => detail.path === "body.lines"),
+        `expected a detail for body.lines, got ${JSON.stringify(body.details)}`,
+      );
+    });
+
+    it("rings a sale up and answers with the receipt it wrote", async () => {
+      const response = await send("POST", "/api/sales", await cartBody(), token);
+
+      assert.equal(response.status, 201);
+      const receipt = await dataOf<ReceiptBody>(response);
+      ringedUp = receipt;
+
+      assert.equal(receipt.status, "COMPLETED");
+      assert.equal(receipt.paymentStatus, "PAID");
+      assert.equal(receipt.totalQuantity, 2);
+      // Non-member prices from the catalogue: 50 + 15, strings so no cent is a float.
+      assert.equal(receipt.totalAmount, "65.00");
+      assert.equal(receipt.paidAmount, "65.00");
+      assert.equal(receipt.outstandingAmount, "0.00");
+      assert.equal(typeof receipt.receiptNumber, "number");
+      assert.ok((receipt.receiptNumber ?? 0) >= 1, "the first receipt this salon issues");
+
+      // Who rang it up defaults to the signed-in cashier. This rule lives in the
+      // handler, so only this suite can see it.
+      assert.equal(receipt.staffId, ownerId);
+      assert.equal(receipt.staffName, "Ola Owner");
+
+      assert.deepEqual(
+        receipt.lines.map((line) => [line.itemType, line.unitPrice, line.lineTotal]),
+        [
+          ["SERVICE", "50.00", "50.00"],
+          ["PRODUCT", "15.00", "15.00"],
+        ],
+      );
+      assert.deepEqual(receipt.payments, [{ method: "CASH", amount: "65.00", sessionId: null }]);
+    });
+
+    it("re-reads that same receipt through GET /api/sales/:id", async () => {
+      assert.ok(ringedUp, "the write test above must have run first");
+
+      const response = await request("GET", `/api/sales/${ringedUp.id}`, token);
+
+      // The confirmation screen *is* the receipt (roadmap, Phase 5d): one shape, the
+      // same numbers, whether the POST just wrote it or the GET fetches it again.
+      assert.equal(response.status, 200);
+      assert.deepEqual(await dataOf<ReceiptBody>(response), ringedUp);
+    });
+
+    it("answers a sale id that does not exist as not found, not as a crash", async () => {
+      const response = await request("GET", "/api/sales/no-such-sale", token);
+
+      assert.equal(response.status, 404);
+      assert.equal((await envelope(response)).code, "SALE_NOT_FOUND");
+    });
+
+    it("answers a replayed idempotency key with the sale it already wrote", async () => {
+      // Q16. The double-tap a slow connection makes must charge once — asserted over
+      // HTTP, because the double-tap happens at the till, not inside the service.
+      const keyed = { ...(await cartBody()), idempotencyKey: "route-double-tap-0001" };
+
+      const first = await send("POST", "/api/sales", keyed, token);
+      const second = await send("POST", "/api/sales", keyed, token);
+
+      assert.equal(first.status, 201);
+      assert.equal(second.status, 201);
+      const a = await dataOf<ReceiptBody>(first);
+      const b = await dataOf<ReceiptBody>(second);
+      assert.equal(b.id, a.id, "the second tap must not charge twice");
+      assert.equal(b.receiptNumber, a.receiptNumber);
+
+      const stored = await runAsPlatform(() =>
+        prisma.sale.count({
+          where: { tenantId: TENANT_A, idempotencyKey: "route-double-tap-0001" },
+        }),
+      );
+      assert.equal(stored, 1, "one key, one sale");
+    });
+
+    it("lets a suspended salon read its till, but not take money", async () => {
+      await runAsPlatform(() =>
+        prisma.tenant.update({ where: { id: TENANT_A }, data: { status: "SUSPENDED" } }),
+      );
+      try {
+        const write = await send("POST", "/api/sales", await cartBody(), token);
+        assert.equal(write.status, 403);
+        assert.equal((await envelope(write)).code, "TENANT_SUSPENDED");
+
+        const read = await request("GET", "/api/sales/items", token);
+        assert.equal(read.status, 200, "reading stays open — saas/TENANCY.md §6");
+      } finally {
+        await runAsPlatform(() =>
+          prisma.tenant.update({ where: { id: TENANT_A }, data: { status: "ACTIVE" } }),
+        );
+      }
     });
   },
 );
