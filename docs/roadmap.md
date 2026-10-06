@@ -131,8 +131,15 @@ Payment endpoints must be idempotent (**Q16** — closed in 5b.2, see [`STATE.md
 | 5a — the add-on catalogue | `/api/packages` and `/api/gift-cards` (list, one, create, update) and screen 08's last two tabs, which the deferral table above promised to this phase                                      | **Done** — the first mounts whose `requireModule` can refuse, since both modules are add-ons                                                                                                                                               |
 | 5b.1 — the item search    | `GET /api/sales/items`: one endpoint over all five sellable kinds, entitlement-aware, so an add-on the salon has not bought is **omitted** from the result rather than refusing the request | **Done** — no migration and no write; contract and search only                                                                                                                                                                             |
 | 5b.2 — the sale           | `POST /api/sales` (lines, per-line `staffId`, `payments[]`), the ledgers it fills, `GET /api/sales/:id` as the receipt, and **Q16**'s idempotency key — which needs a migration             | **Done** — migration `20261005201500_sale_tenders_receipt_number_and_idempotency` committed and applied to both databases; Q16 closed; the receipt number settled by [ADR 0011](decisions/0011-receipt-number-is-a-per-tenant-sequence.md) |
-| 5c — screen 01            | `/sale`: category tabs, the item grid with the cart visible at all times                                                                                                                    | Not started                                                                                                                                                                                                                                |
-| 5d — screen 02            | The confirmation step inside `/sale`, which is the receipt                                                                                                                                  | Not started                                                                                                                                                                                                                                |
+| 5c — screen 01            | `/sale`: category tabs, the item grid with the cart visible at all times                                                                                                                    | Not started — **MVP slice M1**                                                                                                                                                                                                             |
+| 5d — screen 02            | The confirmation step inside `/sale`, which is the receipt                                                                                                                                  | Not started — **MVP slice M1**                                                                                                                                                                                                             |
+
+**MVP (M1) takes 5c+5d whole:** tabs → search → grid → cart (quantity, per-line
+staff) → tender (cash, card, split) → inline receipt, reusing `createSaleSchema`
+and `saleItemSearchQuerySchema` with no new contract. The service↔staff choice is
+forced by the model — see [`mvp.md`](mvp.md) — and hold/void/discounts/printing,
+cart persistence and shortcuts stay full-phase work. The rest of Phase 5 is done;
+the phase closes when the full-phase remainder after the MVP lands.
 
 Both things 5b.2 had to settle rather than assume are now settled: **the receipt
 number** (screen 02 draws `Receipt #24418` and legacy had a human-readable
@@ -151,17 +158,32 @@ would leave the cashier unable to take the sale at all.
 
 ## Phase 6 — Appointments and calendar
 
+**MVP (M2):** list by date range, read one, create, update and complete, with the
+staff offered filtered to the service's department ([`mvp.md`](mvp.md)) and the
+deviation recorded as an ADR. The calendar grid, drag-to-reschedule, availability
+and clash detection, shifts/leave in the booking path, the skill matrix and
+reminders stay full-phase work.
+
 Handoff screens 03 and 06. Criterion: an appointment can be created through the
 guided flow or dragged in the calendar, rescheduled and completed, and duration and
 staff assignment come from the service rather than from free text.
 
 ## Phase 7 — Dashboard and reports
 
+**MVP (M3):** a real dashboard (today's income, today's appointments, new
+customers, low stock) and `/reports` with a date range and two to three tables.
+The demo seed must grant the `reports` entitlement. The full report catalogue,
+export, charts and scheduled reports stay full-phase work.
+
 Handoff screens 05 and 10, backed by the report and export routes catalogued in
 [`legacy/API-INVENTORY.md`](legacy/API-INVENTORY.md). Criterion: every tile and
 report has a tenant-scoped query behind it and an entry in `queryKeys.ts`.
 
 ## Phase 8 — Settings and integrations
+
+**MVP (M4):** the salon profile (read/edit), a read-only modules panel, and a
+staff/roles summary. Hours editing, tax and receipt configuration, notifications,
+user management beyond the summary and integrations stay full-phase work.
 
 Handoff screen 11: salon profile, staff and roles, the modules the tenant has bought,
 and the integrations that exist today. Criterion: a tenant can see what it owns and
