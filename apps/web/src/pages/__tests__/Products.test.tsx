@@ -325,6 +325,58 @@ describe("the tabs", () => {
     expect(screen.getByRole("button", { name: "Add package" })).toBeInTheDocument();
   });
 
+  it("draws a row on every tab when the server has one to send", async () => {
+    const user = userEvent.setup();
+    // One walk over all four tabs, because they go through four different list
+    // hooks and a screen that is empty on one of them is the failure this file
+    // exists to catch: the empty-state copy is the same either way, so a list that
+    // never arrives looks like a salon with nothing rather than a broken query.
+    useProductList.mockReturnValue(listOf([product({ name: "Magken Shampoo" })]));
+    useServiceList.mockReturnValue(listOf([service({ name: "Argan Treatment" })]));
+    usePackageList.mockReturnValue(
+      listOf([
+        {
+          id: "pk1",
+          name: "Ten-session bundle",
+          status: "ACTIVE",
+          sessionCount: 10,
+          memberPrice: "250.00",
+          nonmemberPrice: "300.00",
+          description: null,
+          serviceCount: 2,
+          createdAt: "2021-03-04T00:00:00.000Z",
+          updatedAt: "2021-03-04T00:00:00.000Z",
+        },
+      ]),
+    );
+    useGiftCardList.mockReturnValue(
+      listOf([
+        {
+          id: "g1",
+          name: "S$100 gift card",
+          value: "100.00",
+          expiresAt: null,
+          remark: null,
+          qrPayload: null,
+          createdAt: "2021-03-04T00:00:00.000Z",
+          updatedAt: "2021-03-04T00:00:00.000Z",
+        },
+      ]),
+    );
+
+    render(<Products />);
+
+    for (const [tab, row] of [
+      ["Products", "Magken Shampoo"],
+      ["Services", "Argan Treatment"],
+      ["Packages", "Ten-session bundle"],
+      ["Gift cards", "S$100 gift card"],
+    ] as const) {
+      await user.click(screen.getByRole("tab", { name: tab }));
+      expect(screen.getByText(row)).toBeInTheDocument();
+    }
+  });
+
   it("draws no Status column for gift cards, because the model has none", async () => {
     const user = userEvent.setup();
     useGiftCardList.mockReturnValue(

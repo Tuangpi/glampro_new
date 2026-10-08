@@ -173,14 +173,40 @@ export async function get<T>(url: string, params?: QueryParams): Promise<T> {
   return extractData<T>(response.data);
 }
 
-/** GET returning a `PaginatedResponse`, normalised from any supported shape. */
+/**
+ * GET returning a `PaginatedResponse`, normalised from any supported shape.
+ *
+ * A list route answers `{ data: { data: [...], total, … } }` — the documented
+ * `ApiResponse` envelope wrapped around the page, the same one wrap that `get`,
+ * `post`, `patch` and `del` see through. Handing the body straight to the
+ * normaliser made the *envelope* the page instead: `data` was not an array and no
+ * `total` was visible, so every list in the app resolved to `data: []` with
+ * `total: 0` — a salon with twelve products rendered as "No products yet", HTTP
+ * 200, nothing logged.
+ */
 export async function getPaginated<T>(
   url: string,
   params?: QueryParams,
   dataKey = "data",
 ): Promise<PaginatedResponse<T>> {
   const response = await api.get<unknown>(url + buildQueryString(params));
-  return normalisePaginated<T>(response.data as Record<string, unknown>, dataKey);
+  return normalisePaginated<T>(unwrapEnvelope(response.data), dataKey);
+}
+
+/**
+ * Unwraps `{ data: T }` when `T` is the page, for `getPaginated`.
+ *
+ * Only a nested **object** is the envelope. A body whose `data` is already the row
+ * array (`{ data: [...] }`) or a bare collection (`{ items: [...] }`) is the shape
+ * `normalisePaginated` reads, so it is handed over untouched.
+ */
+function unwrapEnvelope(payload: unknown): Record<string, unknown> {
+  if (payload === null || typeof payload !== "object") return {};
+
+  const inner = (payload as { data?: unknown }).data;
+  return inner !== null && typeof inner === "object" && !Array.isArray(inner)
+    ? (inner as Record<string, unknown>)
+    : (payload as Record<string, unknown>);
 }
 
 export async function post<T>(url: string, data?: unknown): Promise<T> {

@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import { normalisePaginated } from "./apiUtils";
 
 describe("normalisePaginated", () => {
-  it("passes through the current API shape", () => {
+  it("passes through a page whose rows are already flattened", () => {
+    // Not the shape a list route sends: it nests this inside the `ApiResponse`
+    // envelope, and `getPaginated` unwraps that before calling here. This is what
+    // it hands over, so it must survive untouched — unwrapping again would take
+    // the rows away.
     expect(
       normalisePaginated({ data: [1, 2], total: 2, page: 1, pageSize: 20, pageCount: 1 }),
     ).toEqual({ data: [1, 2], total: 2, page: 1, pageSize: 20, pageCount: 1 });

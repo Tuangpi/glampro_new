@@ -9,13 +9,18 @@
  * The single-flight requirement is not an optimisation. The server rotates the
  * refresh token on every use and revokes the family on a replay, so N parallel
  * refreshes would kill the user's own session.
+ *
+ * It also covers `getPaginated`'s unwrapping of the list envelope, which needs the
+ * same real call: that bug shipped green through every suite, because the web
+ * suites mock the query hooks and the API suites assert only what the *server*
+ * sends.
  */
 import { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { AuthUser } from "@glampro/shared";
 
-import api from "@/lib/api";
+import api, { getPaginated } from "@/lib/api";
 import { clearSession, getRefreshToken, setSession } from "@/lib/auth-storage";
 
 /** Annotated so `globalRole` stays a `GlobalRole` union instead of widening. */
@@ -198,5 +203,86 @@ describe("replay safety", () => {
 
     expect(countFor("/auth/refresh")).toBe(1);
     expect(countFor("/customers")).toBe(2); // original + exactly one replay
+  });
+});
+
+describe("getPaginated", () => {
+  it("unwraps the envelope the list routes wrap the page in", async () => {
+    // What every list route actually puts on the wire: the page — rows plus its own
+    // `total`, `page`, `pageSize`, `pageCount` — nested one level inside the
+    // `ApiResponse` envelope. Handed the body raw, the normaliser read the
+    // *envelope* as the page: no array, no `total`, so twelve products rendered as
+    // "No products yet" with `total: 0`, HTTP 200 and nothing in the console.
+    handler = async (config) =>
+      respond(config, 200, {
+        data: { data: [{ id: "p1" }], total: 12, page: 1, pageSize: 20, pageCount: 1 },
+      });
+
+    await expect(getPaginated<{ id: string }>("/products")).resolves.toEqual({
+      data: [{ id: "p1" }],
+      total: 12,
+      page: 1,
+      pageSize: 20,
+      pageCount: 1,
+    });
+  });
+
+  it("leaves a page whose rows are already flattened alone", async () => {
+    // Unwrapping twice would take the rows away — `{ data: [...] }` is the shape
+    // `normalisePaginated` reads, not an envelope around one.
+    handler = async (config) =>
+      respond(config, 200, {
+        data: [{ id: "p1" }],
+        total: 1,
+        page: 1,
+        pageSize: 20,
+        pageCount: 1,
+      });
+
+    await expect(getPaginated<{ id: string }>("/products")).resolves.toEqual({
+      data: [{ id: "p1" }],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      pageCount: 1,
+    });
+  });
+
+  it("still accepts a bare collection inside the envelope", async () => {
+    handler = async (config) => respond(config, 200, { data: { items: [{ id: "p1" }] } });
+
+    await expect(getPaginated<{ id: string }>("/products")).resolves.toEqual({
+      data: [{ id: "p1" }],
+      total: 1,
+      page: 1,
+      pageSize: 1,
+      pageCount: 1,
+    });
+  });
+
+  it("honours the caller's own data key after unwrapping", async () => {
+    handler = async (config) =>
+      respond(config, 200, { data: { rows: [{ id: "p1" }], total: 1, pageSize: 20 } });
+
+    await expect(getPaginated<{ id: string }>("/products", undefined, "rows")).resolves.toEqual({
+      data: [{ id: "p1" }],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      pageCount: 1,
+    });
+  });
+
+  it("reads an empty list as empty rather than as malformed", async () => {
+    handler = async (config) =>
+      respond(config, 200, { data: { data: [], total: 0, page: 1, pageSize: 20, pageCount: 0 } });
+
+    await expect(getPaginated<{ id: string }>("/products")).resolves.toEqual({
+      data: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      pageCount: 0,
+    });
   });
 });
