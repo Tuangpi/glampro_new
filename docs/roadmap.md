@@ -131,8 +131,8 @@ Payment endpoints must be idempotent (**Q16** — closed in 5b.2, see [`STATE.md
 | 5a — the add-on catalogue | `/api/packages` and `/api/gift-cards` (list, one, create, update) and screen 08's last two tabs, which the deferral table above promised to this phase                                      | **Done** — the first mounts whose `requireModule` can refuse, since both modules are add-ons                                                                                                                                               |
 | 5b.1 — the item search    | `GET /api/sales/items`: one endpoint over all five sellable kinds, entitlement-aware, so an add-on the salon has not bought is **omitted** from the result rather than refusing the request | **Done** — no migration and no write; contract and search only                                                                                                                                                                             |
 | 5b.2 — the sale           | `POST /api/sales` (lines, per-line `staffId`, `payments[]`), the ledgers it fills, `GET /api/sales/:id` as the receipt, and **Q16**'s idempotency key — which needs a migration             | **Done** — migration `20261005201500_sale_tenders_receipt_number_and_idempotency` committed and applied to both databases; Q16 closed; the receipt number settled by [ADR 0011](decisions/0011-receipt-number-is-a-per-tenant-sequence.md) |
-| 5c — screen 01            | `/sale`: category tabs, the item grid with the cart visible at all times                                                                                                                    | Not started — **MVP slice M1**                                                                                                                                                                                                             |
-| 5d — screen 02            | The confirmation step inside `/sale`, which is the receipt                                                                                                                                  | Not started — **MVP slice M1**                                                                                                                                                                                                             |
+| 5c — screen 01            | `/sale`: category tabs, the item grid with the cart visible at all times                                                                                                                    | **Done** — M1 landed 2026-10-08                                                                                                                                                                                                            |
+| 5d — screen 02            | The confirmation step inside `/sale`, which is the receipt                                                                                                                                  | **Done** — M1 landed 2026-10-08 (tender dialog + inline receipt)                                                                                                                                                                           |
 
 **MVP (M1) takes 5c+5d whole:** tabs → search → grid → cart (quantity, per-line
 staff) → tender (cash, card, split) → inline receipt, reusing `createSaleSchema`
@@ -140,6 +140,25 @@ and `saleItemSearchQuerySchema` with no new contract. The service↔staff choice
 forced by the model — see [`mvp.md`](mvp.md) — and hold/void/discounts/printing,
 cart persistence and shortcuts stay full-phase work. The rest of Phase 5 is done;
 the phase closes when the full-phase remainder after the MVP lands.
+
+**M1 landed 2026-10-08:** `pages/Sale.tsx` plus
+`components/sale/{SaleItemGrid,CartPanel,CartLine,CustomerPicker,PaymentDialog,ReceiptView}`,
+the `/sale` route behind `ProtectedRoute`, and `__tests__/Sale.test.tsx`
+(10 cases). `docs/STATE.md` §3 lists the decisions the screen had to make
+(the tabs come from the server's `searchableKinds`, a service line's performers
+come from its branch, and a granting line forces a customer). The full-phase
+remainder is untouched.
+
+**M1 also had to make the demo seed real.** `prisma/seed-data.ts` had been written
+but almost nothing read it, so a fresh `db:reset` left the till with an empty grid
+and the cart's performer picker with nobody in it. `seed.ts` now seeds the
+departments, the staff↔department links, the services, the products, the packages
+and their links, the value package, the gift cards and the customers, idempotently
+on each row's natural key and inside `runAsTenant`. `DEMO_APPOINTMENTS` and
+`DEMO_SALES` are deliberately **still unused**: seeding a sale means running the
+real write (prices, ledgers, receipt number), which is M3's dashboard slice to
+bring, and inventing rows for the dashboard to add up would be a fabricated number
+rather than a demo.
 
 Both things 5b.2 had to settle rather than assume are now settled: **the receipt
 number** (screen 02 draws `Receipt #24418` and legacy had a human-readable
@@ -164,6 +183,11 @@ deviation recorded as an ADR. The calendar grid, drag-to-reschedule, availabilit
 and clash detection, shifts/leave in the booking path, the skill matrix and
 reminders stay full-phase work.
 
+**M2 landed 2026-10-08** (`pages/Appointments.tsx` + `components/appointments/…`
+
+- `hooks/useAppointments.ts`, over the `/api/appointments` mount), with the staff
+  filter recorded as [ADR 0013](decisions/0013-appointment-performers-come-from-the-service.md).
+
 Handoff screens 03 and 06. Criterion: an appointment can be created through the
 guided flow or dragged in the calendar, rescheduled and completed, and duration and
 staff assignment come from the service rather than from free text.
@@ -172,8 +196,20 @@ staff assignment come from the service rather than from free text.
 
 **MVP (M3):** a real dashboard (today's income, today's appointments, new
 customers, low stock) and `/reports` with a date range and two to three tables.
-The demo seed must grant the `reports` entitlement. The full report catalogue,
-export, charts and scheduled reports stay full-phase work.
+The tiles need **no** seed change: `/api/reports` is mounted behind
+`requireModule("dashboard")`, which is core and therefore always entitled. The
+`reports` add-on guards screen 10's wider tables, so the seed gains that
+entitlement when those land, not for M3.
+The full report catalogue, export, charts and scheduled reports stay full-phase work.
+
+**M3's first half landed 2026-10-08** — `GET /api/reports/dashboard`
+(`services/report.service.ts`, `routes/reports.routes.ts`,
+`packages/shared/src/schemas/report.ts`), `hooks/useDashboard.ts` and the four
+`StatTile`s in `pages/Dashboard.tsx`. The tile **window is the browser's day**, sent
+as two instants: the salon's timezone lives in the clock in front of the screen, and
+letting the server guess it would put "today" somewhere the salon is not. A failed
+summary leaves the figures reading "—" rather than zero. `/reports` itself — the
+date-range screen, its tables and the `Reports` rail entry — is what is left.
 
 Handoff screens 05 and 10, backed by the report and export routes catalogued in
 [`legacy/API-INVENTORY.md`](legacy/API-INVENTORY.md). Criterion: every tile and

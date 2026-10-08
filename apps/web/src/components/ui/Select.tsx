@@ -26,6 +26,8 @@ export interface SelectProps extends Omit<SelectHTMLAttributes<HTMLSelectElement
   hint?: string;
   error?: string;
   trailing?: React.ReactNode;
+  /** See `FieldProps.hideLabel` — the name stays, the pixels go. */
+  hideLabel?: boolean;
   onChange?: SelectHTMLAttributes<HTMLSelectElement>["onChange"];
 }
 
@@ -36,6 +38,7 @@ export default function Select({
   hint,
   error,
   trailing,
+  hideLabel = false,
   className,
   disabled = false,
   onChange,
@@ -53,7 +56,7 @@ export default function Select({
   };
 
   return (
-    <Field label={label} hint={hint} error={error} trailing={trailing}>
+    <Field label={label} hint={hint} error={error} trailing={trailing} hideLabel={hideLabel}>
       {({ controlId, describedBy }) => (
         <div className="relative">
           <select

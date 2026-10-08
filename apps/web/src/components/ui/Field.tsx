@@ -20,6 +20,13 @@ export interface FieldProps {
   error?: string;
   /** Rendered after the label — e.g. an optional count or a unit. */
   trailing?: React.ReactNode;
+  /**
+   * Keeps the label for assistive technology but does not draw it — for a
+   * control in a toolbar whose surrounding section already says what it is
+   * (the day view's status filter). The accessible name is unchanged; only
+   * the pixels go away.
+   */
+  hideLabel?: boolean;
   className?: string;
   children: (ids: { controlId: string; describedBy: string | undefined }) => React.ReactNode;
 }
@@ -27,7 +34,15 @@ export interface FieldProps {
 export const CONTROL_CLASS =
   "w-full rounded-md border border-line bg-surface text-sm text-ink transition-colors placeholder:text-ink-muted focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-purple disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-ink-disabled";
 
-export default function Field({ label, hint, error, trailing, className, children }: FieldProps) {
+export default function Field({
+  label,
+  hint,
+  error,
+  trailing,
+  hideLabel = false,
+  className,
+  children,
+}: FieldProps) {
   const controlId = useId();
   const hintId = `${controlId}-hint`;
   const errorId = `${controlId}-error`;
@@ -35,7 +50,7 @@ export default function Field({ label, hint, error, trailing, className, childre
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <div className="flex items-baseline justify-between gap-2">
+      <div className={cn("flex items-baseline justify-between gap-2", hideLabel && "sr-only")}>
         <label htmlFor={controlId} className="text-sm font-medium text-ink">
           {label}
         </label>

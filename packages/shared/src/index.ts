@@ -12,3 +12,6 @@ export * from "./schemas/customer.js";
 export * from "./schemas/catalogue.js";
 export * from "./schemas/sales.js";
 export * from "./schemas/staff.js";
+export * from "./schemas/appointment.js";
+export * from "./schemas/report.js";
+export * from "./schemas/settings.js";

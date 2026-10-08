@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router";
+import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 
 import { Bell, LogOut, Plus, Search } from "@/components/icons";
 import { activeNavItem, visibleNavItems } from "@/constants/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSaleCart } from "@/hooks/useSale";
 import { useLowStockCount } from "@/hooks/useProducts";
 import { cn, getInitials } from "@/lib/utils";
 
@@ -22,17 +23,27 @@ import { cn, getInitials } from "@/lib/utils";
  */
 export default function AppShell() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, tenant, entitlements, isReadOnly, signOut } = useAuth();
   const items = visibleNavItems(user?.globalRole, entitlements);
   const current = activeNavItem(location.pathname, user?.globalRole, entitlements);
   const [search, setSearch] = useState("");
 
-  // The rail's live counter. It is asked for only when the Products entry is
-  // actually on the rail — role first, then entitlement — because a hidden entry
-  // must not cost a request. The count is server-side: the badge counts the whole
-  // catalogue while the browser only ever holds one page of it (ADR 0010).
+  // The rail's live counters. Each is asked for only when its entry is on the
+  // rail — role first, then entitlement — because a hidden entry must not cost
+  // a request. The counts are server-side: the badge counts the whole catalogue
+  // while the browser only ever holds one page of it (ADR 0010).
   const lowStock = useLowStockCount(items.some((item) => item.badge === "lowStock"));
   const lowStockTotal = lowStock.data?.total ?? 0;
+
+  // The open cart is the one badge the browser owns: the cart *is* client state
+  // kept in the query cache (`useSaleCart`), so this reads no server — and it
+  // must not, because an unsold cart exists nowhere else. Counted in lines, as
+  // `docs/mvp.md` → M1 says, not in units: "3 in the cart" is 3 things the
+  // cashier picked up, not the six shampoos among them.
+  const cart = useSaleCart();
+  const cartLines = cart.lines.length;
+  const showSaleBadge = items.some((item) => item.badge === "openCart");
 
   return (
     <div className="flex min-h-screen bg-bg">
@@ -74,6 +85,16 @@ export default function AppShell() {
                     {lowStockTotal > 99 ? "99+" : lowStockTotal}
                   </span>
                   <span className="sr-only">, {lowStockTotal} low on stock</span>
+                </>
+              ) : item.badge === "openCart" && showSaleBadge && cartLines > 0 ? (
+                <>
+                  <span
+                    aria-hidden
+                    className="absolute top-0.5 right-2.5 flex h-4 min-w-4 items-center justify-center rounded-pill border-2 border-navy bg-danger px-1 text-2xs font-heavy text-white"
+                  >
+                    {cartLines > 99 ? "99+" : cartLines}
+                  </span>
+                  <span className="sr-only">, {cartLines} lines waiting in the cart</span>
                 </>
               ) : null}
             </NavLink>
@@ -124,10 +145,16 @@ export default function AppShell() {
 
             <button
               type="button"
+              onClick={() => navigate("/sale")}
               className="flex h-control items-center gap-2 rounded-md bg-purple px-4 text-sm font-semibold text-white shadow-purple-btn transition hover:bg-purple-dark"
             >
               <Plus aria-hidden />
               New sale
+              {cartLines > 0 ? (
+                <span className="rounded-pill bg-white/20 px-1.5 text-2xs font-heavy">
+                  {cartLines}
+                </span>
+              ) : null}
             </button>
 
             <div className="flex items-center gap-2.5 pl-1">

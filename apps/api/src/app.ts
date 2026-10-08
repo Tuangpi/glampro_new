@@ -4,6 +4,7 @@ import helmet from "helmet";
 import { API_PREFIX } from "@glampro/shared";
 
 import { env } from "./lib/env.js";
+import { appointmentsRouter } from "./routes/appointments.routes.js";
 import { authRouter } from "./routes/auth.routes.js";
 import { customersRouter } from "./routes/customers.routes.js";
 import { departmentsRouter } from "./routes/departments.routes.js";
@@ -11,8 +12,10 @@ import { giftCardsRouter } from "./routes/gift-cards.routes.js";
 import { healthRouter, readiness } from "./routes/health.routes.js";
 import { packagesRouter } from "./routes/packages.routes.js";
 import { productsRouter } from "./routes/products.routes.js";
+import { reportsRouter } from "./routes/reports.routes.js";
 import { salesRouter } from "./routes/sales.routes.js";
 import { servicesRouter } from "./routes/services.routes.js";
+import { settingsRouter } from "./routes/settings.routes.js";
 import { staffRouter } from "./routes/staff.routes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { apiLimiter } from "./middleware/rateLimit.js";
@@ -89,6 +92,16 @@ export function createApp(): Express {
   // add-ons, so it omits them and says so rather than refusing the whole request the way
   // the two mounts above do.
   app.use(`${API_PREFIX}/sales`, salesRouter);
+  // Screens 03 and 06. A booking's duration and eligible performers come from
+  // the service (M2), so this mount is the boundary that refuses them rather
+  // than trusting the list the form sent (ADR 0013).
+  app.use(`${API_PREFIX}/appointments`, appointmentsRouter);
+  // Screen 05's tiles. Guarded by the core `dashboard` module, not the `reports`
+  // add-on: every salon has a dashboard, and the add-on gates screen 10's tables.
+  app.use(`${API_PREFIX}/reports`, reportsRouter);
+  // Screen 11. The only router without a `requireModule`: the salon's own
+  // configuration is not a switchable feature, so it is never entitlement-hidden.
+  app.use(`${API_PREFIX}/settings`, settingsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -22,10 +22,19 @@ export const queryKeys = {
     summary: () => ["dashboard", "summary"] as const,
   },
 
+  /**
+   * The till. `openCart` is the odd one: the cart is client state kept in the
+   * cache (`useSaleCart` in `hooks/useSale.ts`), so the rail badge and the
+   * till read one cart, and signing out clears it.
+   *
+   * The search and customer lookups follow the convention above — the base
+   * tuple here, the filter object appended by the caller — so one prefix
+   * invalidates every search and every kind after a sale rings up.
+   */
   sale: {
-    items: (search?: string) => ["sale", "items", { search: search ?? "" }] as const,
+    items: () => ["sale", "items"] as const,
     openCart: () => ["sale", "openCart"] as const,
-    customers: (search?: string) => ["sale", "customers", { search: search ?? "" }] as const,
+    customers: () => ["sale", "customers"] as const,
   },
 
   appointments: {
@@ -102,6 +111,8 @@ export const queryKeys = {
 
   settings: {
     general: () => ["settings", "general"] as const,
+    /** The module catalogue joined to this salon's grants (screen 11's panel). */
+    modules: () => ["settings", "modules"] as const,
     businessHours: () => ["settings", "businessHours"] as const,
     users: () => ["settings", "users"] as const,
   },

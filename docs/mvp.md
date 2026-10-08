@@ -40,7 +40,10 @@ naming what the MVP takes and what it leaves for the full phase, and
 it with the `openCart` badge counting lines. Flow: category tabs → search → grid →
 cart (quantity, per-line staff) → tender (cash, card, split) → inline receipt.
 No new contract: the screen reuses `createSaleSchema` and `saleItemSearchQuerySchema`.
-Test: `__tests__/Sale.test.tsx`.
+Test: `__tests__/Sale.test.tsx`. The demo seed was wired in with this slice, because
+the screen is only demonstrable against a populated catalogue: `seed.ts` now seeds the
+branch/department/staff-service/customer rows `seed-data.ts` describes, idempotently and
+inside `runAsTenant` (see [`STATE.md`](STATE.md) §3).
 
 **Forced decision — service ↔ staff:** there is no service-to-staff mapping in the
 schema or in the legacy database, and the MVP adds no table for one. The staff
@@ -73,8 +76,14 @@ shifts and leave in the booking path, the staff skill matrix, reminders.
 Shared `schemas/report.ts`; `report.service.ts` + `reports.routes.ts`;
 a real `Dashboard.tsx` (today's income, today's appointments, new customers,
 low stock); `pages/Reports.tsx` with a date range and two to three tables;
-`useReports.ts`. **The demo seed must grant the `reports` entitlement** or
-Reports answers 403 on a fresh `db:reset`.
+`useReports.ts`. **The tiles need no entitlement**: `/api/reports` is mounted behind
+the core `dashboard` module, so every salon has a dashboard — the `reports` add-on
+guards screen 10's wider tables, and the seed gains it if and when `pages/Reports.tsx`
+reads one of those.
+
+_Landed 2026-10-08:_ the whole server half (`schemas/report.ts`,
+`report.service.ts`, `reports.routes.ts`) and the four tiles in `Dashboard.tsx`.
+_Still to do:_ `pages/Reports.tsx`, `useReports.ts` and the `Reports` rail entry.
 
 #### Deferred (full Phase 7)
 

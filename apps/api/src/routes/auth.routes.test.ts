@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 import assert from "node:assert/strict";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -12,6 +14,14 @@ import {
 
 /**
  * Integration tests for the web session endpoints.
+ *
+ * `dotenv/config` is imported **statically and first** on purpose: the gate below
+ * reads `process.env` at module scope, and every other suite in the API gets that
+ * value for free by importing `lib/prisma.js` statically. This file deliberately
+ * imports the app *dynamically* (so `app.js` always receives a DATABASE_URL), which
+ * would otherwise leave the gate reading a variable that is set a few lines later —
+ * a suite that skips without saying so, because node does not count the children of
+ * a skipped `describe`.
  *
  * The gate is read *before* the defaults are applied: the suite only runs when a
  * real database was offered, but `app.js` fails fast on a missing DATABASE_URL at

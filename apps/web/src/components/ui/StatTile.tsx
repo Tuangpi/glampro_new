@@ -27,11 +27,21 @@ const TILE_TONES = {
 export interface StatTileProps {
   icon: React.ReactNode;
   value: number | undefined;
+  /**
+   * A pre-formatted stand-in for `value` — money, mostly.
+   *
+   * The income tile is `"1234.50"` as a **string** (a `Decimal(12,2)` that a
+   * JSON float would have already lost a cent of), and rendering `1234` would
+   * drop the decimals the receipt shows. `display` wins over `value` when
+   * present; `value` still drives nothing else, so a tile passing only
+   * `display` shows "—" only when `display` is absent too.
+   */
+  display?: string;
   label: string;
   tone?: keyof typeof TILE_TONES;
 }
 
-export default function StatTile({ icon, value, label, tone = "purple" }: StatTileProps) {
+export default function StatTile({ icon, value, display, label, tone = "purple" }: StatTileProps) {
   return (
     <div className="flex items-center gap-3 rounded-card border border-line bg-surface px-4.5 py-3.5">
       <span
@@ -44,7 +54,7 @@ export default function StatTile({ icon, value, label, tone = "purple" }: StatTi
         {icon}
       </span>
       <div className="min-w-0">
-        <p className="text-lg font-heavy leading-tight text-ink">{value ?? "—"}</p>
+        <p className="text-lg font-heavy leading-tight text-ink">{display ?? value ?? "—"}</p>
         <p className="text-xs text-ink-muted">{label}</p>
       </div>
     </div>
