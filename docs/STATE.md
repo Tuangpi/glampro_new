@@ -57,12 +57,14 @@ and three new customers on Dashboard; Reports showed one receipt, one item,
 customer, receipt and completed appointment remain in the retained development
 database volume as evidence; the salon name and low-stock threshold were restored.
 
-The next roadmap boundary is therefore the remainder of **Phase 5**: hold/resume
-and void from the till, line discounts, receipt printing, cart persistence across
-reloads, and keyboard shortcuts. Their behavior and order have not been selected;
-inspect the legacy implementation and settle any product choices before starting
-one slice rather than implementing all six as an assumed bundle. Keep Phase 6's
-calendar remainder separate.
+The first full-Phase-5 slice is now landed: one unfinished cart and selected
+customer survive a reload, scoped to tenant + user, while tenders and idempotency
+keys never enter storage. Successful payment and logout clear the draft; malformed
+browser data is discarded; the API still re-prices every line. The remaining
+boundary is hold/resume, auditable voids, discounts, receipt printing and keyboard
+shortcuts. Legacy evidence is now in [`legacy/POS-BEHAVIOR.md`](legacy/POS-BEHAVIOR.md);
+Q31–Q33 below are the product choices that block the next write-side slice. Keep
+Phase 6's calendar remainder separate.
 
 ### Closed with M3 — Dashboard and Reports (screens 05 and 10)
 
@@ -88,15 +90,15 @@ The MVP loop's front half, and the three rail entries that had no route behind
 them. `routes.tsx` now points at `/sale`, `/appointments` and `/settings`; every
 rail destination resolves except `Reports`, which M3 builds.
 
-| Piece      | Where                                                               | What it does                                                                                                                                                                                                              |
-| ---------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Page       | `apps/web/src/pages/Sale.tsx`                                       | Customer picker → search → kind tabs → grid → cart → tender → receipt. One search answers every kind (`limit` is per kind), so switching tabs costs no request                                                            |
-| Components | `components/sale/{SaleItemGrid,CartPanel,CartLine,CustomerPicker}`  | The grid, the cart, a line's quantity stepper and performer picker, the Walk-in/member picker. Built with the M1 pass and unchanged by it                                                                                 |
-| Components | `components/sale/{PaymentDialog,ReceiptView}`                       | The tender sheet (cash/card/split, whole cents) and the confirmation, which **is** the receipt the API returned — `saleDetailSchema`, never recomputed on screen                                                          |
-| Hooks      | `apps/web/src/hooks/useSale.ts`                                     | Already landed in 5b.1/5b.2; the cart is client state in the query cache, so the rail badge and the till read one cart                                                                                                    |
-| Page       | `apps/web/src/pages/Appointments.tsx` + `components/appointments/…` | **M2.** The day list by local-day window, create/edit/complete through the drawer                                                                                                                                         |
-| Page       | `apps/web/src/pages/Settings.tsx`                                   | **M4.** Salon profile (name + low-stock threshold, two editable fields), a read-only modules panel, and the team summary read from `GET /api/staff`                                                                       |
-| Test       | `apps/web/src/pages/__tests__/Sale.test.tsx`                        | 10 cases: tabs from the server's `searchableKinds`, cents-exact totals, member re-pricing, the granting-cart rule, one idempotency key per attempt, the receipt replacing the till, and a suspended salon filling no cart |
+| Piece      | Where                                                               | What it does                                                                                                                                                     |
+| ---------- | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Page       | `apps/web/src/pages/Sale.tsx`                                       | Customer picker → search → kind tabs → grid → cart → tender → receipt. One search answers every kind (`limit` is per kind), so switching tabs costs no request   |
+| Components | `components/sale/{SaleItemGrid,CartPanel,CartLine,CustomerPicker}`  | The grid, the cart, a line's quantity stepper and performer picker, the Walk-in/member picker. Built with the M1 pass and unchanged by it                        |
+| Components | `components/sale/{PaymentDialog,ReceiptView}`                       | The tender sheet (cash/card/split, whole cents) and the confirmation, which **is** the receipt the API returned — `saleDetailSchema`, never recomputed on screen |
+| Hooks      | `apps/web/src/hooks/useSale.ts` + `lib/sale-draft-storage.ts`       | The cart is live client state in the query cache and a tenant/user-scoped reload draft underneath it; payment and logout clear both                              |
+| Page       | `apps/web/src/pages/Appointments.tsx` + `components/appointments/…` | **M2.** The day list by local-day window, create/edit/complete through the drawer                                                                                |
+| Page       | `apps/web/src/pages/Settings.tsx`                                   | **M4.** Salon profile (name + low-stock threshold, two editable fields), a read-only modules panel, and the team summary read from `GET /api/staff`              |
+| Test       | `apps/web/src/pages/__tests__/Sale.test.tsx`                        | 11 cases: the original till behavior plus restoration of the unfinished cart and selected customer after remount                                                 |
 
 **Decisions made on the screen rather than re-derived:**
 
@@ -114,8 +116,9 @@ rail destination resolves except `Reports`, which M3 builds.
 - **The read-only salon cannot fill a cart at all**, rather than failing at the
   end of the till: the shell's banner and `TENANCY.md` §6 say why.
 
-**Not built:** the M1 deferrals — hold/resume and void from the till, line
-discounts, receipt printing, cart persistence across reloads, keyboard shortcuts.
+**Not built:** the remaining M1 deferrals — hold/resume and auditable void from
+the till, line discounts, receipt printing and keyboard shortcuts. Reload
+persistence landed as roadmap slice 5e.
 
 **The demo catalogue was wired in with it.** `prisma/seed-data.ts` (858 lines:
 departments, twelve services, twelve products, packages, prepaid credit, gift
@@ -726,15 +729,18 @@ These are ours to decide; none of them needs production data.
 | Q28 | **`Customer` has no archived flag.** The Phase 4 criterion says "create, edit and archive a record of each kind", and `Service`/`Product` have `CatalogStatus { ACTIVE, INACTIVE }` to archive against — `Customer` has no equivalent column                                                                                                                                                                                                                                      | The third of the Phase 4 criterion for customers is unmet, and the screen has no archive action                                                                                                                              | A product call: add `archivedAt DateTime?` to `Customer` (a migration plus an ADR), or define archive as a `deletedAt` on all three master-data models at once. **Not decided unilaterally**                                                                                                                                                                                                                                                                                                                                                                         |
 | Q29 | **The repository moved and every `docker compose` stack on this host broke at once.** The app containers were still bound to a previous `/media/tuangpi/<uuid>/…` path; Docker silently created the missing directory and mounted it over `/app`, so the API and web containers crash-looped on `ENOENT /app/package.json`                                                                                                                                                        | Nothing was wrong with the code — the stack simply could not start, which reads as "the screens don't exist"                                                                                                                 | Already fixed on this host by `docker compose --env-file .env.docker up -d --force-recreate api web`. **It will recur if the media path changes again**; re-run that whenever `docker ps` shows the app containers restarting. **It recurred on 2026-10-06** (`…e7917` → `…e7918`) and the same command fixed it again — even after a plain `make up`, which rebuilt the images but kept the stale bind, because compose saw an unchanged config                                                                                                                     |
 | Q30 | **The till's tender rule is a UI decision, not a contract one.** `createSaleSchema` accepts any set of tenders, so a sale can be part-paid (`PaymentStatus.UNPAID`, the balance as a `CustomerOutstanding`) or tendered with none at all — and `PaymentDialog` allows a shortfall **only when the sale has a customer**, because a walk-in has nowhere to owe to. Nothing in the MVP reads a customer's outstanding balance, so the debt is written and never shown.              | Full Phase 5 (a customer statement / balance screen) and Phase 8's settings: does the salon want to ring up on-account sales at all, and if so where is the balance read?                                                    | Decide before the sale screen is called finished                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Q31 | **What is a held sale in the rebuild?** Legacy writes a real `Sale` with `sale_status=0`, inserts line rows and skips product stock decrement; the checked-in resume button is commented out.                                                                                                                                                                                                                                                                                     | A server draft changes the schema, stock timing, receipt numbering, reporting and whether a hold is visible on another device.                                                                                               | Product decision: one named/multi-device server draft versus browser-only carts; define when stock, ledgers and receipt numbers move. Evidence: [`legacy/POS-BEHAVIOR.md`](legacy/POS-BEHAVIOR.md).                                                                                                                                                                                                                                                                                                                                                                  |
+| Q32 | **What must an auditable void do?** Legacy directly deletes the `Sale` and has no void reason, actor or reversal transaction.                                                                                                                                                                                                                                                                                                                                                     | Deleting a completed sale would erase financial history and can leave inventory, payments, holdings, commissions and reports inconsistent.                                                                                   | Product/accounting decision: who may void, required reason, full versus line void, reversal ledgers and reporting treatment. Do not port the legacy delete.                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Q33 | **What discount model is allowed?** Legacy trusts arbitrary per-line prices and an arbitrary replacement total, with no reason or approver. The rebuild deliberately ignores browser prices.                                                                                                                                                                                                                                                                                      | Discounts cross the API contract, receipt shape, tax/accounting totals, staff permissions and reporting.                                                                                                                     | Product decision: percent/fixed, line/sale scope, stacking, limits/approval and receipt disclosure; then add an explicit shared contract and server-side calculation.                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ## 5. Verify status
 
 `npm run verify` is `format:check` → `lint` → `typecheck` → `test`. Last full run:
-**exit 0**, 2026-10-09, with the complete MVP and its route/page coverage in the tree:
-**240 web (32 files) + 238 API (45 suites) + 55 shared**, no failures and nothing
-skipped. `DATABASE_URL` pointed at the migrated PostgreSQL 17 Compose service on
-host port 5433, so this one command covered the database-gated suites as well as
-formatting, lint and every workspace typecheck.
+**exit 0**, 2026-10-09, with Phase 5e reload persistence and its boundary coverage
+in the tree: **244 web (33 files) + 238 API (45 suites) + 55 shared**, no failures
+and nothing skipped. `DATABASE_URL` pointed at the migrated PostgreSQL 17 Compose
+service on host port 5433, so this one command covered the database-gated suites
+as well as formatting, lint and every workspace typecheck.
 
 ### Standalone app builds now build shared first (2026-10-09)
 

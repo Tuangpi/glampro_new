@@ -12,17 +12,17 @@ out, and the mapping from its model to the new one.
 ## 1. Where it is
 
 ```
-/media/tuangpi/2f03b0ac-9b56-4f1a-ab1c-0529d7bb4e7911/home/singtuang/Documents/Aridient/Glampros/glampro
+/media/tuangpi/2f03b0ac-9b56-4f1a-ab1c-0529d7bb4e7918/home/singtuang/Documents/Aridient/Glampros/glampro
 ```
 
 A sibling directory of this repository — **outside** the monorepo, not a git
 submodule, not a dependency. It is reference material: read it, cite it, do not
 build against it.
 
-> The path above was wrong until 2026-10-03: it ended `…d7bb4e7910`, and that
-> mount holds an empty tree, so the legacy app could not be opened at all. It
-> ends `…d7bb4e7911` — the same mount as this repository. Q1 was only answerable
-> once that was fixed, which is the whole of §6 Q1.
+> This workstation's media UUID changes when the project is remounted. It moved
+> from `…d7bb4e7911` to `…d7bb4e7918` by 2026-10-09; verify the path if the mount
+> changes again. Q1 was only answerable once the real sibling checkout was found,
+> which is the whole of §6 Q1.
 
 | Aspect       | Legacy                             | Rebuild                          |
 | ------------ | ---------------------------------- | -------------------------------- |

@@ -133,12 +133,14 @@ Payment endpoints must be idempotent (**Q16** — closed in 5b.2, see [`STATE.md
 | 5b.2 — the sale           | `POST /api/sales` (lines, per-line `staffId`, `payments[]`), the ledgers it fills, `GET /api/sales/:id` as the receipt, and **Q16**'s idempotency key — which needs a migration             | **Done** — migration `20261005201500_sale_tenders_receipt_number_and_idempotency` committed and applied to both databases; Q16 closed; the receipt number settled by [ADR 0011](decisions/0011-receipt-number-is-a-per-tenant-sequence.md) |
 | 5c — screen 01            | `/sale`: category tabs, the item grid with the cart visible at all times                                                                                                                    | **Done** — M1 landed 2026-10-08                                                                                                                                                                                                            |
 | 5d — screen 02            | The confirmation step inside `/sale`, which is the receipt                                                                                                                                  | **Done** — M1 landed 2026-10-08 (tender dialog + inline receipt)                                                                                                                                                                           |
+| 5e — reload persistence   | Persist one unfinished cart and its selected customer across a browser reload, scoped to tenant + user; never persist tenders or an idempotency key                                         | **Done** — landed 2026-10-09; malformed drafts are discarded, payment and logout clear the draft, and the API still re-prices every line                                                                                                   |
 
 **MVP (M1) takes 5c+5d whole:** tabs → search → grid → cart (quantity, per-line
 staff) → tender (cash, card, split) → inline receipt, reusing `createSaleSchema`
 and `saleItemSearchQuerySchema` with no new contract. The service↔staff choice is
-forced by the model — see [`mvp.md`](mvp.md) — and hold/void/discounts/printing,
-cart persistence and shortcuts stay full-phase work. The rest of Phase 5 is done;
+forced by the model — see [`mvp.md`](mvp.md) — and hold/void/discounts/printing
+and shortcuts stay full-phase work. Reload persistence landed as 5e after the MVP.
+The rest of Phase 5 is done;
 the phase closes when the full-phase remainder after the MVP lands.
 
 **M1 landed 2026-10-08:** `pages/Sale.tsx` plus
@@ -147,7 +149,7 @@ the `/sale` route behind `ProtectedRoute`, and `__tests__/Sale.test.tsx`
 (10 cases). `docs/STATE.md` §3 lists the decisions the screen had to make
 (the tabs come from the server's `searchableKinds`, a service line's performers
 come from its branch, and a granting line forces a customer). The full-phase
-remainder is untouched.
+remainder was untouched by M1; reload persistence has since landed as 5e.
 
 **M1 also had to make the demo seed real.** `prisma/seed-data.ts` had been written
 but almost nothing read it, so a fresh `db:reset` left the till with an empty grid

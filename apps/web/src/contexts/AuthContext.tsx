@@ -22,6 +22,7 @@ import type {
 
 import { get, post } from "@/lib/api";
 import { clearSession, getRefreshToken, setSession } from "@/lib/auth-storage";
+import { clearSaleDraft, saleDraftIdentity } from "@/lib/sale-draft-storage";
 
 export type AuthStatus = "loading" | "authenticated" | "anonymous";
 
@@ -102,11 +103,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     const refreshToken = getRefreshToken();
+    const draftIdentity =
+      profile?.tenant && profile.user
+        ? saleDraftIdentity(profile.tenant.id, profile.user.id)
+        : null;
 
     // Locally first, so the screen is usable even if the call below never
     // returns. ADR 0007 makes logout idempotent and the endpoint deliberately
     // unauthenticated, so a failure here changes nothing.
     clearSession();
+    clearSaleDraft(draftIdentity);
     setProfile(null);
     setStatus("anonymous");
     queryClient.clear();
@@ -118,7 +124,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Best effort — the token is already gone from this browser.
       }
     }
-  }, [queryClient]);
+  }, [profile, queryClient]);
 
   const value = useMemo<AuthContextValue>(
     () => ({

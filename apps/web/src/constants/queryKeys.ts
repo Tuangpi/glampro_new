@@ -33,7 +33,7 @@ export const queryKeys = {
    */
   sale: {
     items: () => ["sale", "items"] as const,
-    openCart: () => ["sale", "openCart"] as const,
+    openCart: (identity: string) => ["sale", "openCart", identity] as const,
     customers: () => ["sale", "customers"] as const,
   },
 

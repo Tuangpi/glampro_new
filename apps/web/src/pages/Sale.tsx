@@ -3,8 +3,8 @@
  *
  * **MVP slice M1** (`docs/mvp.md`): category tabs → search → grid → cart
  * (quantity, per-line staff) → tender (cash, card, split) → receipt. Hold/resume
- * and void from the till, line discounts, receipt printing, cart persistence and
- * keyboard shortcuts are full-phase work and are not stubbed here.
+ * and void from the till, line discounts, receipt printing and keyboard shortcuts
+ * remain full-phase work. The unfinished cart and customer now survive reloads.
  *
  * Four things this page decides rather than re-derives:
  *
@@ -62,6 +62,7 @@ import {
 } from "@/hooks/useSale";
 import { getErrorMessage } from "@/lib/api";
 import { cartTotalCents } from "@/lib/money";
+import { readSaleDraft, saleDraftIdentity, setSaleDraftCustomer } from "@/lib/sale-draft-storage";
 
 /**
  * How many rows a picker reads. The number `AppointmentFormDrawer` uses, and for
@@ -81,12 +82,15 @@ const GRANTING_KINDS: ReadonlySet<SaleItemKind> = new Set<SaleItemKind>([
 ]);
 
 export default function Sale() {
-  const { isReadOnly } = useAuth();
+  const { isReadOnly, tenant, user } = useAuth();
+  const draftIdentity = tenant && user ? saleDraftIdentity(tenant.id, user.id) : null;
 
   const [kind, setKind] = useState<SaleItemKind>("SERVICE");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [customer, setCustomer] = useState<CustomerSummary | null>(null);
+  const [customer, setCustomer] = useState<CustomerSummary | null>(
+    () => readSaleDraft(draftIdentity).customer,
+  );
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<SaleDetail | null>(null);
@@ -99,6 +103,10 @@ export default function Sale() {
     }, SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timer);
   }, [searchInput]);
+
+  useEffect(() => {
+    setSaleDraftCustomer(draftIdentity, customer);
+  }, [customer, draftIdentity]);
 
   const cart = useSaleCart();
   const createSale = useCreateSale();
@@ -185,6 +193,7 @@ export default function Sale() {
       // The cart is cleared by `useCreateSale`'s own success handler, so the rail
       // badge drops with the sale rather than waiting for the receipt to close.
       setCheckoutOpen(false);
+      setCustomer(null);
       setReceipt(sale);
       showToast(
         "success",

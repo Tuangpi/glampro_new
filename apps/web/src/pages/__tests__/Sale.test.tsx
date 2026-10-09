@@ -58,7 +58,13 @@ vi.mock("@/hooks/useServices", () => ({ useServiceList }));
 vi.mock("@/hooks/useStaff", () => ({ useStaffList }));
 
 const isReadOnly = vi.hoisted(() => ({ value: false }));
-vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ isReadOnly: isReadOnly.value }) }));
+vi.mock("@/contexts/AuthContext", () => ({
+  useAuth: () => ({
+    isReadOnly: isReadOnly.value,
+    tenant: { id: "tenant-1" },
+    user: { id: "user-1" },
+  }),
+}));
 
 const { default: Sale } = await import("@/pages/Sale");
 
@@ -253,6 +259,23 @@ describe("the cart", () => {
     await waitFor(() => {
       expect(within(cartPanel()).getAllByText("$70.00")).toHaveLength(2);
     });
+  });
+
+  it("restores the unfinished cart and customer after a browser reload", async () => {
+    const user = userEvent.setup();
+    const first = renderSale();
+
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.type(screen.getByLabelText("Attach a customer by name or phone"), "Mrs");
+    await user.click(await screen.findByRole("button", { name: "Attach Mrs Loi, member" }));
+    await waitFor(() => expect(within(cartPanel()).getAllByText("$70.00")).toHaveLength(2));
+
+    first.unmount();
+    renderSale();
+
+    expect(await screen.findByText("1 line · 1 item")).toBeInTheDocument();
+    expect(screen.getByText("Mrs Loi")).toBeInTheDocument();
+    expect(within(cartPanel()).getAllByText("$70.00")).toHaveLength(2);
   });
 });
 

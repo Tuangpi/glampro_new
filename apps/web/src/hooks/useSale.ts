@@ -6,12 +6,11 @@
  * what those two schemas already say.
  *
  * The open cart lives in the TanStack Query cache under
- * `queryKeys.sale.openCart()` rather than in a context. The rail badge and the
- * till read one cart without prop-drilling, the cart survives a round trip to the
- * customer screen mid-sale, and signing out clears it along with everything else
- * (`queryClient.clear()` in `AuthContext`). Cart *persistence across reloads* is a
- * full-phase feature (`docs/mvp.md` → deferred), so a reload starts an empty
- * cart — deliberately.
+ * `queryKeys.sale.openCart(identity)` rather than in a context. The rail badge and the
+ * till read one cart without prop-drilling, and the cart survives both a round
+ * trip to another screen and a browser reload. `lib/sale-draft-storage.ts` is the
+ * durable layer under that cache, scoped to tenant + user; successful payment or
+ * signing out clears it.
  *
  * **Unit prices are never stored.** A line keeps both prices the search returned
  * (`price` and `memberPrice`) and `lineUnitPrice` derives the one that applies
@@ -35,7 +34,14 @@ import {
 } from "@glampro/shared";
 
 import { queryKeys } from "@/constants/queryKeys";
+import { useAuth } from "@/contexts/AuthContext";
 import { get, getPaginated, post } from "@/lib/api";
+import {
+  clearSaleDraft,
+  readSaleDraft,
+  saleDraftIdentity,
+  setSaleDraftLines,
+} from "@/lib/sale-draft-storage";
 
 /**
  * One row of the till's cart.
@@ -255,17 +261,22 @@ export interface SaleCart {
  */
 export function useSaleCart(): SaleCart {
   const queryClient = useQueryClient();
+  const { tenant, user } = useAuth();
+  const identity = tenant && user ? saleDraftIdentity(tenant.id, user.id) : null;
+  const cartKey = queryKeys.sale.openCart(identity ?? "anonymous");
   const query = useQuery<CartLine[]>({
-    queryKey: queryKeys.sale.openCart(),
-    queryFn: () => [],
+    queryKey: cartKey,
+    queryFn: () => readSaleDraft(identity).lines,
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: Number.POSITIVE_INFINITY,
   });
 
   function update(updater: (lines: CartLine[]) => CartLine[]): void {
-    queryClient.setQueryData<CartLine[]>(queryKeys.sale.openCart(), (current) =>
-      updater(current ?? []),
-    );
+    queryClient.setQueryData<CartLine[]>(cartKey, (current) => {
+      const next = updater(current ?? []);
+      setSaleDraftLines(identity, next);
+      return next;
+    });
   }
 
   return {
@@ -306,11 +317,14 @@ export function useSaleCart(): SaleCart {
  */
 export function useCreateSale() {
   const queryClient = useQueryClient();
+  const { tenant, user } = useAuth();
+  const identity = tenant && user ? saleDraftIdentity(tenant.id, user.id) : null;
 
   return useMutation({
     mutationFn: (input: CreateSaleInput) => post<SaleDetail>("/sales", input),
     onSuccess: () => {
-      queryClient.setQueryData<CartLine[]>(queryKeys.sale.openCart(), []);
+      queryClient.setQueryData<CartLine[]>(queryKeys.sale.openCart(identity ?? "anonymous"), []);
+      clearSaleDraft(identity);
       void queryClient.invalidateQueries({ queryKey: queryKeys.sale.items() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
       void queryClient.invalidateQueries({ queryKey: queryKeys.products.count() });
