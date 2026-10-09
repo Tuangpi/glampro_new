@@ -734,12 +734,36 @@ These are ours to decide; none of them needs production data.
 ## 5. Verify status
 
 `npm run verify` is `format:check` → `lint` → `typecheck` → `test`. Last full run:
-**exit 0**, 2026-10-08, with 5a, 5b.1, 5b.2, M1–M4 and the empty-list fix in the tree:
-**225 web (28 files) + 226 API (42 suites) + 55 shared**, no failures and nothing
+**exit 0**, 2026-10-09, with 5a, 5b.1, 5b.2, M1–M4 and the empty-list fix in the tree:
+**227 web (28 files) + 226 API (42 suites) + 55 shared**, no failures and nothing
 skipped. The three steps before the tests passed with no warnings. (The pipeline was
 re-run end to end at this close, and its stages were also run individually —
 `prettier --check`, `eslint`, `tsc` and each suite — because its output is not always
 capturable through the editor's shell.)
+
+### Standalone app builds now build shared first (2026-10-09)
+
+**Symptom.** On a fresh checkout (the production server), `npm run build` inside
+`apps/api` or `apps/web` failed with `TS2307: Cannot find module '@glampro/shared'`
+while the repo-root `npm run build` passed locally. The workspace dependency
+`@glampro/shared` resolves through its compiled `dist/`, which a fresh clone has
+never built — and only the root `build`/`typecheck`/`test` scripts chained
+`build:shared` first.
+
+**Fix.** One line each in `apps/api/package.json` and `apps/web/package.json`:
+
+```json
+"prebuild": "npm run build --workspace @glampro/shared"
+```
+
+npm runs `prebuild` automatically before `build` in the same package, so a
+per-app build is now self-sufficient wherever it runs. Proven from a fully
+cleaned tree (`npm run clean` removes all three `dist/` dirs): `cd apps/api &&
+npm run build` → exit 0, `cd apps/web && npm run build` → exit 0 with 415
+modules transformed. `prisma generate` needs no env file (exit 0 with
+`DATABASE_URL` unset — it is only needed for migrate/runtime), and the web
+already falls back to `/api` when `VITE_API_URL` is unset (`src/lib/api.ts`),
+so neither app needs env files to build.
 
 ### The empty list bug — one `ApiResponse` wrap was never unwrapped (2026-10-08)
 
