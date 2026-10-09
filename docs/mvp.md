@@ -20,6 +20,12 @@ works against `make up-d`.
    capability says it is absent (an empty list stays an empty list) rather than
    showing an invented number.
 
+_Accepted in a real Google Chrome session on 2026-10-09:_ all eight rail
+destinations rendered, and the customer → sale/receipt → completed appointment →
+Dashboard/Reports → Settings loop completed against the migrated PostgreSQL
+development database. The exact observations are recorded in [`STATE.md`](STATE.md)
+§3 and §5.
+
 ## The slices
 
 One commit per slice, in this order. Each slice closes the phase slice named in

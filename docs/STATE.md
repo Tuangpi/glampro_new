@@ -40,29 +40,29 @@ Facts below were read out of the tree, not copied from a plan.
 | Legacy application  | **Not in this repository.** `docs/legacy/` is the transcription of it: the API surface (154 registrations, 151 live routes) and the schema, plus the gaps worth knowing before migrating                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Docs                | `architecture.md`, `CONTEXT.md`, `roadmap.md`, `STATE.md`, `decisions/` (0002–0011 + index), `legacy/` (LEGACY-MAP, API-INVENTORY, reference/legacy-schema), `saas/TENANCY.md`, `design/HANDOFF.md`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
-## 3. Next up — validate the complete MVP loop in a real browser
+## 3. Next up — finish full Phase 5 (POS sale and confirmation)
 
-The minimal-complete MVP in [`mvp.md`](mvp.md) is now present in code: all eight
-rail destinations resolve to tenant-backed pages, and M3's `/reports` page closes
-the last missing route. `GET /api/reports/dashboard` remains behind the core
-`dashboard` module; `GET /api/reports/overview` is separately guarded by the
-`reports` add-on, which the development seed grants alongside packages and gift
-cards.
+The minimal-complete MVP in [`mvp.md`](mvp.md) is now **whole-system proven**. On
+2026-10-09, a real headless Google Chrome session signed in through the rendered
+login form, created `Browser Acceptance 20261009`, attached that customer to a
+$22.00 cash sale, read receipt `#1`, booked and completed a 30-minute Blow Dry
+appointment with Maya Manager, then observed Dashboard and Reports update from
+the same writes. Settings persisted a changed low-stock threshold across a reload
+and was restored to `5`; all eight rail destinations rendered their expected page
+heading with no runtime-error screen.
 
-The range overview returns cents-exact totals, sales by local day, top items and
-staff performance. It excludes void sales, validates the browser's IANA timezone,
-and relies on the Prisma tenant extension rather than accepting a tenant id. The
-Appointments and Settings mounts now also have real-HTTP boundary suites, and the
-Dashboard, Appointments, Settings and Reports pages have jsdom suites. The coverage
-gap described by the previous handoff is closed.
+The observed cross-page figures were `$22.00` / one sale, one appointment today,
+and three new customers on Dashboard; Reports showed one receipt, one item,
+`$22.00` revenue/paid, and Acrylic Powder 100g as the top item. The acceptance
+customer, receipt and completed appointment remain in the retained development
+database volume as evidence; the salon name and low-stock threshold were restored.
 
-**What remains before calling the product whole-system proven is not another MVP
-feature:** run the done-definition loop in a real browser against `make up-d` — sign
-in, create a customer, ring and read a sale, book and complete an appointment, then
-observe Dashboard and Reports change and edit Settings. No Playwright/Puppeteer
-runner is installed, so the automated gate cannot replace that check. After it is
-observed, take the next full-phase item from [`roadmap.md`](roadmap.md) rather than
-silently expanding the frozen MVP boundary.
+The next roadmap boundary is therefore the remainder of **Phase 5**: hold/resume
+and void from the till, line discounts, receipt printing, cart persistence across
+reloads, and keyboard shortcuts. Their behavior and order have not been selected;
+inspect the legacy implementation and settle any product choices before starting
+one slice rather than implementing all six as an assumed bundle. Keep Phase 6's
+calendar remainder separate.
 
 ### Closed with M3 — Dashboard and Reports (screens 05 and 10)
 
@@ -1043,24 +1043,28 @@ package, 2 gift cards, 10 customers, 14 modules. That is the idempotency the blo
 `main()` claims, observed rather than asserted: a re-seed refreshes the demo instead of
 duplicating it.
 
-**Still unverified, and smaller than it was:** the React screens have still not been
-rendered against that API **in a real browser**, so the browser half of the MVP's own
-done definition — sign in, ring a sale, book an appointment, watch the dashboard move —
-has not been run end to end by anyone. The web suite renders in **jsdom** and no
-Playwright or Puppeteer is installed, so nothing here drives a real browser. What the
-2026-10-08 close added is the wire itself: `:5173` now proxies to the API that is
-actually running (`apps/web/.env` sets `VITE_PROXY_TARGET=http://localhost:9001` and
-`vite.config.ts` reads it — before the fix it silently proxied to `:9000`, which is
-Portainer on this host), and `GET /api/products` **through the dev server** returns the
-same twelve rows the counts above came from. The pixel check remains the user's: sign in
-at <http://localhost:5173> as `manager@glampro.test` and look at the list screens.
+**The browser half is now verified.** On 2026-10-09, Google Chrome was driven through
+its DevTools protocol against Vite on `:5173`, the host API on `:9001`, and the
+Compose PostgreSQL service on `:5433`. The normal `make up-d` path was attempted
+first, but Docker Hub repeatedly reset the first download of `node:24-bookworm-slim`;
+the already-installed host Node toolchain was therefore used for API and web while
+the same migrated and seeded Compose database backed every request. No browser-test
+dependency was added to the repository.
 
-**The former route/page coverage gap is closed.** Real-HTTP suites now cover
+The observed loop was: rendered login as `manager@glampro.test`; create customer;
+attach the customer to an Acrylic Powder 100g cash sale; read receipt `#1`; book a
+Blow Dry appointment and observe the performer list narrow to Maya Manager and Rita
+Stylist; complete it; observe Dashboard and Reports; save and reload Settings. The
+Settings threshold was changed from `5` to `6`, proved after reload and restored to
+`5`. A final route sweep rendered Dashboard, Sale, Appointments, Customers, Products,
+Staff, Reports and Settings with their expected headings and no runtime-error text.
+
+**The former route/page coverage gap is closed.** Real-HTTP suites cover
 Appointments, Reports/Dashboard and Settings at the authentication, tenant,
 entitlement, validation, role and suspended-write boundaries. The web suite now
 renders Dashboard, Appointments, Reports and Settings as well as the five pages the
-previous close listed. What remains unverified is the cross-page real-browser loop
-above, not these individual boundaries.
+previous close listed. Together with the observed Chrome loop above, the MVP done
+definition is now met.
 
 ## 6. How to pick this up
 
