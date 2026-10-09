@@ -1,0 +1,282 @@
+import "dotenv/config";
+
+import assert from "node:assert/strict";
+import type { Server } from "node:http";
+import type { AddressInfo } from "node:net";
+import { after, before, describe, it } from "node:test";
+
+const databaseUrl = process.env["DATABASE_URL"];
+process.env.DATABASE_URL ??= "postgresql://glampro:glampro@127.0.0.1:5432/glampro_test";
+process.env.JWT_SECRET ??= "appointments-routes-test-secret";
+process.env.NODE_ENV = "test";
+
+const { createApp } = await import("../app.js");
+const { prisma } = await import("../lib/prisma.js");
+const { hashPassword } = await import("../lib/password.js");
+const { runAsPlatform } = await import("../lib/tenant-context.js");
+
+const PASSWORD = "correct-horse-1";
+const DOMAIN = "appointments-rt.test";
+const TENANT_A = "appointments-rt-a";
+const TENANT_B = "appointments-rt-b";
+const TENANT_SUSPENDED = "appointments-rt-suspended";
+const TENANT_IDS = [TENANT_A, TENANT_B, TENANT_SUSPENDED];
+
+interface AppointmentBody {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  status: string;
+  durationMinutes: number | null;
+  customerName: string | null;
+  staffName: string | null;
+  serviceName: string | null;
+  finishedAt?: string | null;
+}
+
+interface ErrorEnvelope {
+  code?: string;
+}
+
+async function purge(): Promise<void> {
+  await runAsPlatform(async () => {
+    await prisma.tenant.deleteMany({ where: { id: { in: TENANT_IDS } } });
+  });
+}
+
+async function seed(): Promise<void> {
+  const passwordHash = await hashPassword(PASSWORD);
+
+  await runAsPlatform(async () => {
+    await prisma.module.upsert({
+      where: { code: "appointments" },
+      update: { isCore: true },
+      create: {
+        code: "appointments",
+        name: "Appointments",
+        category: "Core",
+        isCore: true,
+      },
+    });
+
+    await prisma.tenant.create({ data: { id: TENANT_A, name: "Appointments A", slug: TENANT_A } });
+    await prisma.tenant.create({ data: { id: TENANT_B, name: "Appointments B", slug: TENANT_B } });
+    await prisma.tenant.create({
+      data: {
+        id: TENANT_SUSPENDED,
+        name: "Appointments Suspended",
+        slug: TENANT_SUSPENDED,
+        status: "SUSPENDED",
+      },
+    });
+
+    const owner = await prisma.user.create({
+      data: {
+        id: "appointments-rt-owner",
+        tenantId: TENANT_A,
+        email: `owner@${DOMAIN}`,
+        name: "Olivia Owner",
+        passwordHash,
+        globalRole: "SUPER_ADMIN",
+      },
+    });
+    const stylist = await prisma.user.create({
+      data: {
+        id: "appointments-rt-stylist",
+        tenantId: TENANT_A,
+        email: `stylist@${DOMAIN}`,
+        name: "Sam Stylist",
+        passwordHash,
+      },
+    });
+    const foreignOwner = await prisma.user.create({
+      data: {
+        id: "appointments-rt-foreign-owner",
+        tenantId: TENANT_B,
+        email: `foreign@${DOMAIN}`,
+        name: "Foreign Owner",
+        passwordHash,
+        globalRole: "SUPER_ADMIN",
+      },
+    });
+    await prisma.user.create({
+      data: {
+        id: "appointments-rt-suspended-owner",
+        tenantId: TENANT_SUSPENDED,
+        email: `suspended@${DOMAIN}`,
+        name: "Suspended Owner",
+        passwordHash,
+        globalRole: "SUPER_ADMIN",
+      },
+    });
+
+    const department = await prisma.department.create({
+      data: { id: "appointments-rt-department", tenantId: TENANT_A, name: "Hair" },
+    });
+    await prisma.staffDepartment.create({
+      data: { tenantId: TENANT_A, userId: stylist.id, departmentId: department.id },
+    });
+    const service = await prisma.service.create({
+      data: {
+        id: "appointments-rt-service",
+        tenantId: TENANT_A,
+        departmentId: department.id,
+        name: "Cut and finish",
+        memberPrice: "35.00",
+        nonmemberPrice: "40.00",
+        durationMinutes: 45,
+      },
+    });
+    const customer = await prisma.customer.create({
+      data: { id: "appointments-rt-customer", tenantId: TENANT_A, name: "Casey Client" },
+    });
+
+    await prisma.appointment.create({
+      data: {
+        id: "appointments-rt-existing",
+        tenantId: TENANT_A,
+        customerId: customer.id,
+        staffId: stylist.id,
+        serviceId: service.id,
+        startsAt: new Date("2026-10-09T09:00:00.000Z"),
+        endsAt: new Date("2026-10-09T09:45:00.000Z"),
+        durationMinutes: 45,
+      },
+    });
+    await prisma.appointment.create({
+      data: {
+        id: "appointments-rt-foreign",
+        tenantId: TENANT_B,
+        staffId: foreignOwner.id,
+        startsAt: new Date("2026-10-09T10:00:00.000Z"),
+        endsAt: new Date("2026-10-09T11:00:00.000Z"),
+        durationMinutes: 60,
+      },
+    });
+
+    await prisma.tenant.update({ where: { id: TENANT_A }, data: { ownerUserId: owner.id } });
+  });
+}
+
+async function dataOf<T>(response: Response): Promise<T> {
+  return ((await response.json()) as { data: T }).data;
+}
+
+let baseUrl = "";
+let server: Server | undefined;
+let token = "";
+let suspendedToken = "";
+
+async function login(email: string): Promise<string> {
+  const response = await fetch(`${baseUrl}/api/auth/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password: PASSWORD }),
+  });
+  assert.equal(response.status, 200);
+  return (await dataOf<{ accessToken: string }>(response)).accessToken;
+}
+
+function request(
+  method: "GET" | "POST" | "PATCH",
+  path: string,
+  accessToken?: string,
+  body?: unknown,
+): Promise<Response> {
+  return fetch(`${baseUrl}${path}`, {
+    method,
+    headers: {
+      ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
+      ...(body === undefined ? {} : { "content-type": "application/json" }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+describe(
+  "appointments endpoints",
+  { skip: databaseUrl ? false : "DATABASE_URL is not set" },
+  () => {
+    before(async () => {
+      await purge();
+      await seed();
+      await new Promise<void>((resolve) => {
+        server = createApp().listen(0, "127.0.0.1", () => resolve());
+      });
+      baseUrl = `http://127.0.0.1:${(server?.address() as AddressInfo).port}`;
+      token = await login(`owner@${DOMAIN}`);
+      suspendedToken = await login(`suspended@${DOMAIN}`);
+    });
+
+    after(async () => {
+      await new Promise<void>((resolve, reject) => {
+        if (!server) return resolve();
+        server.close((error) => (error ? reject(error) : resolve()));
+      });
+      await purge();
+    });
+
+    it("protects the list and returns one tenant-scoped pagination envelope", async () => {
+      assert.equal((await request("GET", "/api/appointments")).status, 401);
+
+      const response = await request("GET", "/api/appointments?page=1&pageSize=20", token);
+      const page = await dataOf<{
+        data: AppointmentBody[];
+        total: number;
+        page: number;
+        pageSize: number;
+      }>(response);
+
+      assert.equal(response.status, 200);
+      assert.equal(page.total, 1);
+      assert.equal(page.page, 1);
+      assert.equal(page.pageSize, 20);
+      assert.deepEqual(
+        page.data.map((appointment) => appointment.id),
+        ["appointments-rt-existing"],
+      );
+      assert.equal(page.data[0]?.customerName, "Casey Client");
+    });
+
+    it("does not expose another tenant's appointment by id", async () => {
+      const response = await request("GET", "/api/appointments/appointments-rt-foreign", token);
+      assert.equal(response.status, 404);
+    });
+
+    it("derives the end time from the service and stamps completion", async () => {
+      const createdResponse = await request("POST", "/api/appointments", token, {
+        customerId: "appointments-rt-customer",
+        staffId: "appointments-rt-stylist",
+        serviceId: "appointments-rt-service",
+        startsAt: "2026-10-09T12:00:00.000Z",
+        comment: "Route-test booking",
+      });
+      const created = await dataOf<AppointmentBody>(createdResponse);
+
+      assert.equal(createdResponse.status, 201);
+      assert.equal(created.durationMinutes, 45);
+      assert.equal(created.endsAt, "2026-10-09T12:45:00.000Z");
+      assert.equal(created.staffName, "Sam Stylist");
+      assert.equal(created.serviceName, "Cut and finish");
+
+      const completedResponse = await request("PATCH", `/api/appointments/${created.id}`, token, {
+        status: "COMPLETED",
+      });
+      const completed = await dataOf<AppointmentBody>(completedResponse);
+
+      assert.equal(completedResponse.status, 200);
+      assert.equal(completed.status, "COMPLETED");
+      assert.equal(typeof completed.finishedAt, "string");
+    });
+
+    it("keeps suspended salons read-only", async () => {
+      const response = await request("POST", "/api/appointments", suspendedToken, {
+        serviceId: "appointments-rt-service",
+        startsAt: "2026-10-09T14:00:00.000Z",
+      });
+
+      assert.equal(response.status, 403);
+      assert.equal(((await response.json()) as ErrorEnvelope).code, "TENANT_SUSPENDED");
+    });
+  },
+);

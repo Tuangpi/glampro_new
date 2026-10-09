@@ -2,9 +2,10 @@
  * Reports — handoff screen 05's tiles, `/api/reports`.
  *
  * The phase's full report catalogue, export and charts are still ahead of this
- * file (`docs/roadmap.md` → Phase 7); what exists today is the dashboard's
- * four numbers, and they are here rather than in four bespoke endpoints
- * because they are **one question asked of one window**: how was today.
+ * file (`docs/roadmap.md` → Phase 7); the MVP carries the dashboard's four
+ * numbers plus screen 10's date-range overview. The tiles live here rather than
+ * in four bespoke endpoints because they are **one question asked of one
+ * window**: how was today.
  *
  * Every figure is a tenant-scoped aggregate the server counts — the browser
  * never sums the page of rows it happens to hold (ADR 0010). Runs inside the
@@ -12,8 +13,11 @@
  */
 import {
   dashboardSummarySchema,
+  reportOverviewSchema,
   type DashboardQuery,
   type DashboardSummary,
+  type ReportOverview,
+  type ReportRangeQuery,
 } from "@glampro/shared";
 
 import { prisma } from "../lib/prisma.js";
@@ -86,6 +90,190 @@ export async function dashboardSummary(query: DashboardQuery): Promise<Dashboard
     appointmentsToday: appointments,
     newCustomersToday: newCustomers,
     lowStock,
+    asOf: new Date().toISOString(),
+  });
+}
+
+/** Decimal-like values returned by Prisma aggregates and rows. */
+interface MoneyValue {
+  toFixed: (digits: number) => string;
+}
+
+/** Adds decimal strings without routing money through a JavaScript float. */
+function addMoney(current: bigint, value: MoneyValue): bigint {
+  const fixed = value.toFixed(2);
+  const negative = fixed.startsWith("-");
+  const [whole = "0", fraction = "00"] = fixed.replace("-", "").split(".");
+  const cents = BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0").slice(0, 2));
+  return current + (negative ? -cents : cents);
+}
+
+function centsToMoney(value: bigint): string {
+  const negative = value < 0n;
+  const absolute = negative ? -value : value;
+  const whole = absolute / 100n;
+  const cents = (absolute % 100n).toString().padStart(2, "0");
+  return `${negative ? "-" : ""}${whole}.${cents}`;
+}
+
+/**
+ * Screen 10's minimal report: totals plus three real tables over one range.
+ *
+ * The lists are intentionally read and folded in application code for this MVP
+ * slice. Prisma's tenant extension scopes each read, and the full reporting phase
+ * can replace these folds with RLS-protected SQL once the catalogue is large enough
+ * to justify it (`TENANCY.md` §9).
+ */
+export async function reportOverview(query: ReportRangeQuery): Promise<ReportOverview> {
+  const from = new Date(query.from);
+  const to = new Date(query.to);
+  const soldAt = { gte: from, lte: to };
+  const localDay = new Intl.DateTimeFormat("en-CA", {
+    timeZone: query.timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  function dateKey(value: Date): string {
+    const parts = Object.fromEntries(
+      localDay
+        .formatToParts(value)
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, part.value]),
+    );
+    return `${parts["year"]}-${parts["month"]}-${parts["day"]}`;
+  }
+
+  const [sales, lines, performances] = await Promise.all([
+    prisma.sale.findMany({
+      where: { status: "COMPLETED", soldAt },
+      select: {
+        soldAt: true,
+        totalQuantity: true,
+        totalAmount: true,
+        paidAmount: true,
+      },
+      orderBy: { soldAt: "asc" },
+    }),
+    prisma.saleLine.findMany({
+      where: { sale: { status: "COMPLETED", soldAt } },
+      select: {
+        itemType: true,
+        itemId: true,
+        itemName: true,
+        quantity: true,
+        lineTotal: true,
+      },
+    }),
+    prisma.employeePerformance.findMany({
+      where: { sale: { status: "COMPLETED", soldAt } },
+      select: {
+        amount: true,
+        user: { select: { id: true, name: true, position: true } },
+      },
+    }),
+  ]);
+
+  const byDay = new Map<
+    string,
+    { date: string; sales: number; quantity: number; revenue: bigint; paid: bigint }
+  >();
+  let revenue = 0n;
+  let paid = 0n;
+  let items = 0;
+
+  for (const sale of sales) {
+    const date = dateKey(sale.soldAt);
+    const row = byDay.get(date) ?? { date, sales: 0, quantity: 0, revenue: 0n, paid: 0n };
+    row.sales += 1;
+    row.quantity += sale.totalQuantity;
+    row.revenue = addMoney(row.revenue, sale.totalAmount);
+    row.paid = addMoney(row.paid, sale.paidAmount);
+    byDay.set(date, row);
+
+    revenue = addMoney(revenue, sale.totalAmount);
+    paid = addMoney(paid, sale.paidAmount);
+    items += sale.totalQuantity;
+  }
+
+  const byItem = new Map<
+    string,
+    {
+      itemType: (typeof lines)[number]["itemType"];
+      itemId: string;
+      itemName: string;
+      quantity: number;
+      revenue: bigint;
+    }
+  >();
+  for (const line of lines) {
+    const key = `${line.itemType}:${line.itemId}`;
+    const row = byItem.get(key) ?? {
+      itemType: line.itemType,
+      itemId: line.itemId,
+      itemName: line.itemName,
+      quantity: 0,
+      revenue: 0n,
+    };
+    row.quantity += line.quantity;
+    row.revenue = addMoney(row.revenue, line.lineTotal);
+    byItem.set(key, row);
+  }
+
+  const byStaff = new Map<
+    string,
+    {
+      userId: string;
+      name: string;
+      position: string | null;
+      creditedLines: number;
+      revenue: bigint;
+    }
+  >();
+  for (const performance of performances) {
+    const row = byStaff.get(performance.user.id) ?? {
+      userId: performance.user.id,
+      name: performance.user.name,
+      position: performance.user.position,
+      creditedLines: 0,
+      revenue: 0n,
+    };
+    row.creditedLines += 1;
+    row.revenue = addMoney(row.revenue, performance.amount);
+    byStaff.set(row.userId, row);
+  }
+
+  return reportOverviewSchema.parse({
+    from: query.from,
+    to: query.to,
+    totals: {
+      revenue: centsToMoney(revenue),
+      paid: centsToMoney(paid),
+      sales: sales.length,
+      items,
+    },
+    salesByDay: [...byDay.values()].map((row) => ({
+      ...row,
+      revenue: centsToMoney(row.revenue),
+      paid: centsToMoney(row.paid),
+    })),
+    topItems: [...byItem.values()]
+      .sort((a, b) =>
+        a.revenue === b.revenue ? b.quantity - a.quantity : a.revenue > b.revenue ? -1 : 1,
+      )
+      .slice(0, 10)
+      .map((row) => ({ ...row, revenue: centsToMoney(row.revenue) })),
+    staffPerformance: [...byStaff.values()]
+      .sort((a, b) =>
+        a.revenue === b.revenue
+          ? b.creditedLines - a.creditedLines
+          : a.revenue > b.revenue
+            ? -1
+            : 1,
+      )
+      .slice(0, 10)
+      .map((row) => ({ ...row, revenue: centsToMoney(row.revenue) })),
     asOf: new Date().toISOString(),
   });
 }

@@ -78,12 +78,15 @@ a real `Dashboard.tsx` (today's income, today's appointments, new customers,
 low stock); `pages/Reports.tsx` with a date range and two to three tables;
 `useReports.ts`. **The tiles need no entitlement**: `/api/reports` is mounted behind
 the core `dashboard` module, so every salon has a dashboard — the `reports` add-on
-guards screen 10's wider tables, and the seed gains it if and when `pages/Reports.tsx`
-reads one of those.
+guards screen 10's wider tables, and the development seed grants it so a fresh
+demo salon can open the completed page.
 
-_Landed 2026-10-08:_ the whole server half (`schemas/report.ts`,
-`report.service.ts`, `reports.routes.ts`) and the four tiles in `Dashboard.tsx`.
-_Still to do:_ `pages/Reports.tsx`, `useReports.ts` and the `Reports` rail entry.
+_Completed 2026-10-09:_ the dashboard tiles and the add-on-gated `/reports`
+screen are both live. The overview keeps money as decimal strings, excludes void
+sales, groups each receipt by the browser's validated IANA timezone, and renders
+totals plus sales-by-day, top-items and attributed-staff tables. Route-boundary
+tests cover authentication, entitlement, validation, tenant isolation and the
+aggregates; page tests cover the range query, populated, empty and error states.
 
 #### Deferred (full Phase 7)
 

@@ -104,9 +104,7 @@ export const queryKeys = {
   },
 
   reports: {
-    sales: (range: string) => ["reports", "sales", range] as const,
-    staff: (range: string) => ["reports", "staff", range] as const,
-    inventory: (range: string) => ["reports", "inventory", range] as const,
+    overview: () => ["reports", "overview"] as const,
   },
 
   settings: {

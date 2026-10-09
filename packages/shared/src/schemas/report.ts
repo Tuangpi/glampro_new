@@ -1,7 +1,7 @@
 /**
- * Report contracts — handoff screen 05's tiles and (later) screen 10's tables.
+ * Report contracts — handoff screen 05's tiles and screen 10's tables.
  *
- * This file starts with the one shape the dashboard needs: four numbers the
+ * The dashboard starts with four numbers the
  * **server** counted. Every tile on screen 05 is a tenant-scoped aggregate, so
  * the browser never derives a figure from the page of rows it happens to hold
  * (ADR 0010) — and "today's income" is a sum over `Sale`, which no list screen
@@ -52,3 +52,83 @@ export const dashboardSummarySchema = z.object({
 });
 
 export type DashboardSummary = z.infer<typeof dashboardSummarySchema>;
+
+/**
+ * `GET /api/reports/overview?from=&to=` — screen 10's minimal-complete report.
+ *
+ * The range is required here (unlike the dashboard's convenient server-day
+ * fallback): a report is a statement about an explicit period, and silently
+ * choosing one would make an exported or shared figure impossible to reproduce.
+ */
+export const reportRangeQuerySchema = z
+  .object({
+    from: z.iso.datetime({ offset: true }),
+    to: z.iso.datetime({ offset: true }),
+    /** Browser IANA zone used only to label each sale with the salon's local day. */
+    timeZone: z.string().min(1),
+  })
+  .refine((range) => new Date(range.from) <= new Date(range.to), {
+    message: "The start of the report range must be before its end.",
+    path: ["to"],
+  })
+  .refine(
+    (range) => {
+      try {
+        new Intl.DateTimeFormat("en-CA", { timeZone: range.timeZone }).format(new Date());
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { message: "The report timezone is not recognised.", path: ["timeZone"] },
+  );
+
+export type ReportRangeQuery = z.infer<typeof reportRangeQuerySchema>;
+
+export const reportSalesByDaySchema = z.object({
+  /** `YYYY-MM-DD` in the browser timezone supplied with the range. */
+  date: z.iso.date(),
+  sales: z.number().int().min(0),
+  quantity: z.number().int().min(0),
+  revenue: z.string(),
+  paid: z.string(),
+});
+
+export type ReportSalesByDay = z.infer<typeof reportSalesByDaySchema>;
+
+export const reportItemSchema = z.object({
+  itemType: z.enum(["SERVICE", "PRODUCT", "PACKAGE", "VALUE_PACKAGE", "GIFT_CARD"]),
+  itemId: z.string(),
+  itemName: z.string(),
+  quantity: z.number().int().min(0),
+  revenue: z.string(),
+});
+
+export type ReportItem = z.infer<typeof reportItemSchema>;
+
+export const reportStaffSchema = z.object({
+  userId: z.string(),
+  name: z.string(),
+  position: z.string().nullable(),
+  creditedLines: z.number().int().min(0),
+  revenue: z.string(),
+});
+
+export type ReportStaff = z.infer<typeof reportStaffSchema>;
+
+export const reportOverviewSchema = z.object({
+  from: z.string(),
+  to: z.string(),
+  totals: z.object({
+    revenue: z.string(),
+    paid: z.string(),
+    sales: z.number().int().min(0),
+    items: z.number().int().min(0),
+  }),
+  salesByDay: z.array(reportSalesByDaySchema),
+  topItems: z.array(reportItemSchema),
+  staffPerformance: z.array(reportStaffSchema),
+  asOf: z.string(),
+});
+
+export type ReportOverview = z.infer<typeof reportOverviewSchema>;

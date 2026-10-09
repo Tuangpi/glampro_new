@@ -194,19 +194,20 @@ async function seedModules(): Promise<void> {
 }
 
 /**
- * Grants the demo salon the add-ons screen 08's last two tabs need.
+ * Grants the demo salon the add-ons its demonstrable screens need.
  *
  * A `TenantModule` row is how entitlement is recorded, and **nothing creates one
  * yet** — the platform console does that, and it has no phase (see `docs/roadmap.md`
  * → Not scheduled yet). Seeding them keeps a fresh `db:reset` showing the Packages
  * and Gift cards tabs rather than a 403 that reads as "this feature is broken" when
- * the truth is "this salon has not bought it".
+ * truth is "this salon has not bought it". Reports joins those grants because
+ * `/reports` is part of the minimal-complete MVP (`docs/mvp.md` M3).
  *
  * Development only: `SEED_MODE=production` seeds the module catalogue and one
  * administrator, and grants nobody anything.
  */
 async function seedEntitlements(tenantId: string): Promise<void> {
-  for (const code of ["packages", "giftCards"] as const) {
+  for (const code of ["packages", "giftCards", "reports"] as const) {
     // `seedModules()` has already created the row; this upsert is here so the
     // function is correct on its own rather than depending on call order.
     const module = await prisma.module.upsert({
@@ -222,7 +223,7 @@ async function seedEntitlements(tenantId: string): Promise<void> {
     });
   }
 
-  console.log("  ✔ entitlements — packages, giftCards (demo salon)");
+  console.log("  ✔ entitlements — packages, giftCards, reports (demo salon)");
 }
 
 /*

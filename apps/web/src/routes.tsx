@@ -13,13 +13,12 @@ const Appointments = lazy(() => import("@/pages/Appointments"));
 const Customers = lazy(() => import("@/pages/Customers"));
 const Products = lazy(() => import("@/pages/Products"));
 const Staff = lazy(() => import("@/pages/Staff"));
+const Reports = lazy(() => import("@/pages/Reports"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 // ── Route tree ─────────────────────────────────────────────────────
-// Every rail destination is here except Reports, which the phase that builds
-// screen 10 adds — the rail draws the entry already so its absence is visible
-// rather than silent. There is no /services route: services are a tab on the
+// Every rail destination is here. There is no /services route: services are a tab on the
 // products screen and a step in the sale and appointment flows (ADR 0005).
 const routes: RouteObject[] = [
   {
@@ -43,6 +42,7 @@ const routes: RouteObject[] = [
       { path: "customers", element: lazyRoute(<Customers />) },
       { path: "products", element: lazyRoute(<Products />) },
       { path: "staff", element: lazyRoute(<Staff />) },
+      { path: "reports", element: lazyRoute(<Reports />) },
       // Screen 11. The API refuses the profile write for anyone else
       // (`requireRole("SUPER_ADMIN", "MANAGER")`), which is the actual boundary.
       { path: "settings", element: lazyRoute(<Settings />) },

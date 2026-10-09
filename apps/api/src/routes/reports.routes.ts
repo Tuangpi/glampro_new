@@ -1,10 +1,15 @@
 import { Router } from "express";
-import { dashboardQuerySchema, type DashboardQuery } from "@glampro/shared";
+import {
+  dashboardQuerySchema,
+  reportRangeQuerySchema,
+  type DashboardQuery,
+  type ReportRangeQuery,
+} from "@glampro/shared";
 
 import { auth } from "../middleware/auth.js";
 import { requireModule } from "../middleware/requireModule.js";
 import { validate, validated } from "../middleware/validate.js";
-import { dashboardSummary } from "../services/report.service.js";
+import { dashboardSummary, reportOverview } from "../services/report.service.js";
 
 /**
  * Reports — handoff screen 05's tiles (`/api/reports`).
@@ -27,6 +32,21 @@ reportsRouter.get(
     try {
       const query = validated<DashboardQuery>(req, "query");
       res.status(200).json({ data: await dashboardSummary(query) });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+reportsRouter.get(
+  "/overview",
+  auth,
+  requireModule("reports"),
+  validate(reportRangeQuerySchema, "query"),
+  async (req, res, next) => {
+    try {
+      const query = validated<ReportRangeQuery>(req, "query");
+      res.status(200).json({ data: await reportOverview(query) });
     } catch (error) {
       next(error);
     }

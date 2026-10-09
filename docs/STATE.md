@@ -40,50 +40,47 @@ Facts below were read out of the tree, not copied from a plan.
 | Legacy application  | **Not in this repository.** `docs/legacy/` is the transcription of it: the API surface (154 registrations, 151 live routes) and the schema, plus the gaps worth knowing before migrating                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | Docs                | `architecture.md`, `CONTEXT.md`, `roadmap.md`, `STATE.md`, `decisions/` (0002–0011 + index), `legacy/` (LEGACY-MAP, API-INVENTORY, reference/legacy-schema), `saas/TENANCY.md`, `design/HANDOFF.md`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
-## 3. Next up — M3's second half: `/reports` (the MVP loop's last slice)
+## 3. Next up — validate the complete MVP loop in a real browser
 
-Two forced decisions rode along the slices: **service↔staff has no mapping**, so the
-MVP offers staff in the service's department (`mvp.md` M1) — now implemented on both
-the till and the booking form
-([ADR 0013](decisions/0013-appointment-performers-come-from-the-service.md)) — and
-the demo seed grants only `packages`+`giftCards`. **M3 needs no further entitlement
-for its tiles**, which corrects what this file said earlier: `/api/reports` is mounted
-behind the **core** `dashboard` module, so `GET /api/reports/dashboard` answers for
-every salon that exists, and the `reports` add-on is there for screen 10's wider
-tables, which are full-phase work. The deferred depth each slice leaves behind is the
-checklist in [`docs/mvp.md`](mvp.md) and the MVP paragraphs in
-[`docs/roadmap.md`](roadmap.md). None of it is faked: an absent capability says so
-rather than showing an invented number.
+The minimal-complete MVP in [`mvp.md`](mvp.md) is now present in code: all eight
+rail destinations resolve to tenant-backed pages, and M3's `/reports` page closes
+the last missing route. `GET /api/reports/dashboard` remains behind the core
+`dashboard` module; `GET /api/reports/overview` is separately guarded by the
+`reports` add-on, which the development seed grants alongside packages and gift
+cards.
 
-**Last session closed the empty list screens, and the catalogue route suite with
-them.** Products, Services, Packages, Gift cards and Customers all rendered empty while
-`GET /api/products` answered `200` with twelve rows: `getPaginated` never unwrapped the
-`ApiResponse` envelope. §5 has the cause, the fix and the three suites that now pin it;
-`apps/api/src/routes/catalogue.routes.test.ts` is the route-level suite §5 of the
-previous close said the catalogue mounts were missing.
+The range overview returns cents-exact totals, sales by local day, top items and
+staff performance. It excludes void sales, validates the browser's IANA timezone,
+and relies on the Prisma tenant extension rather than accepting a tenant id. The
+Appointments and Settings mounts now also have real-HTTP boundary suites, and the
+Dashboard, Appointments, Settings and Reports pages have jsdom suites. The coverage
+gap described by the previous handoff is closed.
 
-**The next task is still not a feature.** `appointments`, `settings` and `reports` have
-no route suite, and `Appointments.tsx`, `Settings.tsx` and `Dashboard.tsx` have none —
-§5 names them. Their **pages exist** (M2's desk and M4's settings were built with M1,
-and the tiles are M3's first half); what is missing is their tests, not the screens.
-Adding them is the way to test a mount here, because each sits behind `auth` plus
-`requireModule` and can be driven the way `sales.routes.test.ts` already drives
-`/api/sales`.
+**What remains before calling the product whole-system proven is not another MVP
+feature:** run the done-definition loop in a real browser against `make up-d` — sign
+in, create a customer, ring and read a sale, book and complete an appointment, then
+observe Dashboard and Reports change and edit Settings. No Playwright/Puppeteer
+runner is installed, so the automated gate cannot replace that check. After it is
+observed, take the next full-phase item from [`roadmap.md`](roadmap.md) rather than
+silently expanding the frozen MVP boundary.
 
-### Closed with M3's first half — the tiles, `GET /api/reports/dashboard` (screen 05)
+### Closed with M3 — Dashboard and Reports (screens 05 and 10)
 
-| Piece   | Where                                     | What it does                                                                                                                                                                                                                                                 |
-| ------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Schema  | `packages/shared/src/schemas/report.ts`   | `dashboardSummaryQuerySchema` (a `from`/`to` window, both instants) and `dashboardSummarySchema` — money as a decimal string, counts as integers, one `asOf`                                                                                                 |
-| Service | `apps/api/src/services/report.service.ts` | The four aggregates in one read path: income and sales from `Sale`, appointments from `Appointment`, new customers from `Customer.createdAt`, low stock against the tenant's own threshold ([ADR 0010](decisions/0010-low-stock-threshold-is-per-tenant.md)) |
-| Routes  | `apps/api/src/routes/reports.routes.ts`   | `GET /api/reports/dashboard`, behind `auth` + `requireModule("dashboard")` — the **core** module, deliberately not the `reports` add-on                                                                                                                      |
-| Hook    | `apps/web/src/hooks/useDashboard.ts`      | One request for all four tiles so they cannot be observed a moment apart; the window is **the browser's day** derived from calendar midnight, so a re-render does not refetch                                                                                |
-| Page    | `apps/web/src/pages/Dashboard.tsx`        | The four `StatTile`s plus the Phase 0 status card. A failed summary leaves every figure reading "—": "no income today" and "the server did not answer" are different sentences                                                                               |
+| Piece   | Where                                                                    | What it does                                                                                                                                                                                                                                                 |
+| ------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Schema  | `packages/shared/src/schemas/report.ts`                                  | `dashboardQuerySchema` (a `from`/`to` window, both instants) and `dashboardSummarySchema` — money as a decimal string, counts as integers, one `asOf`                                                                                                        |
+| Service | `apps/api/src/services/report.service.ts`                                | The four aggregates in one read path: income and sales from `Sale`, appointments from `Appointment`, new customers from `Customer.createdAt`, low stock against the tenant's own threshold ([ADR 0010](decisions/0010-low-stock-threshold-is-per-tenant.md)) |
+| Routes  | `apps/api/src/routes/reports.routes.ts`                                  | `GET /api/reports/dashboard`, behind `auth` + `requireModule("dashboard")` — the **core** module, deliberately not the `reports` add-on                                                                                                                      |
+| Hook    | `apps/web/src/hooks/useDashboard.ts`                                     | One request for all four tiles so they cannot be observed a moment apart; the window is **the browser's day** derived from calendar midnight, so a re-render does not refetch                                                                                |
+| Page    | `apps/web/src/pages/Dashboard.tsx`                                       | The four `StatTile`s plus the Phase 0 status card. A failed summary leaves every figure reading "—": "no income today" and "the server did not answer" are different sentences                                                                               |
+| Schema  | `packages/shared/src/schemas/report.ts`                                  | `reportRangeQuerySchema` validates an explicit range plus IANA timezone; `reportOverviewSchema` carries totals, daily sales, top items and staff performance, with all money as strings                                                                      |
+| Service | `apps/api/src/services/report.service.ts`                                | `reportOverview()` folds only completed, tenant-scoped sales; preserves decimal cents with integer arithmetic; labels each receipt with the supplied timezone; ranks items and attributed staff                                                              |
+| Routes  | `apps/api/src/routes/reports.routes.ts`                                  | `GET /api/reports/overview`, behind `auth` + `requireModule("reports")`, while the Dashboard read remains core                                                                                                                                               |
+| Web     | `apps/web/src/hooks/useReports.ts`, `pages/Reports.tsx`                  | A 30-day default range, four totals and three real tables, with loading, empty and error states; the rail now resolves to `/reports`                                                                                                                         |
+| Tests   | `reports.routes.test.ts`, `pages/__tests__/{Dashboard,Reports}.test.tsx` | Auth, entitlement, reversed-range validation, tenant isolation, timezone grouping, void exclusion, populated/empty/error rendering and local-date query conversion                                                                                           |
 
-**What is left of M3** is `/reports` itself — `pages/Reports.tsx` + `hooks/useReports.ts`,
-a date-range control and two or three real tables from `docs/legacy/API-INVENTORY.md`,
-plus the `Reports` rail entry, which is the **only** rail destination with no route
-behind it.
+**Deferred from full Phase 7:** the wider report catalogue, charts, CSV/PDF export
+and scheduled reports. Those are not represented by placeholder figures.
 
 ### Closed with M1 — the till, `/sale` (screens 01–02), with M2's desk and M4's settings
 
@@ -117,9 +114,8 @@ rail destination resolves except `Reports`, which M3 builds.
 - **The read-only salon cannot fill a cart at all**, rather than failing at the
   end of the till: the shell's banner and `TENANCY.md` §6 say why.
 
-**Not built:** `pages/Reports.tsx` + `useReports.ts` (**M3**), and the M1
-deferrals — hold/resume and void from the till, line discounts, receipt printing,
-cart persistence across reloads, keyboard shortcuts.
+**Not built:** the M1 deferrals — hold/resume and void from the till, line
+discounts, receipt printing, cart persistence across reloads, keyboard shortcuts.
 
 **The demo catalogue was wired in with it.** `prisma/seed-data.ts` (858 lines:
 departments, twelve services, twelve products, packages, prepaid credit, gift
@@ -734,12 +730,11 @@ These are ours to decide; none of them needs production data.
 ## 5. Verify status
 
 `npm run verify` is `format:check` → `lint` → `typecheck` → `test`. Last full run:
-**exit 0**, 2026-10-09, with 5a, 5b.1, 5b.2, M1–M4 and the empty-list fix in the tree:
-**227 web (28 files) + 226 API (42 suites) + 55 shared**, no failures and nothing
-skipped. The three steps before the tests passed with no warnings. (The pipeline was
-re-run end to end at this close, and its stages were also run individually —
-`prettier --check`, `eslint`, `tsc` and each suite — because its output is not always
-capturable through the editor's shell.)
+**exit 0**, 2026-10-09, with the complete MVP and its route/page coverage in the tree:
+**240 web (32 files) + 238 API (45 suites) + 55 shared**, no failures and nothing
+skipped. `DATABASE_URL` pointed at the migrated PostgreSQL 17 Compose service on
+host port 5433, so this one command covered the database-gated suites as well as
+formatting, lint and every workspace typecheck.
 
 ### Standalone app builds now build shared first (2026-10-09)
 
@@ -940,11 +935,10 @@ Earlier closes said to use `glampro_test` because `glampro` stopped at
 `20261002060110_domain_models`. Phase 4b's low-stock migration was applied to both, so
 either works now, and `make test-db` — the documented path — uses the dev one.
 
-**What this close did not re-verify.** One thing, stated rather than glossed: **no single
-run covers everything at once.** `make test-db` runs all three suites against a live
-database but not the format check, lint or type-check; `npm run verify` runs all four but
-skips the database-gated suites. The table above is those two runs together, and both are
-green.
+**Superseded by the 2026-10-09 MVP close:** one run now covered everything at once.
+Exporting the live Compose `DATABASE_URL` before `npm run verify` kept every
+database-gated suite enabled while the root gate also ran format, lint and typecheck.
+The exact observed totals are in §5 above.
 
 Everything else was checked rather than assumed: the dev stack was up at this close and
 `make smoke` exited 0, and the migrated state of the two databases came from querying
@@ -1061,20 +1055,12 @@ Portainer on this host), and `GET /api/products` **through the dev server** retu
 same twelve rows the counts above came from. The pixel check remains the user's: sign in
 at <http://localhost:5173> as `manager@glampro.test` and look at the list screens.
 
-**Three mounts and three pages still have no test file at all**, which is the largest
-honest gap this close leaves behind — and the empty-list bug above is what that gap
-costs. The API's 20 `*.test.ts` files cover `auth`, `packages`, `sales`, `staff` and,
-since the empty-list fix, the catalogue reads at the route level
-(`catalogue.routes.test.ts` drives `/api/products`, `/api/services` and
-`/api/departments` over real HTTP) plus the customer, gift card, package and sale
-services; there is **no** `appointments.routes.test.ts`,
-`settings.routes.test.ts` or `reports.routes.test.ts`, so M2, M3's tiles and M4 rest on
-the curls above plus their shared Zod schemas. On the web side the 28 files include
-`pages/__tests__/{Customers,Login,Products,Sale,Staff}.test.tsx` — `Appointments.tsx`,
-`Settings.tsx` and `Dashboard.tsx` have none. Adding those suites is the first thing
-the next session should do: every one of the mounts sits behind `auth` plus
-`requireModule`, so it can be tested the way `sales.routes.test.ts` already tests
-`/api/sales`.
+**The former route/page coverage gap is closed.** Real-HTTP suites now cover
+Appointments, Reports/Dashboard and Settings at the authentication, tenant,
+entitlement, validation, role and suspended-write boundaries. The web suite now
+renders Dashboard, Appointments, Reports and Settings as well as the five pages the
+previous close listed. What remains unverified is the cross-page real-browser loop
+above, not these individual boundaries.
 
 ## 6. How to pick this up
 
