@@ -71,6 +71,47 @@ describe("the form", () => {
 
     expect(signIn).toHaveBeenCalledWith("owner@glampro.test", "secret123");
   });
+
+  it("marks the submit busy while the credentials are in flight", async () => {
+    let release: () => void = () => {};
+    signIn.mockReturnValue(
+      new Promise<void>((resolve) => {
+        release = () => resolve();
+      }),
+    );
+    const user = renderLogin();
+
+    await submit(user);
+
+    const pending = screen.getByRole("button", { name: "Signing in…" });
+    expect(pending).toBeDisabled();
+    expect(pending).toHaveAttribute("aria-busy", "true");
+
+    release();
+    await waitFor(() => expect(screen.getByTestId("path")).toHaveTextContent("/"));
+  });
+});
+
+describe("the password field", () => {
+  it("can be revealed without losing its label or what was typed", async () => {
+    const user = renderLogin();
+
+    await user.type(screen.getByLabelText("Password"), "secret123");
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
+
+    await user.click(screen.getByRole("button", { name: "Show password" }));
+
+    // The same input, still reachable by the same label: the toggle changes the
+    // control's type, not the control. A second input that replaced it would
+    // lose the value on the way across, which is the one thing reveal must not
+    // do.
+    const revealed = screen.getByLabelText("Password");
+    expect(revealed).toHaveAttribute("type", "text");
+    expect(revealed).toHaveValue("secret123");
+
+    await user.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
+  });
 });
 
 describe("where it goes afterwards", () => {

@@ -80,6 +80,51 @@ when Q23 lands.
 the missing token, and that reason no longer holds. Switching it is a one-line
 change if the amber tone is wanted.
 
+**Update (2026-10-08): the screen is now a split layout, and the mark changed.**
+The decision above stands — the screen is still a composition, still an
+invention, still tokens only — but two things about it were revisited when the
+page was modernised.
+
+**The layout is two columns from `lg` up.** A navy brand panel sits `aria-hidden`
+beside the form, which keeps the heading, the one-line summary, the notice tones
+and the "Trouble signing in?" line it already had. Below `lg` the panel is hidden
+and the form draws the mark itself, so a tablet loses the decoration and none of
+the meaning. The panel is `aria-hidden` because it is decoration: the page keeps
+exactly one `h1`, and the panel is built from `--sp-navy`, the handoff's own
+`--sp-text-on-dark-muted` / `--sp-text-on-dark-accent` pair, and
+`--sp-navy-tint-14` for its icon chips.
+
+- The panel's width is `--app-auth-panel-w` in
+  `apps/web/src/styles/app-chrome.css` — the file that exists for frame geometry
+  the handoff omits, and which already carries `--app-search-w` and
+  `--app-rail-item-w`. Nothing was added to `tokens.css`, so `cmp` between
+  `design/handoff/tokens/tokens.css` and
+  `apps/web/src/styles/tokens.css` still exits 0. That is the rule that mattered
+  in the decision above, and it is why the width lives there.
+- The form sits in `rounded-card border border-line bg-surface p-6` — the recipe
+  the dashboard's and settings' sections already use — rather than in `Card`.
+  `Card`'s body padding is sized for a table (`px-3 pt-1.5 pb-3`) and would
+  crowd the first control of a form. `Card` itself is unchanged, so no other
+  screen's spacing moved.
+
+**The mark is the shared "G" tile, not the ported `Lock` glyph.** The gradient
+tile that `AppShell`'s rail and `favicon.svg` draw _is_ the product's mark, so
+reusing that exact one is stronger evidence of "one product" than reusing a
+different icon from the same set. `Lock` is untouched and still exported — the
+41-icon port stays one-for-one, per [`design/HANDOFF.md`](../design/HANDOFF.md)
+§4 — it is simply no longer this page's subject: a purple "G" reads as this
+product, a padlock reads as any sign-in form.
+
+**Password reveal was added without touching a shared primitive.** The password
+control is now `Field` + `CONTROL_CLASS` — precisely what `Input` itself renders —
+so a 44px `IconButton` holding the ported `Eye` docks inside the control. The
+alternative, teaching `Input` about trailing buttons, would have changed a
+primitive every other screen composes in order to serve one screen.
+
+The layout is still not pixel-matched to anything, and this update does not
+change that: it is a second deliberate invention, in the same file, recorded the
+same way.
+
 ## Why not the alternatives
 
 | Alternative                                        | Why it was rejected                                                                                                                                                       |
@@ -101,4 +146,5 @@ change if the amber tone is wanted.
 
 - `pages/__tests__/Login.test.tsx` pins the behaviour the layout exists to serve: returning to `?next=`, and refusing an off-origin `?next=` so the screen cannot be used as an open redirect.
 - That suite also pins the error-code branching, so `TENANT_SUSPENDED` cannot quietly become an error and `TENANT_EXPIRED` cannot quietly become a suggestion to retry.
+- It also pins the 2026-10-08 redraw: the reveal flips the password control's `type` while keeping its value and its label, and the submit reports `aria-busy` and `disabled` while the credentials are in flight. A redesign that drops either fails the gate.
 - `navigation.test.ts` asserts every `NavItem.module` is a real `ModuleCode`, so the entitlement field cannot be a typo that `requireModule` would later reject.

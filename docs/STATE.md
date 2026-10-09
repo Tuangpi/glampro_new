@@ -499,7 +499,8 @@ Three things were decided rather than assumed:
   assembled from those on token values only — no new tokens, no hand-written
   hex, and the `cmp` against the handoff token file still passes. The layout is
   recorded as a deliberate invention in [ADR 0008](decisions/0008-login-screen-shape.md)
-  (closes Q24).
+  (closes Q24). It was later redrawn as a split screen — that is the same ADR's
+  2026-10-08 update — and it is still an invention rather than a copy.
 - **The read-only tone is purple, not amber.** A suspended salon needs a third
   notice tone, and amber had no token when this screen was written — that was Q23.
   Rather than pre-empt the question for one screen, the notice used the brand
@@ -512,6 +513,24 @@ Three things were decided rather than assumed:
   only as a same-origin absolute path; `//evil.example` and `https://evil.example`
   both fall back to the dashboard. Without this the login screen is an open
   redirect.
+
+**The sign-in screen was then redrawn as a split screen**, in place and on the
+same tokens (ADR 0008's 2026-10-08 update). From `lg` up an `aria-hidden` navy
+panel sits beside a form that keeps the heading, the one-line summary, the notice
+tones and the `?next=` behaviour it already had; below `lg` the panel is hidden
+and the form draws the mark itself. Three details there were choices rather than
+conveniences. The panel's width is a new `--app-auth-panel-w` in
+`apps/web/src/styles/app-chrome.css`, because `tokens.css` is closed to invented
+values and the panel is frame geometry the handoff never drew — `cmp` on the token
+file still exits 0. The mark is now the gradient "G" tile `AppShell`'s rail and
+`favicon.svg` already draw, not the ported `Lock` glyph, which stays exported and
+untouched. And the password reveal is `Field` + `CONTROL_CLASS` — exactly what
+`Input` renders — so a 44px `IconButton` docks inside the control without `Input`
+growing a trailing-slot feature for one screen. `Login.test.tsx` grew with it,
+14 tests to 16: it pins that the reveal flips the control's `type` while keeping
+its value and label, and that the submit reports `aria-busy` while the credentials
+are in flight. The layout is still not pixel-matched to anything, and nobody has
+looked at it in a browser (§5).
 
 The rail now filters on entitlement as well as role: `NavItem` carries the
 `Module.code` a destination needs, which is the field `saas/TENANCY.md` §5
@@ -834,12 +853,28 @@ DOM, so read a lone 5 s timeout on an unrelated file as load rather than as a re
 
 The web half of Phase 3 added 3 files and 29 tests to that suite:
 `contexts/__tests__/AuthContext.test.tsx` (6), `lib/api.test.ts` (4),
-`pages/__tests__/Login.test.tsx` (14), plus 5 entitlement cases in
-`navigation.test.ts`.
+`pages/__tests__/Login.test.tsx` (14 — 16 since the 2026-10-08 redraw below),
+plus 5 entitlement cases in `navigation.test.ts`.
 
 **The token copy is still verbatim.** `cmp design/handoff/tokens/tokens.css
-apps/web/src/styles/tokens.css` exits 0 — the sign-in screen introduced no
-colour, radius or spacing of its own (ADR 0008).
+apps/web/src/styles/tokens.css` exits 0 — neither the sign-in screen nor its
+2026-10-08 split-screen redraw introduced a colour, radius or spacing of its own
+(ADR 0008). The redraw's one new value is `--app-auth-panel-w` in
+`apps/web/src/styles/app-chrome.css`, which is frame geometry and deliberately not
+a handoff token.
+
+**The sign-in redraw is unit-verified and has not been looked at.** The gate is
+green on this tree: `npm run verify` exits 0 — format, lint and typecheck pass,
+API 226/226 over 42 suites with 0 skipped (so the database suites ran), web 28
+files / 227 tests, `shared` 55/55 over 21 suites — and `npm run build:web`
+passes. `Login.test.tsx`'s 16 cases cover the form's behaviour — but the part
+that changed is CSS: `hidden lg:flex`, a 520px panel, and a `pr-12` control with an
+`IconButton` docked at its right edge.
+jsdom applies no stylesheet, so the breakpoint, the panel width and the eye
+button's position are **unverified by any automated check**, and no Playwright or
+Puppeteer is installed on this host. The pixel check is the user's:
+<http://localhost:5173/login>, then narrow the window past `lg` and watch the
+panel disappear and the mark move into the form.
 
 **A caveat from the 5b.2 close, kept because it explains that close's figures.** On a
 machine with no `apps/api/.env`, `npm run verify` cannot exercise the database-backed

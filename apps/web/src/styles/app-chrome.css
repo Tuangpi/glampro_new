@@ -38,4 +38,12 @@
 
   /* Route-loading placeholder height — PageLoading scaffold, no handoff source. */
   --app-loading-min-h: 320px;
+
+  /* Sign-in brand panel width. The handoff draws no login screen (ADR 0008), so
+     there is no source value to copy; this is the screen's own frame geometry,
+     kept here for the same reason `--app-search-w` and `--app-rail-item-w` are:
+     only tokens.css is closed to invented values. Below `lg` the panel is
+     hidden and the form draws the mark itself, so the breakpoint stays
+     Tailwind's and is deliberately not a variable. */
+  --app-auth-panel-w: 520px;
 }
