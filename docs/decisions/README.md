@@ -22,12 +22,13 @@ defines when a file has to be written.
 | 0011 | [The receipt number is a per-tenant sequence](0011-receipt-number-is-a-per-tenant-sequence.md)                           | Accepted |
 | 0012 | [A sale's tenders are rows, not a free-text column](0012-sale-tenders-are-rows.md)                                       | Accepted |
 | 0013 | [An appointment takes its duration and performer from the service](0013-appointment-performers-come-from-the-service.md) | Accepted |
+| 0014 | [A double-booked member of staff is refused, not warned](0014-double-booked-staff-are-refused.md)                        | Accepted |
 
 `0001` is unallocated: `0002` is referenced by name from
 [`../saas/TENANCY.md`](../saas/TENANCY.md) and
 [`../legacy/LEGACY-MAP.md`](../legacy/LEGACY-MAP.md), and renumbering a referenced
 decision is worse than leaving the first slot empty. The next new decision is
-`0014`.
+`0015`.
 
 ## Rules
 

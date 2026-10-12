@@ -19,11 +19,16 @@
  *    only staff whose `User.departments` contain the service's branch, and the
  *    API refuses the ones it would not have offered rather than trusting the
  *    list it sent (ADR 0013 — the booking twin of M1's till decision).
+ * 3. **One person cannot be in two places at once.** A booking whose window
+ *    overlaps an active booking for the same performer is refused with `409`
+ *    (ADR 0014). The calendar grid is the surface that makes the gap visible,
+ *    so the rule lives here rather than in the browser that drew it.
  */
 import type { PaginatedResponse } from "@glampro/shared";
 import {
   appointmentDetailSchema,
   appointmentSummarySchema,
+  APPOINTMENT_STATUSES,
   type AppointmentDetail,
   type AppointmentListQuery,
   type AppointmentSummary,
@@ -31,7 +36,7 @@ import {
   type UpdateAppointmentInput,
 } from "@glampro/shared";
 
-import { badRequest, notFound } from "../lib/http-error.js";
+import { badRequest, conflict, notFound } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";
 import { paginated, parsePagination } from "../utils/pagination.js";
 
@@ -160,6 +165,77 @@ async function assertCustomerExists(customerId: string): Promise<void> {
 }
 
 /**
+ * The statuses that hold a slot (ADR 0014 §3).
+ *
+ * The complement of `{ CANCELLED }` rather than a second list to keep in sync,
+ * so a status added to `APPOINTMENT_STATUSES` occupies the slot by default and
+ * has to be deliberately excluded. A cancelled booking freed its slot the
+ * moment it was cancelled; a no-show did not — the time was still held and
+ * cannot be given to somebody else after the fact.
+ */
+const OCCUPYING_APPOINTMENT_STATUSES = APPOINTMENT_STATUSES.filter(
+  (status) => status !== "CANCELLED",
+);
+
+/**
+ * Refuses a booking that overlaps an active one for the same performer (ADR 0014).
+ *
+ * Three things make this a rule rather than a filter: it is **half-open** (a
+ * block ending at 10:00 and one starting at 10:00 are back-to-back, which is
+ * the normal day), it **excludes the row's own id** so rescheduling a booking
+ * into the window it already occupies is a no-op, and it is **skipped for an
+ * unassigned booking**, because nobody named is nobody double-booked.
+ *
+ * It runs *before* the write and is not one atomic statement with it, so two
+ * concurrent requests can both pass and both write. That residual is inherent
+ * to an application-level check — the eventual fix is a Postgres `EXCLUDE`
+ * constraint over a `tstzrange`, which needs `btree_gist` and a migration over
+ * every tenant's `appointments` (see the ADR). It is documented rather than
+ * hidden so nobody mistakes the check for a guarantee.
+ */
+async function assertNoClash(
+  staffId: string | null,
+  startsAt: Date,
+  endsAt: Date,
+  excludeId?: string,
+): Promise<void> {
+  if (!staffId) return;
+
+  const clash = await prisma.appointment.findFirst({
+    where: {
+      staffId,
+      status: { in: [...OCCUPYING_APPOINTMENT_STATUSES] },
+      // Half-open overlap: touching edges are neighbours, not a clash.
+      startsAt: { lt: endsAt },
+      endsAt: { gt: startsAt },
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    },
+    select: {
+      startsAt: true,
+      endsAt: true,
+      customer: { select: { name: true } },
+    },
+    orderBy: { startsAt: "asc" },
+  });
+
+  if (!clash) return;
+
+  const who = clash.customer?.name ?? "another appointment";
+  const window = `${clash.startsAt.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}–${clash.endsAt.toLocaleTimeString("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
+
+  throw conflict(
+    `That time is already taken: ${who} is booked ${window}. Pick another time or another stylist.`,
+    "APPOINTMENT_CLASH",
+  );
+}
+
+/**
  * One page of bookings in a window, soonest first.
  *
  * The window is optional and expressed as instants (see the contract): a day
@@ -226,6 +302,8 @@ export async function createAppointment(input: CreateAppointmentInput): Promise<
   const endsAt = new Date(startsAt.getTime() + service.durationMinutes * 60_000);
   const status = input.status ?? "SCHEDULED";
 
+  await assertNoClash(input.staffId ?? null, startsAt, endsAt);
+
   const created = await prisma.appointment.create({
     data: {
       // Placeholder: `scopeCreateData` overwrites it with the scope's tenant.
@@ -271,6 +349,14 @@ export async function updateAppointment(
 
   const startsAt = input.startsAt ? new Date(input.startsAt) : existing.startsAt;
   const endsAt = new Date(startsAt.getTime() + service.durationMinutes * 60_000);
+
+  // A move is what can clash, so the check re-runs when either half of the
+  // slot changed — a new time under the same stylist, or the same time onto a
+  // new one. Both are judged on the **merged** performer, and the row's own id
+  // is excluded so a patch that changes nothing else is not a conflict.
+  if (input.startsAt !== undefined || input.staffId !== undefined) {
+    await assertNoClash(staffId ?? null, startsAt, endsAt, id);
+  }
 
   const status = input.status ?? existing.status;
   // Leaving COMPLETED clears the stamp: a booking that is no longer done must
