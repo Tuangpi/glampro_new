@@ -40,17 +40,23 @@ export default function ReceiptView({ sale, onNewSale }: ReceiptViewProps) {
         title={`Receipt ${sale.receiptNumber === null ? "(number pending)" : `#${sale.receiptNumber}`}`}
         description={`${formatDateTime(sale.soldAt)} · ${sale.customerName ?? "Walk-in"} · rung up by ${sale.staffName ?? "the till"}`}
         actions={
-          // Printing is full-phase work (`docs/mvp.md` → M1 deferred). The control is
-          // drawn disabled with a reason rather than left out, so the cashier can see
-          // the capability is planned rather than wonder where it went.
-          <Button variant="secondary" size="sm" disabled title="Receipt printing is not built yet">
+          // The browser's own print dialog — no PDF library needed, because the
+          // receipt is already rendered here with the server's numbers. It covers
+          // both a physical printer and "Save as PDF"; `print:hidden` strips the
+          // app chrome so only the receipt reaches the paper.
+          <Button
+            variant="secondary"
+            size="sm"
+            className="print:hidden"
+            onClick={() => window.print()}
+          >
             <Printer aria-hidden />
             Print
           </Button>
         }
         footer={
           <div className="flex items-center justify-between gap-4">
-            <Button variant="secondary" onClick={onNewSale}>
+            <Button variant="secondary" className="print:hidden" onClick={onNewSale}>
               New sale
             </Button>
             <div className="text-right">
@@ -131,7 +137,7 @@ export default function ReceiptView({ sale, onNewSale }: ReceiptViewProps) {
 
       <p
         role="status"
-        className="flex items-center gap-2 rounded-card border border-line bg-success-soft px-4.5 py-3.5 text-sm text-success-text"
+        className="flex items-center gap-2 rounded-card border border-line bg-success-soft px-4.5 py-3.5 text-sm text-success-text print:hidden"
       >
         <CheckCircle aria-hidden className="shrink-0" />
         {sale.receiptNumber === null

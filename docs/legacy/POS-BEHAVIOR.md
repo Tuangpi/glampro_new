@@ -59,6 +59,14 @@ Two authenticated endpoints generate a DomPDF download from the `invoice` view:
 the PDF as a blob and opens the object URL in a new tab; it does not call
 `window.print()` or directly address a receipt printer.
 
+**The rebuild deliberately does the opposite.** Legacy needed a server round-trip
+because its receipt was not on screen when printing was offered (Today's Sales
+reprint). The rebuild's receipt _is_ the drawn confirmation — every number on it is
+the server's, already in the DOM — so slice 5f wires Print to `window.print()` and
+excludes the app chrome with `print:hidden`. That covers a physical printer and
+"Save as PDF" with no PDF library and no extra endpoint; server-side PDF stays
+reporting-phase work (`docs/architecture.md`).
+
 ## Keyboard behavior
 
 No global `keydown`/`keyup`, key-code map or cashier shortcut layer exists in the

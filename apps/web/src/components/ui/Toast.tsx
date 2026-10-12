@@ -42,7 +42,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
 
       <div
-        className="pointer-events-none fixed bottom-6 right-6 z-[100] flex w-[var(--app-toast-w)] flex-col gap-3"
+        className="pointer-events-none fixed bottom-6 right-6 z-[100] flex w-[var(--app-toast-w)] flex-col gap-3 print:hidden"
         role="status"
         aria-live="polite"
       >

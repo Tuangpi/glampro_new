@@ -379,6 +379,31 @@ describe("taking payment", () => {
   });
 });
 
+describe("printing the receipt", () => {
+  it("hands the drawn receipt to the browser's print dialog", async () => {
+    // jsdom prints "Not implemented" to the console instead of opening a dialog,
+    // so the call is observed rather than performed.
+    const print = vi.spyOn(window, "print").mockImplementation(() => {});
+    const user = userEvent.setup();
+    renderSale();
+
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.click(screen.getByRole("button", { name: "Take payment" }));
+    await user.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Take payment" }),
+    );
+
+    await screen.findByText("Receipt #1042");
+    await user.click(screen.getByRole("button", { name: "Print" }));
+
+    // The whole receipt is already on screen with the server's numbers, so print
+    // is the browser's own dialog over it — no PDF round-trip, and "Save as PDF"
+    // comes with it. It is excluded from its own output with `print:hidden`.
+    expect(print).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Print" })).toHaveClass("print:hidden");
+  });
+});
+
 describe("a suspended salon", () => {
   it("cannot fill a cart at all", async () => {
     isReadOnly.value = true;

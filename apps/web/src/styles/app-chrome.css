@@ -47,3 +47,24 @@
      Tailwind's and is deliberately not a variable. */
   --app-auth-panel-w: 520px;
 }
+
+/*
+  Print. Receipt printing uses the browser's own dialog (the receipt is already
+  rendered with the server's numbers, so there is no PDF library to reach for and
+  "Save as PDF" comes free). The app chrome — rail, top bar, toasts, page header
+  and the till's own buttons — is excluded with Tailwind's `print:hidden`; these
+  two rules cover what a utility on each element cannot: a white page and the
+  content starting at the sheet's own edge. Background *fills* stay off the paper
+  by default, which is what a receipt wants; the borders that carry the layout
+  still print.
+*/
+@media print {
+  :root {
+    background: #fff;
+  }
+
+  body {
+    margin: 0;
+    background: #fff;
+  }
+}

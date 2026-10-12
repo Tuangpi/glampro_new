@@ -60,9 +60,10 @@ whatever the cashier picks. Product lines take no performer: the sale's own
 
 #### Deferred (full Phase 5)
 
-Sale hold/resume and void from the till, line discounts, receipt printing and
-keyboard shortcuts for the cashier. Cart persistence across reloads was deferred
-by M1 and later landed as roadmap slice 5e on 2026-10-09.
+Sale hold/resume and void from the till, line discounts, and keyboard shortcuts
+for the cashier. Cart persistence across reloads was deferred by M1 and later
+landed as roadmap slice 5e on 2026-10-09; receipt printing landed as slice 5f on
+2026-10-10.
 
 ### M2 — `/appointments` (Phase 6)
 

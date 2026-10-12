@@ -47,7 +47,7 @@ export default function AppShell() {
 
   return (
     <div className="flex min-h-screen bg-bg">
-      <aside className="fixed inset-y-0 left-0 z-40 flex w-rail flex-col items-center bg-navy pt-5 pb-4">
+      <aside className="fixed inset-y-0 left-0 z-40 flex w-rail flex-col items-center bg-navy pt-5 pb-4 print:hidden">
         <div className="mb-[var(--sp-space-10)] flex h-10 w-10 items-center justify-center rounded-md bg-gradient-to-br from-[var(--sp-purple-grad-a)] to-[var(--sp-purple-grad-b)] text-base font-extrabold text-white">
           G
         </div>
@@ -113,8 +113,8 @@ export default function AppShell() {
         </button>
       </aside>
 
-      <div className="flex min-h-screen flex-1 flex-col pl-rail">
-        <header className="sticky top-0 z-30 flex h-topbar items-center gap-5 border-b border-line bg-surface px-7">
+      <div className="flex min-h-screen flex-1 flex-col pl-rail print:pl-0">
+        <header className="sticky top-0 z-30 flex h-topbar items-center gap-5 border-b border-line bg-surface px-7 print:hidden">
           <div className="min-w-0">
             <h1 className="truncate text-lg leading-tight">{current?.label ?? "Glampro"}</h1>
             <p className="text-xs text-ink-muted">
@@ -171,13 +171,13 @@ export default function AppShell() {
         {/* A suspended salon can sign in but not write (TENANCY.md §6), so the
             shell says so once rather than leaving every save button to fail. */}
         {isReadOnly ? (
-          <p role="status" className="bg-purple-soft px-7 py-2 text-sm text-purple">
+          <p role="status" className="bg-purple-soft px-7 py-2 text-sm text-purple print:hidden">
             This salon&rsquo;s subscription is suspended. You can look at everything, but changes
             are disabled until it is renewed.
           </p>
         ) : null}
 
-        <main className="flex-1 px-7 py-6">
+        <main className="flex-1 px-7 py-6 print:p-0">
           <Outlet />
         </main>
       </div>

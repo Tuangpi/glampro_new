@@ -60,11 +60,15 @@ database volume as evidence; the salon name and low-stock threshold were restore
 The first full-Phase-5 slice is now landed: one unfinished cart and selected
 customer survive a reload, scoped to tenant + user, while tenders and idempotency
 keys never enter storage. Successful payment and logout clear the draft; malformed
-browser data is discarded; the API still re-prices every line. The remaining
-boundary is hold/resume, auditable voids, discounts, receipt printing and keyboard
-shortcuts. Legacy evidence is now in [`legacy/POS-BEHAVIOR.md`](legacy/POS-BEHAVIOR.md);
-Q31–Q33 below are the product choices that block the next write-side slice. Keep
-Phase 6's calendar remainder separate.
+browser data is discarded; the API still re-prices every line. Receipt printing
+then landed as slice 5f on 2026-10-10 — the receipt's Print button opens the
+browser's own dialog over the drawn receipt, with `print:hidden` on the rail, top
+bar, toasts, page header and the till's own buttons so only the receipt reaches
+the paper; no PDF library is involved. The remaining boundary is hold/resume,
+auditable voids, discounts and keyboard shortcuts. Legacy evidence is now in
+[`legacy/POS-BEHAVIOR.md`](legacy/POS-BEHAVIOR.md); Q31–Q33 below are the product
+choices that block the next write-side slice. Keep Phase 6's calendar remainder
+separate.
 
 ### Closed with M3 — Dashboard and Reports (screens 05 and 10)
 
