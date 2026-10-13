@@ -38,6 +38,13 @@ export const queryKeys = {
   },
 
   appointments: {
+    /**
+     * The whole domain, matched by prefix. A write — a booking, a reschedule, a
+     * cancel — moves the list, the calendar grid and the detail entry at once,
+     * so invalidation uses this rather than naming one of them and missing the
+     * others (see `invalidateAppointments` in `hooks/useAppointments.ts`).
+     */
+    all: () => ["appointments"] as const,
     list: () => ["appointments", "list"] as const,
     detail: (id: string) => ["appointments", "detail", id] as const,
     calendar: (from: string, to: string) => ["appointments", "calendar", from, to] as const,

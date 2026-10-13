@@ -34,7 +34,7 @@ export type StaffCountFilters = Omit<StaffListFilters, "page" | "pageSize">;
  * `queryKeys.staff.list()` matches every page, every search term and every filter,
  * which is what a create or an edit needs.
  */
-export function useStaffList(filters: StaffListFilters) {
+export function useStaffList(filters: StaffListFilters, enabled = true) {
   return useQuery({
     queryKey: [...queryKeys.staff.list(), filters],
     queryFn: () =>
@@ -45,6 +45,7 @@ export function useStaffList(filters: StaffListFilters) {
         role: filters.role,
         status: filters.status === "all" ? undefined : filters.status,
       }),
+    enabled,
     placeholderData: (previous) => previous,
   });
 }

@@ -50,3 +50,20 @@ export const OPEN_APPOINTMENT_STATUSES: readonly AppointmentStatusValue[] = [
   "SCHEDULED",
   "IN_PROGRESS",
 ];
+
+/**
+ * The day grid tints a block by status too, but on its own palette — a filled
+ * calendar block is not the list's outlined badge, so it gets a separate set of
+ * tones rather than borrowing `BadgeVariant`. Kept beside the badge map for the
+ * same reason both live in this file: one word per status, shared by the grid
+ * and its tests.
+ */
+export type CalendarBlockTone = "brand" | "success" | "warning" | "neutral" | "danger";
+
+export const APPOINTMENT_BLOCK_TONE: Record<AppointmentStatusValue, CalendarBlockTone> = {
+  SCHEDULED: "brand",
+  IN_PROGRESS: "warning",
+  COMPLETED: "success",
+  CANCELLED: "neutral",
+  NO_SHOW: "danger",
+};

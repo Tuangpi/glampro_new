@@ -1,10 +1,12 @@
 /**
- * Appointments — handoff screens 03 and 06: the day list.
+ * Appointments — handoff screens 03 and 06: the day list **and** the day grid.
  *
- * **MVP slice M2** (`docs/mvp.md`): list by date range, read, create, update
- * and complete. The calendar grid, drag-to-reschedule, availability and clash
- * detection, shifts and leave, and reminders are full-phase work and are
- * deliberately not stubbed here — an absent capability is absent, not faked.
+ * **MVP slice M2** (`docs/mvp.md`) shipped the list; **Phase 6** adds the
+ * calendar grid as a second view of the same day, plus the server-side clash
+ * refusal both surfaces (ADR 0014). The two views are one fact asked twice: the
+ * same `AppointmentSummary` rows, the same day window, the same drawer for the
+ * write. Drag-to-reschedule (slice 6c), shifts/leave, the skill matrix and
+ * reminders are not stubbed here — an absent capability is absent, not faked.
  *
  * The window is the **browser's day** rendered as instants, the same edges the
  * dashboard's tiles count, so "3 appointments today" and the three rows below
@@ -16,6 +18,11 @@ import { useState } from "react";
 import type { AppointmentDetail, AppointmentSummary } from "@glampro/shared";
 
 import AppointmentFormDrawer from "@/components/appointments/AppointmentFormDrawer";
+import CalendarView from "@/components/appointments/CalendarView";
+import {
+  buildCalendarColumns,
+  type CalendarColumn,
+} from "@/components/appointments/calendar-geometry";
 import { Calendar, ChevronLeft, Plus, Search } from "@/components/icons";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
@@ -31,7 +38,12 @@ import {
   OPEN_APPOINTMENT_STATUSES,
 } from "@/constants/appointments";
 import { useAuth } from "@/contexts/AuthContext";
-import { useAppointmentList, useUpdateAppointment } from "@/hooks/useAppointments";
+import {
+  useAppointmentList,
+  useCalendarAppointments,
+  useUpdateAppointment,
+} from "@/hooks/useAppointments";
+import { useStaffList } from "@/hooks/useStaff";
 import { get, getErrorMessage } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -80,11 +92,15 @@ export default function Appointments() {
   const [status, setStatus] = useState("");
   const [editing, setEditing] = useState<AppointmentDetail | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // The handoff drew a Day/Week/Month toggle, but the query is a day window, so
+  // "Week" and "Month" have nothing behind them yet — the switch is List | Grid.
+  const [view, setView] = useState<"list" | "grid">("list");
 
   // Booking defaults come from `bookingStart(day)` at the moment the drawer opens
   // — see that function; there is no effect writing into state for it.
 
   const dayRange = dayWindow(day);
+  const showGrid = view === "grid";
   const { data, isPending, isError, error, isFetching, refetch } = useAppointmentList({
     page: 1,
     pageSize: PAGE_SIZE,
@@ -92,6 +108,20 @@ export default function Appointments() {
     to: dayRange.to,
     status: (status || undefined) as AppointmentSummary["status"] | undefined,
   });
+
+  // The grid reads the whole day and the roster only when it is actually shown,
+  // so the list view pays for neither. Both stay in the cache once fetched, so
+  // toggling back and forth is instant.
+  const calendar = useCalendarAppointments(dayRange, showGrid);
+  const staff = useStaffList({ page: 1, pageSize: 200, status: "active" }, showGrid);
+  const gridColumns: CalendarColumn[] = buildCalendarColumns(
+    calendar.data?.data ?? [],
+    (staff.data?.data ?? []).map((member) => ({
+      id: member.id,
+      name: member.name,
+      role: member.position ?? undefined,
+    })),
+  );
 
   const update = useUpdateAppointment();
   const rows = data?.data ?? [];
@@ -240,14 +270,42 @@ export default function Appointments() {
             </button>
           </div>
 
-          <Select
-            label="Status"
-            hideLabel
-            value={status}
-            onChange={(event) => setStatus(event.target.value)}
-            options={APPOINTMENT_STATUS_OPTIONS}
-            className="w-44"
-          />
+          {/* List | Calendar — the handoff's Day/Week/Month toggle, reduced to the
+              two views the day-window query can actually back. */}
+          <div className="flex items-center gap-1 rounded-md border border-line bg-surface p-0.5">
+            {(
+              [
+                { key: "list", label: "List" },
+                { key: "grid", label: "Calendar" },
+              ] as const
+            ).map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                aria-pressed={view === option.key}
+                onClick={() => setView(option.key)}
+                className={cn(
+                  "h-control rounded-sm px-3 text-sm font-medium transition",
+                  view === option.key
+                    ? "bg-purple-soft text-purple"
+                    : "text-ink-body hover:bg-surface-muted",
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          {showGrid ? null : (
+            <Select
+              label="Status"
+              hideLabel
+              value={status}
+              onChange={(event) => setStatus(event.target.value)}
+              options={APPOINTMENT_STATUS_OPTIONS}
+              className="w-44"
+            />
+          )}
 
           <Button onClick={openCreate} disabled={isReadOnly}>
             <Plus aria-hidden />
@@ -256,74 +314,88 @@ export default function Appointments() {
         </div>
       </header>
 
-      <section
-        aria-busy={isPending || isFetching}
-        aria-label="Appointments for the selected day"
-        className="rounded-card border border-line bg-surface"
-      >
-        <div className="flex items-center justify-between border-b border-line-soft px-5 py-3.5">
-          <p className="text-sm text-ink-muted">
-            {isPending
-              ? "Loading appointments…"
-              : `${data?.total ?? 0} ${data?.total === 1 ? "appointment" : "appointments"}`}
-            {status
-              ? ` · ${APPOINTMENT_STATUS_OPTIONS.find((option) => option.value === status)?.label}`
-              : ""}
-          </p>
-        </div>
-
-        {isPending ? (
-          <div className="flex flex-col gap-3 p-5">
-            {Array.from({ length: 5 }, (_, index) => (
-              <Skeleton key={index} className="h-11" />
-            ))}
+      {showGrid ? (
+        <CalendarView
+          day={day}
+          appointments={calendar.data?.data ?? []}
+          columns={gridColumns}
+          isPending={calendar.isPending}
+          isError={calendar.isError}
+          errorMessage={calendar.error ? getErrorMessage(calendar.error) : undefined}
+          isReadOnly={isReadOnly}
+          onEdit={openEdit}
+          onRetry={() => void calendar.refetch()}
+        />
+      ) : (
+        <section
+          aria-busy={isPending || isFetching}
+          aria-label="Appointments for the selected day"
+          className="rounded-card border border-line bg-surface"
+        >
+          <div className="flex items-center justify-between border-b border-line-soft px-5 py-3.5">
+            <p className="text-sm text-ink-muted">
+              {isPending
+                ? "Loading appointments…"
+                : `${data?.total ?? 0} ${data?.total === 1 ? "appointment" : "appointments"}`}
+              {status
+                ? ` · ${APPOINTMENT_STATUS_OPTIONS.find((option) => option.value === status)?.label}`
+                : ""}
+            </p>
           </div>
-        ) : isError ? (
-          <EmptyState
-            title="The book could not be loaded"
-            description={getErrorMessage(error)}
-            icon={<Calendar />}
-            action={<Button onClick={() => void refetch()}>Try again</Button>}
-          />
-        ) : (
-          <Table
-            caption="Appointments for the selected day"
-            columns={columns}
-            rows={rows}
-            rowKey={(row) => row.id}
-            className="rounded-none border-0"
-            empty={
-              status || !showingToday ? (
-                <EmptyState
-                  title="Nothing booked for that view"
-                  description={
-                    status
-                      ? "No appointments match this status on the selected day."
-                      : "The book is empty for this day. Move the date or book the first one."
-                  }
-                  icon={<Search />}
-                  action={
-                    <Button variant="secondary" onClick={() => setStatus("")}>
-                      Clear filter
-                    </Button>
-                  }
-                />
-              ) : (
-                <EmptyState
-                  title="No appointments today"
-                  description="Book the first appointment of the day and it will show up here."
-                  icon={<Calendar />}
-                  action={
-                    <Button onClick={openCreate} disabled={isReadOnly}>
-                      Book appointment
-                    </Button>
-                  }
-                />
-              )
-            }
-          />
-        )}
-      </section>
+
+          {isPending ? (
+            <div className="flex flex-col gap-3 p-5">
+              {Array.from({ length: 5 }, (_, index) => (
+                <Skeleton key={index} className="h-11" />
+              ))}
+            </div>
+          ) : isError ? (
+            <EmptyState
+              title="The book could not be loaded"
+              description={getErrorMessage(error)}
+              icon={<Calendar />}
+              action={<Button onClick={() => void refetch()}>Try again</Button>}
+            />
+          ) : (
+            <Table
+              caption="Appointments for the selected day"
+              columns={columns}
+              rows={rows}
+              rowKey={(row) => row.id}
+              className="rounded-none border-0"
+              empty={
+                status || !showingToday ? (
+                  <EmptyState
+                    title="Nothing booked for that view"
+                    description={
+                      status
+                        ? "No appointments match this status on the selected day."
+                        : "The book is empty for this day. Move the date or book the first one."
+                    }
+                    icon={<Search />}
+                    action={
+                      <Button variant="secondary" onClick={() => setStatus("")}>
+                        Clear filter
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <EmptyState
+                    title="No appointments today"
+                    description="Book the first appointment of the day and it will show up here."
+                    icon={<Calendar />}
+                    action={
+                      <Button onClick={openCreate} disabled={isReadOnly}>
+                        Book appointment
+                      </Button>
+                    }
+                  />
+                )
+              }
+            />
+          )}
+        </section>
+      )}
 
       <AppointmentFormDrawer
         // Remounting on open and on record change is what clears the form.

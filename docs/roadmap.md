@@ -193,9 +193,33 @@ reminders stay full-phase work.
 - `hooks/useAppointments.ts`, over the `/api/appointments` mount), with the staff
   filter recorded as [ADR 0013](decisions/0013-appointment-performers-come-from-the-service.md).
 
+**Phase 6b landed** — the server refuses a booking whose window overlaps an
+active one for the same performer with `409`, naming the clash
+([ADR 0014](decisions/0014-double-booked-staff-are-refused.md)). `CANCELLED`
+frees the slot; unassigned bookings are never checked. The residual concurrent
+race (no overlap-exclusion constraint in SQL) is documented in the ADR.
+
+**Phase 6a landed** — the calendar grid: `CalendarView.tsx` +
+`calendar-geometry.ts` on `/appointments`, a **List | Calendar** switch over the
+same day window. One column per roster member plus **Unassigned**, blocks placed
+by their real `startsAt`/`endsAt`, a current-time indicator, and status
+tints mapped through the design tokens. No calendar library, no new contract.
+Drag-to-reschedule (6c) is next; the grid currently only *opens* the editor.
+
 Handoff screens 03 and 06. Criterion: an appointment can be created through the
 guided flow or dragged in the calendar, rescheduled and completed, and duration and
 staff assignment come from the service rather than from free text.
+
+### Deferred from Phase 6 — the drawn things the model could not back
+
+| Deferred                                                | Why it is not here                                                                                                                                                                                            | Returns with                                                                                                                                                                                                                     |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Week and Month views                                    | The handoff drew a Day/Week/Month toggle, but every query is a **day window**; a week or month has no endpoint to read and no clash rule across days                                                          | A range query and a cross-day overlap rule                                                                                                                                                                                       |
+| A **shift / break** block on the track                  | There is no shift or rota table — only the leave half was modelled (`EmployeeLeave`), and it is not read here yet                                                                                              | A shift model, so availability can be read to book someone (carried from _Deferred from Phase 4_)                                                                                                                                |
+| The **skill matrix**                                    | Performer eligibility is department-wide (ADR 0013); the legacy `employee_services` mapping was not modelled, so a stylist cannot yet be filtered by the services they can actually perform                   | A staff↔service capability model                                                                                                                                                                                                 |
+| **Reminders**                                           | No notification channel or scheduled-job surface exists                                                                                                                                                        | A notification model and a job runner                                                                                                                                                                                            |
+| Drag-to-reschedule on the grid (6c)                     | It needs a real PATCH path and an optimistic-mutation pattern; 6b's 409 refusal is the server half it will reuse                                                                                               | **Phase 6c** — the immediate next slice                                                                                                                                                                                          |
+
 
 ## Phase 7 — Dashboard and reports
 

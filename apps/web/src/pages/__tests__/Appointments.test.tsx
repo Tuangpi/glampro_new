@@ -2,15 +2,23 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useAppointmentList, useUpdateAppointment, mutateAsync, get } = vi.hoisted(() => ({
-  useAppointmentList: vi.fn(),
-  useUpdateAppointment: vi.fn(),
-  mutateAsync: vi.fn(),
-  get: vi.fn(),
-}));
+const { useAppointmentList, useUpdateAppointment, useCalendarAppointments, mutateAsync, get } =
+  vi.hoisted(() => ({
+    useAppointmentList: vi.fn(),
+    useUpdateAppointment: vi.fn(),
+    useCalendarAppointments: vi.fn(),
+    mutateAsync: vi.fn(),
+    get: vi.fn(),
+  }));
+const { useStaffList } = vi.hoisted(() => ({ useStaffList: vi.fn() }));
 const readOnly = vi.hoisted(() => ({ value: false }));
 
-vi.mock("@/hooks/useAppointments", () => ({ useAppointmentList, useUpdateAppointment }));
+vi.mock("@/hooks/useAppointments", () => ({
+  useAppointmentList,
+  useUpdateAppointment,
+  useCalendarAppointments,
+}));
+vi.mock("@/hooks/useStaff", () => ({ useStaffList }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ isReadOnly: readOnly.value }) }));
 vi.mock("@/lib/api", () => ({
   get,
@@ -52,6 +60,22 @@ beforeEach(() => {
     refetch: vi.fn(),
   });
   useUpdateAppointment.mockReturnValue({ mutateAsync, isPending: false });
+  useCalendarAppointments.mockReturnValue({
+    data: { data: [ROW], total: 1, page: 1, pageSize: 200, pageCount: 1 },
+    isPending: false,
+    isError: false,
+    error: null,
+    isFetching: false,
+    refetch: vi.fn(),
+  });
+  useStaffList.mockReturnValue({
+    data: { data: [{ id: "staff-1", name: "Stella Stylist", position: "Stylist" }], total: 1 },
+    isPending: false,
+    isError: false,
+    error: null,
+    isFetching: false,
+    refetch: vi.fn(),
+  });
 });
 
 describe("Appointments", () => {
@@ -94,5 +118,24 @@ describe("Appointments", () => {
     if (!enabled) throw new Error("Expected an enabled booking button.");
     await user.click(enabled);
     expect(screen.getByRole("dialog")).toHaveTextContent("Appointment form");
+  });
+
+  it("switches to the calendar grid and reads the whole day only when shown", async () => {
+    const user = userEvent.setup();
+    render(<Appointments />);
+
+    // On the list view the grid's whole-day read and the roster stay dormant,
+    // so opening /appointments does not pay for a view nobody asked for.
+    expect(useCalendarAppointments.mock.calls.at(-1)?.[1]).toBe(false);
+    expect(useStaffList.mock.calls.at(-1)?.[1]).toBe(false);
+
+    await user.click(screen.getByRole("button", { name: "Calendar" }));
+
+    // The grid is now live, and it draws the roster's columns — "Unassigned"
+    // is a column head that only the grid has, never the list.
+    expect(useCalendarAppointments.mock.calls.at(-1)?.[1]).toBe(true);
+    expect(useStaffList.mock.calls.at(-1)?.[1]).toBe(true);
+    expect(screen.getByText("Unassigned")).toBeInTheDocument();
+    expect(screen.getByText("Mina Customer")).toBeInTheDocument();
   });
 });

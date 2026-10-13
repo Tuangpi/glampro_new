@@ -21,6 +21,14 @@ import type {
 import { queryKeys } from "@/constants/queryKeys";
 import { get, getPaginated, patch, post } from "@/lib/api";
 
+/**
+ * The calendar reads the whole day in one page. `MAX_PAGE_SIZE` is 200 in the
+ * contract, so this is the server's own ceiling rather than a magic number —
+ * a salon would need 200 bookings in a day before it spills, and paging a
+ * calendar is a grid that silently hides blocks.
+ */
+const CALENDAR_PAGE_SIZE = 200;
+
 export interface AppointmentListFilters {
   page: number;
   pageSize: number;
@@ -64,6 +72,32 @@ export function useAppointment(id: string | null) {
   });
 }
 
+/**
+ * The **whole day** for the calendar grid.
+ *
+ * The list view pages at 20 — fine for a scrollable table, wrong for a grid that
+ * must show every block of the day at once. So the calendar reads the same
+ * endpoint with the page-size ceiling, under its own key
+ * (`queryKeys.appointments.calendar`) rather than sharing the list's paged
+ * entry. Both are invalidated together on a write (see `invalidateAppointments`)
+ * because a booking moves every window, not just the paged one.
+ */
+export function useCalendarAppointments(range: { from: string; to: string }, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.appointments.calendar(range.from, range.to),
+    queryFn: () =>
+      getPaginated<AppointmentSummary>("/appointments", {
+        from: range.from,
+        to: range.to,
+        pageSize: CALENDAR_PAGE_SIZE,
+      }),
+    // The grid stays dormant until it is shown: the day list must not pay for
+    // the calendar's whole-day read just because the screen also offers it.
+    enabled,
+    placeholderData: (previous) => previous,
+  });
+}
+
 export function useCreateAppointment() {
   const queryClient = useQueryClient();
 
@@ -81,24 +115,25 @@ export function useUpdateAppointment() {
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdateAppointmentInput }) =>
       patch<AppointmentDetail>(`/appointments/${id}`, input),
-    onSuccess: (_appointment, variables) => {
+    onSuccess: () => {
+      // `invalidateAppointments` clears the whole `["appointments"]` prefix,
+      // which already includes this booking's `detail` entry.
       invalidateAppointments(queryClient);
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.appointments.detail(variables.id),
-      });
     },
   });
 }
 
 /**
  * A write moves every window, not just the one on screen: booking tomorrow
- * changes today's "upcoming" list and the dashboard tile alike, so the whole
- * `["appointments"]` prefix is invalidated rather than one page of it.
+ * changes today's "upcoming" list, the calendar grid and the dashboard tile
+ * alike, so the whole `["appointments"]` prefix is invalidated rather than one
+ * page of it. That prefix covers `list`, `calendar` and `detail`, which is why
+ * the mutation handlers no longer invalidate the detail entry separately.
  *
  * The dashboard summary goes with it — its appointments tile is the same
  * table counted differently (ADR 0010: one server-side answer per figure).
  */
 function invalidateAppointments(queryClient: ReturnType<typeof useQueryClient>): void {
-  void queryClient.invalidateQueries({ queryKey: queryKeys.appointments.list() });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.appointments.all() });
   void queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.summary() });
 }
