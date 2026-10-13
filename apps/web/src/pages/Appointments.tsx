@@ -18,7 +18,7 @@ import { useState } from "react";
 import type { AppointmentDetail, AppointmentSummary } from "@glampro/shared";
 
 import AppointmentFormDrawer from "@/components/appointments/AppointmentFormDrawer";
-import CalendarView from "@/components/appointments/CalendarView";
+import CalendarView, { type RescheduleInput } from "@/components/appointments/CalendarView";
 import {
   buildCalendarColumns,
   type CalendarColumn,
@@ -41,6 +41,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import {
   useAppointmentList,
   useCalendarAppointments,
+  useRescheduleAppointment,
   useUpdateAppointment,
 } from "@/hooks/useAppointments";
 import { useStaffList } from "@/hooks/useStaff";
@@ -124,12 +125,28 @@ export default function Appointments() {
   );
 
   const update = useUpdateAppointment();
+  const reschedule = useRescheduleAppointment();
   const rows = data?.data ?? [];
   const showingToday = isToday(day);
 
   function openCreate() {
     setEditing(null);
     setDrawerOpen(true);
+  }
+
+  /**
+   * A drag on the grid. The move is optimistic (the block jumps under the
+   * pointer); if the server refuses it — a clash (`409`, ADR 0014) or a
+   * performer outside the service's department (ADR 0013) — the block snaps
+   * back and the toast carries the server's own message.
+   */
+  function handleReschedule(id: string, input: RescheduleInput) {
+    reschedule.mutate(
+      { id, input },
+      {
+        onError: (error_) => showToast("error", getErrorMessage(error_)),
+      },
+    );
   }
 
   async function openEdit(appointment: AppointmentSummary) {
@@ -324,6 +341,7 @@ export default function Appointments() {
           errorMessage={calendar.error ? getErrorMessage(calendar.error) : undefined}
           isReadOnly={isReadOnly}
           onEdit={openEdit}
+          onReschedule={handleReschedule}
           onRetry={() => void calendar.refetch()}
         />
       ) : (

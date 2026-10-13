@@ -7,7 +7,7 @@
  * and the empty/read-only states. The block's position is checked through the
  * geometry module it shares, not through pixel-sniffing the DOM.
  */
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
@@ -114,5 +114,156 @@ describe("CalendarView", () => {
       <CalendarView day={DAY} appointments={[]} columns={COLUMNS} isPending onEdit={vi.fn()} />,
     );
     expect(screen.queryByText("Mina Customer")).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Drag-to-reschedule (slice 6c).
+ *
+ * The gesture is HTML5 drag-and-drop: the block is a drag source carrying its
+ * id, each track a drop target. These tests drive the raw events with a stub
+ * `dataTransfer` and a stubbed track geometry, and assert the *payload* the grid
+ * hands to `onReschedule` — the same fields a real PATCH sends. Whether the move
+ * is allowed (clash, department) is the server's call, not asserted here.
+ *
+ * jsdom's `fireEvent` does not populate `MouseEvent.clientY` on drag events (it
+ * is a read-only getter the event map leaves undefined), so the drop is
+ * dispatched by hand with `clientY` and `dataTransfer` defined onto a plain
+ * `Event`. That is the one accommodation jsdom forces; the handler itself reads
+ * a normal `event.clientY` and `event.dataTransfer`.
+ */
+describe("CalendarView drag-to-reschedule", () => {
+  const dragColumns: CalendarColumn[] = [
+    { id: "staff-1", name: "Stella Stylist" },
+    { id: "staff-2", name: "Nia Nailist" },
+    { id: null, name: "Unassigned" },
+  ];
+
+  /**
+   * A block on staff-1's column. Its start is built in **local** time (the grid
+   * places blocks by local hours), so a drop at the matching offset reads as
+   * "same time, new performer" whatever the runner's timezone.
+   */
+  const dragged = booking({
+    id: "appt-drag",
+    startsAt: new Date(2026, 9, 9, 10, 0).toISOString(),
+    endsAt: new Date(2026, 9, 9, 11, 0).toISOString(),
+    staffId: "staff-1",
+    staffName: "Stella Stylist",
+  });
+
+  function stubTrackTop(track: HTMLElement, top: number) {
+    // jsdom has no layout, so the drop's pointer offset is pinned by hand: the
+    // handler reads `getBoundingClientRect().top`, which we fix to a known value.
+    vi.spyOn(track, "getBoundingClientRect").mockReturnValue({
+      top,
+      bottom: top + 800,
+      left: 0,
+      right: 200,
+      width: 200,
+      height: 800,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    } as DOMRect);
+  }
+
+  /** A minimal DataTransfer stub: an in-memory string map. */
+  function dataTransfer() {
+    const store: Record<string, string> = {};
+    return {
+      setData: (key: string, value: string) => {
+        store[key] = value;
+      },
+      getData: (key: string) => store[key] ?? "",
+      effectAllowed: "none",
+      dropEffect: "none",
+    };
+  }
+
+  /** Fire `drop` on `target` carrying `clientY` and `dataTransfer`. */
+  function drop(target: Element, clientY: number, transfer: ReturnType<typeof dataTransfer>) {
+    const event = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clientY", { value: clientY, configurable: true });
+    Object.defineProperty(event, "dataTransfer", { value: transfer, configurable: true });
+    target.dispatchEvent(event);
+  }
+
+  it("moves a block down its own column to a new time", () => {
+    const onReschedule = vi.fn();
+    const { container } = render(
+      <CalendarView
+        day={DAY}
+        appointments={[dragged]}
+        columns={dragColumns}
+        onEdit={vi.fn()}
+        onReschedule={onReschedule}
+      />,
+    );
+
+    const block = container.querySelector('[data-column="staff-1"] button');
+    const track = container.querySelector('[data-column="staff-1"]');
+    if (!block || !track) throw new Error("Expected a block on its track.");
+    stubTrackTop(track as HTMLElement, 0);
+
+    // Three hours below the 08:00 top (HOUR_HEIGHT px/hour) → 11:00 local.
+    const transfer = dataTransfer();
+    fireEvent.dragStart(block, { dataTransfer: transfer });
+    drop(track, 3 * HOUR_HEIGHT, transfer);
+
+    expect(onReschedule).toHaveBeenCalledTimes(1);
+    const [id, input] = onReschedule.mock.calls[0];
+    expect(id).toBe("appt-drag");
+    expect(new Date(input.startsAt as string).getHours()).toBe(11);
+    expect(input.staffId).toBeUndefined();
+  });
+
+  it("reassigns a block when dropped in another performer's column", () => {
+    const onReschedule = vi.fn();
+    const { container } = render(
+      <CalendarView
+        day={DAY}
+        appointments={[dragged]}
+        columns={dragColumns}
+        onEdit={vi.fn()}
+        onReschedule={onReschedule}
+      />,
+    );
+
+    const block = container.querySelector('[data-column="staff-1"] button');
+    const target = container.querySelector('[data-column="staff-2"]');
+    if (!block || !target) throw new Error("Expected a block and a second column.");
+    stubTrackTop(target as HTMLElement, 0);
+
+    // Dropped at the same 10:00 (two hours in) but on staff-2's track.
+    const transfer = dataTransfer();
+    fireEvent.dragStart(block, { dataTransfer: transfer });
+    drop(target, 2 * HOUR_HEIGHT, transfer);
+
+    expect(onReschedule).toHaveBeenCalledTimes(1);
+    const [, input] = onReschedule.mock.calls[0];
+    expect(input.staffId).toBe("staff-2");
+    expect(input.startsAt).toBeUndefined();
+  });
+
+  it("does not reschedule for a read-only salon", () => {
+    const onReschedule = vi.fn();
+    const { container } = render(
+      <CalendarView
+        day={DAY}
+        appointments={[dragged]}
+        columns={dragColumns}
+        isReadOnly
+        onEdit={vi.fn()}
+        onReschedule={onReschedule}
+      />,
+    );
+
+    const track = container.querySelector('[data-column="staff-1"]');
+    const transfer = dataTransfer();
+    transfer.setData("text/plain", "appt-drag");
+    drop(track as HTMLElement, 5 * HOUR_HEIGHT, transfer);
+
+    expect(onReschedule).not.toHaveBeenCalled();
   });
 });

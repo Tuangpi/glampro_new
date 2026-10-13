@@ -204,7 +204,14 @@ race (no overlap-exclusion constraint in SQL) is documented in the ADR.
 same day window. One column per roster member plus **Unassigned**, blocks placed
 by their real `startsAt`/`endsAt`, a current-time indicator, and status
 tints mapped through the design tokens. No calendar library, no new contract.
-Drag-to-reschedule (6c) is next; the grid currently only *opens* the editor.
+
+**Phase 6c landed** — drag-to-reschedule on the grid: a block dragged down its
+column changes the start (snapped to the quarter hour), dragged across changes
+the performer, and the move is posted as the same `PATCH /api/appointments/:id`
+through an optimistic `useRescheduleAppointment` that rolls back and toasts the
+server's message on a `409` (ADR 0014) or a department refusal (ADR 0013). The
+pure `rescheduleFields` seam turns a drop into the PATCH; the server re-validates
+every move.
 
 Handoff screens 03 and 06. Criterion: an appointment can be created through the
 guided flow or dragged in the calendar, rescheduled and completed, and duration and
@@ -212,14 +219,12 @@ staff assignment come from the service rather than from free text.
 
 ### Deferred from Phase 6 — the drawn things the model could not back
 
-| Deferred                                                | Why it is not here                                                                                                                                                                                            | Returns with                                                                                                                                                                                                                     |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Week and Month views                                    | The handoff drew a Day/Week/Month toggle, but every query is a **day window**; a week or month has no endpoint to read and no clash rule across days                                                          | A range query and a cross-day overlap rule                                                                                                                                                                                       |
-| A **shift / break** block on the track                  | There is no shift or rota table — only the leave half was modelled (`EmployeeLeave`), and it is not read here yet                                                                                              | A shift model, so availability can be read to book someone (carried from _Deferred from Phase 4_)                                                                                                                                |
-| The **skill matrix**                                    | Performer eligibility is department-wide (ADR 0013); the legacy `employee_services` mapping was not modelled, so a stylist cannot yet be filtered by the services they can actually perform                   | A staff↔service capability model                                                                                                                                                                                                 |
-| **Reminders**                                           | No notification channel or scheduled-job surface exists                                                                                                                                                        | A notification model and a job runner                                                                                                                                                                                            |
-| Drag-to-reschedule on the grid (6c)                     | It needs a real PATCH path and an optimistic-mutation pattern; 6b's 409 refusal is the server half it will reuse                                                                                               | **Phase 6c** — the immediate next slice                                                                                                                                                                                          |
-
+| Deferred                               | Why it is not here                                                                                                                                                                          | Returns with                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Week and Month views                   | The handoff drew a Day/Week/Month toggle, but every query is a **day window**; a week or month has no endpoint to read and no clash rule across days                                        | A range query and a cross-day overlap rule                                                        |
+| A **shift / break** block on the track | There is no shift or rota table — only the leave half was modelled (`EmployeeLeave`), and it is not read here yet                                                                           | A shift model, so availability can be read to book someone (carried from _Deferred from Phase 4_) |
+| The **skill matrix**                   | Performer eligibility is department-wide (ADR 0013); the legacy `employee_services` mapping was not modelled, so a stylist cannot yet be filtered by the services they can actually perform | A staff↔service capability model                                                                  |
+| **Reminders**                          | No notification channel or scheduled-job surface exists                                                                                                                                     | A notification model and a job runner                                                             |
 
 ## Phase 7 — Dashboard and reports
 

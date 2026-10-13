@@ -138,3 +138,39 @@ export function buildCalendarColumns(
   columns.push({ id: null, name: "Unassigned" });
   return columns;
 }
+
+/**
+ * The PATCH a drag means: a new `startsAt` and/or a new `staffId`, or nothing
+ * when the block was dropped back where it already was.
+ *
+ * A drag moves a block **down** its own column to change the time, or **across**
+ * to another column to change the performer — and the two combine. Only the
+ * fields that actually changed are returned, so a nudge that lands back on the
+ * same slot posts nothing rather than a no-op PATCH the server would have to
+ * answer with a clash check.
+ *
+ * `startsAt` is the snapped instant for the whole booking, derived from the drop
+ * offset exactly as the block was placed; the server recomputes `endsAt` from
+ * the service's duration, so the drag never sends an end time. Whether the move
+ * is *allowed* — the 409 clash and the department rule — is the server's call
+ * (ADR 0014, ADR 0013), never this function's.
+ */
+export function rescheduleFields(
+  booking: AppointmentSummary,
+  drop: { day: Date; offsetMinutes: number; staffId: string | null },
+): { startsAt?: string; staffId?: string | null } {
+  const next: { startsAt?: string; staffId?: string | null } = {};
+
+  const movedStart = instantFromOffset(drop.day, drop.offsetMinutes);
+  // Same minute on the same day is not a move; comparing instants avoids a
+  // needless write for a block dropped a pixel from where it began.
+  if (movedStart.getTime() !== new Date(booking.startsAt).getTime()) {
+    next.startsAt = movedStart.toISOString();
+  }
+
+  if (drop.staffId !== booking.staffId) {
+    next.staffId = drop.staffId;
+  }
+
+  return next;
+}

@@ -18,6 +18,8 @@
  * block, a green done block) mapped onto the project's tokens rather than the
  * file's literals — `tokens.css` is copied, never edited (`AGENTS.md` rule 2).
  */
+import type { DragEvent } from "react";
+
 import type { AppointmentSummary } from "@glampro/shared";
 
 import { Calendar } from "@/components/icons";
@@ -38,9 +40,13 @@ import {
   blockBox,
   type CalendarColumn,
   nowLineTop,
+  rescheduleFields,
 } from "./calendar-geometry";
 
 export type { CalendarColumn };
+
+/** The PATCH a drag produces — only the fields that actually moved. */
+export type RescheduleInput = { startsAt?: string; staffId?: string | null };
 
 export interface CalendarViewProps {
   day: Date;
@@ -53,6 +59,8 @@ export interface CalendarViewProps {
   /** Disabled blocks: a suspended salon may look but not open the editor. */
   isReadOnly?: boolean;
   onEdit: (appointment: AppointmentSummary) => void;
+  /** A drag that moved a block. Omitted fields mean "unchanged". */
+  onReschedule?: (id: string, input: RescheduleInput) => void;
   onRetry?: () => void;
 }
 
@@ -89,6 +97,7 @@ export default function CalendarView({
   errorMessage,
   isReadOnly = false,
   onEdit,
+  onReschedule,
   onRetry,
 }: CalendarViewProps) {
   if (isPending) {
@@ -198,9 +207,11 @@ export default function CalendarView({
               column={column}
               day={day}
               appointments={byColumn.get(column.id) ?? []}
+              allAppointments={appointments}
               showingToday={showingToday}
               isReadOnly={isReadOnly}
               onEdit={onEdit}
+              onReschedule={onReschedule}
             />
           ))}
         </div>
@@ -288,10 +299,20 @@ function AppointmentBlock({
       aria-label={label}
       disabled={isReadOnly}
       onClick={() => onEdit(booking)}
+      // A drag moves the block; a click (no drag) opens the editor. `draggable`
+      // is off for a read-only salon so a suspended desk cannot grab anything.
+      draggable={!isReadOnly}
+      onDragStart={(event) => {
+        // The id rides in the dataTransfer; the drop reads it back and the server
+        // re-validates the move (clash + department), so nothing is trusted here.
+        event.dataTransfer.setData("text/plain", booking.id);
+        event.dataTransfer.effectAllowed = "move";
+      }}
       style={{ top, height }}
       className={cn(
         "absolute right-1.5 left-1.5 overflow-hidden rounded-sm border-l-[3px] px-2 py-1 text-left shadow-[0_2px_6px_rgba(27,35,80,0.08)] transition",
         "hover:brightness-[0.97] disabled:hover:brightness-100",
+        isReadOnly ? "" : "cursor-grab active:cursor-grabbing",
         TONE_BORDER[tone],
         TONE_BACKGROUND[tone],
       )}
@@ -312,23 +333,35 @@ function AppointmentBlock({
 }
 
 /**
- * One vertical track: the hour lines, the day's blocks for that performer, and
- * the now-indicator when the track is today.
+ * One vertical track: the hour lines, the day's blocks for that performer, the
+ * now-indicator when the track is today, and — when writable — it is a drop
+ * target for a dragged block.
+ *
+ * A drop reads the dragged id, finds that booking in the **whole** day (it may
+ * have come from another column), turns the pointer's offset into a snapped
+ * start and this track's performer into a `staffId`, and hands the resulting
+ * PATCH to `onReschedule`. The server then re-checks the clash and the
+ * department rule (ADR 0014, ADR 0013); the grid never decides whether a move
+ * is legal, only where it was dropped.
  */
 function StaffTrack({
   column,
   day,
   appointments,
+  allAppointments,
   showingToday,
   isReadOnly,
   onEdit,
+  onReschedule,
 }: {
   column: CalendarColumn;
   day: Date;
   appointments: AppointmentSummary[];
+  allAppointments: AppointmentSummary[];
   showingToday: boolean;
   isReadOnly: boolean;
   onEdit: (appointment: AppointmentSummary) => void;
+  onReschedule?: (id: string, input: RescheduleInput) => void;
 }) {
   const nowTop = showingToday ? nowLineTop(new Date()) : null;
   const placed = appointments
@@ -338,6 +371,22 @@ function StaffTrack({
         entry.box !== null,
     );
 
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    if (isReadOnly || !onReschedule) return;
+    event.preventDefault();
+
+    const id = event.dataTransfer.getData("text/plain");
+    const booking = allAppointments.find((candidate) => candidate.id === id);
+    if (!booking) return;
+
+    // Pointer offset within the track, in minutes from the top of the day.
+    const rect = event.currentTarget.getBoundingClientRect();
+    const offsetMinutes = (event.clientY - rect.top) / PX_PER_MINUTE;
+    const input = rescheduleFields(booking, { day, offsetMinutes, staffId: column.id });
+    // A drop that changed nothing posts nothing.
+    if (Object.keys(input).length > 0) onReschedule(booking.id, input);
+  }
+
   return (
     <div
       // Exposed so a test can assert a block rendered under its own staff head,
@@ -345,6 +394,8 @@ function StaffTrack({
       data-column={column.id ?? "unassigned"}
       className="relative border-r border-line-soft"
       style={{ height: TRACK_HEIGHT, backgroundImage: HOUR_LINES }}
+      onDragOver={isReadOnly ? undefined : (event) => event.preventDefault()}
+      onDrop={handleDrop}
     >
       {placed.map(({ booking, box }) => (
         <AppointmentBlock

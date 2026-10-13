@@ -2,14 +2,21 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useAppointmentList, useUpdateAppointment, useCalendarAppointments, mutateAsync, get } =
-  vi.hoisted(() => ({
-    useAppointmentList: vi.fn(),
-    useUpdateAppointment: vi.fn(),
-    useCalendarAppointments: vi.fn(),
-    mutateAsync: vi.fn(),
-    get: vi.fn(),
-  }));
+const {
+  useAppointmentList,
+  useUpdateAppointment,
+  useCalendarAppointments,
+  useRescheduleAppointment,
+  mutateAsync,
+  get,
+} = vi.hoisted(() => ({
+  useAppointmentList: vi.fn(),
+  useUpdateAppointment: vi.fn(),
+  useCalendarAppointments: vi.fn(),
+  useRescheduleAppointment: vi.fn(),
+  mutateAsync: vi.fn(),
+  get: vi.fn(),
+}));
 const { useStaffList } = vi.hoisted(() => ({ useStaffList: vi.fn() }));
 const readOnly = vi.hoisted(() => ({ value: false }));
 
@@ -17,6 +24,7 @@ vi.mock("@/hooks/useAppointments", () => ({
   useAppointmentList,
   useUpdateAppointment,
   useCalendarAppointments,
+  useRescheduleAppointment,
 }));
 vi.mock("@/hooks/useStaff", () => ({ useStaffList }));
 vi.mock("@/contexts/AuthContext", () => ({ useAuth: () => ({ isReadOnly: readOnly.value }) }));
@@ -60,6 +68,7 @@ beforeEach(() => {
     refetch: vi.fn(),
   });
   useUpdateAppointment.mockReturnValue({ mutateAsync, isPending: false });
+  useRescheduleAppointment.mockReturnValue({ mutate: vi.fn(), isPending: false });
   useCalendarAppointments.mockReturnValue({
     data: { data: [ROW], total: 1, page: 1, pageSize: 200, pageCount: 1 },
     isPending: false,

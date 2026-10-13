@@ -15,9 +15,11 @@ import type {
   AppointmentListQuery,
   AppointmentSummary,
   CreateAppointmentInput,
+  PaginatedResponse,
   UpdateAppointmentInput,
 } from "@glampro/shared";
 
+import type { RescheduleInput } from "@/components/appointments/CalendarView";
 import { queryKeys } from "@/constants/queryKeys";
 import { get, getPaginated, patch, post } from "@/lib/api";
 
@@ -118,6 +120,69 @@ export function useUpdateAppointment() {
     onSuccess: () => {
       // `invalidateAppointments` clears the whole `["appointments"]` prefix,
       // which already includes this booking's `detail` entry.
+      invalidateAppointments(queryClient);
+    },
+  });
+}
+
+/**
+ * A drag on the calendar grid — a reschedule, posted as the same PATCH.
+ *
+ * The difference from `useUpdateAppointment` is **optimism**: a drag should move
+ * the block under the pointer immediately, not wait for a round trip and then
+ * snap back from the server. So the calendar's cached day is rewritten the
+ * instant the drop lands, and rolled back if the server refuses — most often
+ * the `409` a clash produces (ADR 0014), or a performer outside the service's
+ * department (ADR 0013). Either way the toast carries the server's own message,
+ * and the block returns to where it was.
+ */
+export function useRescheduleAppointment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: RescheduleInput }) =>
+      patch<AppointmentDetail>(`/appointments/${id}`, input),
+
+    onMutate: async ({ id, input }) => {
+      // Cancel any in-flight refetch so it cannot overwrite the optimistic move.
+      await queryClient.cancelQueries({ queryKey: queryKeys.appointments.all() });
+      const previous = queryClient.getQueriesData<PaginatedResponse<AppointmentSummary>>({
+        queryKey: queryKeys.appointments.calendarPrefix(),
+      });
+
+      queryClient.setQueriesData<PaginatedResponse<AppointmentSummary>>(
+        { queryKey: queryKeys.appointments.calendarPrefix() },
+        (page) =>
+          page
+            ? {
+                ...page,
+                data: page.data.map((booking) =>
+                  booking.id === id
+                    ? {
+                        ...booking,
+                        ...(input.startsAt !== undefined ? { startsAt: input.startsAt } : {}),
+                        ...(input.staffId !== undefined ? { staffId: input.staffId } : {}),
+                      }
+                    : booking,
+                ),
+              }
+            : page,
+      );
+
+      return { previous };
+    },
+
+    onError: (error, _variables, context) => {
+      // Roll every calendar entry back to what it was before the drop.
+      for (const [key, data] of context?.previous ?? []) {
+        queryClient.setQueryData(key, data);
+      }
+      throw error;
+    },
+
+    onSettled: () => {
+      // The server is the source of truth for `endsAt`, `durationMinutes` and
+      // the denormalised names, so re-read rather than trust the optimistic row.
       invalidateAppointments(queryClient);
     },
   });

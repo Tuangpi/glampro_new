@@ -19,6 +19,7 @@ import {
   instantFromOffset,
   minutesIntoDay,
   nowLineTop,
+  rescheduleFields,
   snapToSlot,
 } from "../calendar-geometry";
 
@@ -169,5 +170,59 @@ describe("buildCalendarColumns", () => {
     const columns = buildCalendarColumns([booking], [{ id: "staff-1", name: "Stella" }]);
     // One staff column + Unassigned — the booking folds into the roster column.
     expect(columns).toHaveLength(2);
+  });
+});
+
+describe("rescheduleFields", () => {
+  const DAY = at(9, 0);
+  const base = {
+    id: "appt-1",
+    startsAt: at(9, 10, 0).toISOString(), // 10:00 local
+    endsAt: at(9, 11, 0).toISOString(),
+    status: "SCHEDULED" as const,
+    durationMinutes: 60,
+    comment: null,
+    customerId: null,
+    customerName: "Mina Customer",
+    staffId: "staff-1",
+    staffName: "Stella Stylist",
+    serviceId: null,
+    serviceName: null,
+    serviceDepartmentId: null,
+    createdAt: "2026-10-01T00:00:00.000Z",
+    updatedAt: "2026-10-01T00:00:00.000Z",
+  };
+
+  it("moves the start when dropped at a new time", () => {
+    // Drop two hours below the 08:00 top → 10:00; three hours → 11:00.
+    const fields = rescheduleFields(base, { day: DAY, offsetMinutes: 3 * 60, staffId: "staff-1" });
+    expect(new Date(fields.startsAt as string).getHours()).toBe(11);
+    expect(fields.staffId).toBeUndefined();
+  });
+
+  it("reassigns the performer when dropped in another column", () => {
+    const fields = rescheduleFields(base, {
+      day: DAY,
+      offsetMinutes: 2 * 60, // same 10:00 it already starts at
+      staffId: "staff-2",
+    });
+    expect(fields.startsAt).toBeUndefined();
+    expect(fields.staffId).toBe("staff-2");
+  });
+
+  it("clears the performer when dropped into the Unassigned column", () => {
+    const fields = rescheduleFields(base, { day: DAY, offsetMinutes: 2 * 60, staffId: null });
+    expect(fields.staffId).toBeNull();
+  });
+
+  it("posts nothing when the block is dropped back where it was", () => {
+    const fields = rescheduleFields(base, { day: DAY, offsetMinutes: 2 * 60, staffId: "staff-1" });
+    expect(fields).toEqual({});
+  });
+
+  it("combines a time move and a reassignment in one PATCH", () => {
+    const fields = rescheduleFields(base, { day: DAY, offsetMinutes: 4 * 60, staffId: "staff-2" });
+    expect(new Date(fields.startsAt as string).getHours()).toBe(12);
+    expect(fields.staffId).toBe("staff-2");
   });
 });

@@ -48,6 +48,12 @@ export const queryKeys = {
     list: () => ["appointments", "list"] as const,
     detail: (id: string) => ["appointments", "detail", id] as const,
     calendar: (from: string, to: string) => ["appointments", "calendar", from, to] as const,
+    /**
+     * Every calendar entry, whatever its window — matched by prefix so an
+     * optimistic reschedule rewrites the day on screen without knowing its
+     * `from`/`to` (see `useRescheduleAppointment`).
+     */
+    calendarPrefix: () => ["appointments", "calendar"] as const,
   },
 
   customers: {
