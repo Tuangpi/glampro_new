@@ -132,13 +132,21 @@ branches, the staff↔branch links, the services, the products, the packages and
 their links, the value package, the gift cards and the customers —
 idempotently, keyed on each row's natural key, inside `runAsTenant` so the Prisma
 extension scopes every write the way a request would.
-`DEMO_APPOINTMENTS` / `DEMO_SALES` are still **unconsumed**: seeding a sale means
-running the real write (prices, ledgers, receipt number) rather than inserting rows the
-way the catalogue is inserted, and M3's dashboard half landed without it — so the
-dashboard's sales tiles read an honest `0` and its customer and stock tiles read real
-figures off the same seed (`newCustomersToday: 2`, `lowStock: 5`). Seeding them is
-worth doing when the dashboard is next touched; inventing totals for it to add up
-would not be.
+`DEMO_APPOINTMENTS` / `DEMO_SALES` followed after the MVP. The bookings are
+upserted by their fixed ids with the clash rule (`assertNoAppointmentClash`,
+ADR 0014) checked over exactly the windows about to be stored, so a dataset edit
+that double-books a stylist fails the seed rather than rendering two blocks on
+top of each other. The sales are rung through the real `createSale` by
+idempotency key — the five ledgers (`fillLedgers`: stock, holdings, points, the
+outstanding row, performance) and the receipt number are the service’s work —
+with each `soldAt` moved back to the moment the dataset describes. A re-seed
+replays each sale by its key and only moves the date, so the receipt numbers
+stay the ones the first run printed, and `reconcileProductStock` puts each
+product’s shelf back to the dataset’s figure after the demo sales have
+decremented it. `prisma/seed-data.test.ts` (10 cases) asserts the dataset on its
+own over several fixed instants: every name resolves, no performer is
+double-booked, every sale is paid exactly except the deliberate part payment
+(sale 07).
 
 ### Closed with Phase 5b.2 — the sale (the write, the ledgers and the receipt)
 
@@ -807,10 +815,12 @@ mounts, the first of which asserts `Object.keys(body)` **is** `["data"]` and tha
 the server-side filters, server-side paging, prices as strings and cross-tenant
 isolation. `pages/__tests__/Products.test.tsx` walks all four tabs with a row each.
 
-**Not every empty screen was this bug.** `/api/appointments` and `/api/sales` answer
-`total: 0` because the demo seed fabricates neither — `DEMO_APPOINTMENTS` and
-`DEMO_SALES` in `prisma/seed-data.ts` are still unconsumed — so those two screens show a
-real empty state, and this fix changes nothing there.
+**Not every empty screen was this bug.** At the time, `/api/appointments` and
+`/api/sales` answered `total: 0` because the demo seed fabricated neither —
+`DEMO_APPOINTMENTS` and `DEMO_SALES` were still unconsumed — so those two
+screens showed a real empty state, and this fix changed nothing there. The seed
+has since been completed (see §3): a fresh `db:reset` now carries a yesterday, a
+today and a forward book plus ten rung-up sales.
 
 **The dev proxy had a second defect, which made the symptom confusing to chase.**
 `vite.config.ts` read `VITE_PROXY_TARGET` from `process.env`. Vite never puts `.env`
@@ -1054,6 +1064,32 @@ read:
 package, 2 gift cards, 10 customers, 14 modules. That is the idempotency the block above
 `main()` claims, observed rather than asserted: a re-seed refreshes the demo instead of
 duplicating it.
+
+**The book and the till seed too, and the same two calls now answer with figures.** On
+2026-10-14 `npm run db:seed` was run twice in succession against the dev database. Both
+runs printed the same catalogue counts, and the second reported _"10 sale(s) ring through
+createSale again (10 replayed on re-seed)"_ — nothing duplicated: `appointments` stayed at
+13, `sales` at 10, `sale_lines` at 19, `customer_points` at 5 and `employee_performances`
+at 11 across both runs; the receipts stayed `#1`–`#10`; the three sales dated today moved
+to the new seeding moment, which is the whole point of `offsetMinutes`, while the older
+seven kept their dates; and `reconcileProductStock` put each shelf back to the dataset's
+figure. With the API rebuilt and started against that database, a bearer-token `GET` as
+`manager@glampro.test` read the rows the M1 table above had found empty:
+
+| Call                         | What came back                                                                            |
+| ---------------------------- | ----------------------------------------------------------------------------------------- |
+| `GET /api/appointments`      | `total: 13` — yesterday's closed book, today's board and two forward days (13–16 Oct)     |
+| `GET /api/reports/dashboard` | `incomeToday: "394.00"`, `salesToday: 3`, `appointmentsToday: 5`, `newCustomersToday: 10` |
+| `GET /api/reports/overview`  | `revenue: "1491.00"`, `paid: "1471.00"`, `sales: 10`, `items: 19`                         |
+| `GET /api/sales/:id`         | receipt 7: `totalAmount "40.00"`, `paidAmount "20.00"`, `outstandingAmount "20.00"`       |
+
+The overview's `20.00` gap between revenue and paid **is** sale 07, the dataset's
+deliberate part payment, and its day-by-day rows run 09–14 Oct — so the seeded till adds
+up through the real reporting service, not only in the dataset's own arithmetic. The till
+has no list route, so `GET /api/sales` is a 404 by design; receipts are read one at a time
+by id, which is what the last row does. One gotcha for the next run: `dist/` is whatever
+the last build left, and `npm run start` serves it — a stale build 404'd `/api/reports/overview`
+until `npm run build` was re-run.
 
 **The browser half is now verified.** On 2026-10-09, Google Chrome was driven through
 its DevTools protocol against Vite on `:5173`, the host API on `:9001`, and the

@@ -159,11 +159,16 @@ but almost nothing read it, so a fresh `db:reset` left the till with an empty gr
 and the cart's performer picker with nobody in it. `seed.ts` now seeds the
 departments, the staff↔department links, the services, the products, the packages
 and their links, the value package, the gift cards and the customers, idempotently
-on each row's natural key and inside `runAsTenant`. `DEMO_APPOINTMENTS` and
-`DEMO_SALES` are deliberately **still unused**: seeding a sale means running the
-real write (prices, ledgers, receipt number), which is M3's dashboard slice to
-bring, and inventing rows for the dashboard to add up would be a fabricated number
-rather than a demo.
+on each row's natural key and inside `runAsTenant`. The bookings and the till
+followed after the MVP: `DEMO_APPOINTMENTS` are upserted by their fixed ids with
+the clash rule checked over the windows about to be stored, and `DEMO_SALES` are
+rung through the real `createSale` by idempotency key (a re-seed replays rather
+than duplicating, so the receipt numbers stay the ones the first run printed)
+with each `soldAt` moved back to the moment the dataset describes — which is
+what gives a fresh database a yesterday, a today and a forward book instead of
+an empty calendar and a dashboard with nothing to add up. `prisma/seed-data.test.ts`
+(10 cases) asserts the dataset on its own: every name resolves, no performer is
+double-booked, every sale is paid exactly except the deliberate part payment.
 
 Both things 5b.2 had to settle rather than assume are now settled: **the receipt
 number** (screen 02 draws `Receipt #24418` and legacy had a human-readable

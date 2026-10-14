@@ -1,11 +1,12 @@
 /**
  * Development / bootstrap seed.
  *
- * `SEED_MODE=development` (default) creates a demo salon crew.
  * `SEED_MODE=production` creates exactly one administrator from
- * `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` and touches nothing else.
- *
- * Run with `npm run db:seed` (from `apps/api`).
+ * `ADMIN_EMAIL` / `ADMIN_PASSWORD` / `ADMIN_NAME` and touches nothing else;
+ * `SEED_MODE=development` (default) also creates the demo salon crew. Re-running
+ * after a fresh `db:reset` refreshes the demo instead of duplicating it — every
+ * catalogue row is looked up by its natural key, and the bookings and sales are
+ * written by their fixed ids / idempotency keys.
  */
 import "dotenv/config";
 
@@ -13,17 +14,31 @@ import bcrypt from "bcrypt";
 import { CORE_MODULE_CODES, MODULE_CODES } from "@glampro/shared";
 
 import {
+  DEMO_APPOINTMENTS,
   DEMO_CUSTOMERS,
   DEMO_DEPARTMENTS,
   DEMO_GIFT_CARDS,
   DEMO_PACKAGES,
   DEMO_PRODUCTS,
+  DEMO_SALES,
   DEMO_SERVICES,
   DEMO_STAFF,
   DEMO_VALUE_PACKAGES,
   STAFF_DEPARTMENTS,
 } from "./seed-data.js";
+import {
+  FALLBACK_DURATION_MINUTES,
+  appointmentWindow,
+  assertNoAppointmentClash,
+  centsToMoney,
+  demoSaleTotalCents,
+  saleMoment,
+  tenderAmountsCents,
+  toCents,
+  type ClashWindow,
+} from "./seed-logic.js";
 
+import { createSale } from "../src/services/sale.service.js";
 import { prisma } from "../src/lib/prisma.js";
 import { runAsPlatform, runAsTenant } from "../src/lib/tenant-context.js";
 
@@ -74,27 +89,6 @@ interface SeedUser {
 const SEED_MODE = process.env.SEED_MODE === "production" ? "production" : "development";
 const BCRYPT_ROUNDS = 10;
 
-const DEMO_USERS: SeedUser[] = [
-  {
-    email: "manager@glampro.test",
-    name: "Maya Manager",
-    password: "Manager123!",
-    globalRole: "MANAGER",
-  },
-  {
-    email: "stylist@glampro.test",
-    name: "Rita Stylist",
-    password: "Staff123!",
-    globalRole: "STAFF",
-  },
-  {
-    email: "cashier@glampro.test",
-    name: "Nora Cashier",
-    password: "Cashier123!",
-    globalRole: "CASHIER",
-  },
-];
-
 function resolveAdmin(): SeedUser {
   return {
     email: process.env.ADMIN_EMAIL ?? "admin@glampro.test",
@@ -104,14 +98,6 @@ function resolveAdmin(): SeedUser {
   };
 }
 
-/**
- * Creates the demo tenant that the seeded users belong to.
- *
- * `users.tenantId` points at `tenants` and `tenants.ownerUserId` points back at
- * `users`, so neither row can be inserted first. The tenant is created first with
- * no owner and claimed in the next statement, which is the only place in the
- * codebase that writes ownership in two steps.
- */
 const DEMO_TENANT = {
   slug: "glampro-demo",
   name: "Glampro Demo Salon",
@@ -122,52 +108,21 @@ async function seedTenant(): Promise<string> {
     where: { slug: DEMO_TENANT.slug },
     update: { name: DEMO_TENANT.name },
     create: { name: DEMO_TENANT.name, slug: DEMO_TENANT.slug },
+    select: { id: true, slug: true },
   });
 
   console.log(`  ✔ tenant ${tenant.slug} (${tenant.id})`);
   return tenant.id;
 }
 
-async function upsertUser(user: SeedUser, tenantId: string): Promise<string> {
-  const passwordHash = await bcrypt.hash(user.password, BCRYPT_ROUNDS);
-
-  const row = await prisma.user.upsert({
-    where: { email: user.email },
-    update: {
-      name: user.name,
-      passwordHash,
-      globalRole: user.globalRole,
-      tenantId,
-      // Re-enable an account that was locked or disabled during testing.
-      disabled: false,
-      disabledAt: null,
-    },
-    create: {
-      email: user.email,
-      name: user.name,
-      passwordHash,
-      globalRole: user.globalRole,
-      tenantId,
-    },
-  });
-
-  console.log(`  ✔ ${user.globalRole.padEnd(11)} ${user.email}`);
-  return row.id;
-}
-
-/**
- * `CORE_MODULE_CODES` is a literal tuple, so its `includes` only accepts its own
- * members. Widening to `string` here is what lets any `ModuleCode` be tested
- * against it.
- */
 function isCore(code: string): boolean {
   return (CORE_MODULE_CODES as readonly string[]).includes(code);
 }
 
 /**
- * The module catalogue is platform data, not tenant data, so it is seeded in both
- * modes and written with an unscoped client. `isCore` is derived from
- * `CORE_MODULE_CODES` so the two lists cannot disagree.
+ * The module catalogue is platform data, so it is written with an unscoped
+ * client in both modes. `isCore` derives from `CORE_MODULE_CODES` — the single
+ * source the entitlement list could disagree with.
  */
 async function seedModules(): Promise<void> {
   for (const [index, code] of MODULE_CODES.entries()) {
@@ -189,8 +144,7 @@ async function seedModules(): Promise<void> {
     });
   }
 
-  const coreCount = MODULE_CODES.filter(isCore).length;
-  console.log(`  ✔ ${MODULE_CODES.length} modules (${coreCount} core)`);
+  console.log(`  ✔ ${MODULE_CODES.length} modules (${MODULE_CODES.filter(isCore).length} core)`);
 }
 
 /**
@@ -198,18 +152,13 @@ async function seedModules(): Promise<void> {
  *
  * A `TenantModule` row is how entitlement is recorded, and **nothing creates one
  * yet** — the platform console does that, and it has no phase (see `docs/roadmap.md`
- * → Not scheduled yet). Seeding them keeps a fresh `db:reset` showing the Packages
+ * → Not scheduled yet). Seeding these keeps a fresh `db:reset` showing the Packages
  * and Gift cards tabs rather than a 403 that reads as "this feature is broken" when
- * truth is "this salon has not bought it". Reports joins those grants because
+ * truth is "this salon has not bought it". Reports joins them because
  * `/reports` is part of the minimal-complete MVP (`docs/mvp.md` M3).
- *
- * Development only: `SEED_MODE=production` seeds the module catalogue and one
- * administrator, and grants nobody anything.
  */
 async function seedEntitlements(tenantId: string): Promise<void> {
   for (const code of ["packages", "giftCards", "reports"] as const) {
-    // `seedModules()` has already created the row; this upsert is here so the
-    // function is correct on its own rather than depending on call order.
     const module = await prisma.module.upsert({
       where: { code },
       update: {},
@@ -217,6 +166,9 @@ async function seedEntitlements(tenantId: string): Promise<void> {
     });
 
     await prisma.tenantModule.upsert({
+      // `TenantModule` alone is unscoped in the platform context the modules
+      // are seeded from — only the tenant module grant is looked up by its
+      // real unique key.
       where: { tenantId_moduleId: { tenantId, moduleId: module.id } },
       update: { expiresAt: null },
       create: { tenantId, moduleId: module.id },
@@ -227,239 +179,305 @@ async function seedEntitlements(tenantId: string): Promise<void> {
 }
 
 /*
- * The demo catalogue and the demo customers — development only.
- *
- * Every function below is **idempotent**: a department is found by its natural
- * key (`@@unique([tenantId, name])`), a service, product, package, gift card or
- * value package by `(tenantId, name)` — none of those models has a unique
+ * The demo catalogue, the customer book, the book and the till — development
+ * only. Every function below is **idempotent**: a department is found by its
+ * natural key (`@@unique([tenantId, name])`), a service, product, package, gift
+ * card or value package by `(tenantId, name)` — none of those models has a unique
  * constraint on the name, so the seed looks one up rather than upserting — and a
  * customer by its per-tenant email (`@@unique([tenantId, email])`, ADR 0003).
- * `npm run db:seed` on an existing demo database therefore refreshes the demo
- * rather than duplicating it, which is what `seed-data.ts`'s header promises.
- *
- * Appointments and sales are **not** seeded yet: `DEMO_APPOINTMENTS` and
- * `DEMO_SALES` exist in `seed-data.ts`, but writing a sale means running the real
- * write (prices, ledgers, receipt number), which M3's dashboard slice does — so
- * the dashboard still reads zeros until then rather than inventing rows.
+ * Appointments are upserted by the fixed ids `seed-data.ts` gives them and sales
+ * by Q16's idempotency key. `npm run db:seed` on an existing demo database
+ * therefore refreshes the demo rather than duplicating it.
  */
 
-/** The salon's branches, keyed by name for everything that refers to one. */
-async function seedDepartments(tenantId: string): Promise<Map<string, string>> {
-  const byName = new Map<string, string>();
-
+async function seedDepartments(tenantId: string): Promise<{ id: string; name: string }[]> {
   for (const name of DEMO_DEPARTMENTS) {
-    const row = await prisma.department.upsert({
+    await prisma.department.upsert({
       where: { tenantId_name: { tenantId, name } },
       update: {},
       create: { tenantId, name },
-      select: { id: true },
     });
-    byName.set(name, row.id);
   }
 
-  console.log(`  ✔ ${byName.size} department(s)`);
-  return byName;
+  console.log(`  ✔ ${DEMO_DEPARTMENTS.length} departments`);
+
+  return prisma.department.findMany({
+    where: { tenantId },
+    select: { id: true, name: true },
+  });
 }
 
 /**
- * Puts each performer in their branches.
+ * Links each seeded performer to their branch(es).
  *
- * This is what the till's per-line picker and the booking flow filter on
- * ([ADR 0013](../docs/decisions/0013-appointment-performers-come-from-the-service.md)):
- * a service in Hair offers the staff who are in Hair. The owner and the cashier
- * are deliberately in none, so they can never be offered as a performer.
+ * The performers are the only users with `STAFF_DEPARTMENTS` entries — the
+ * manager, the front desk and the administrator do no services, so they must
+ * not appear in the till's per-line staff picker. A re-seed adds missing links
+ * and leaves existing ones alone.
  */
-async function seedStaffDepartments(
-  tenantId: string,
-  departments: Map<string, string>,
-): Promise<void> {
-  let links = 0;
+async function seedStaffDepartments(tenantId: string): Promise<void> {
+  const departments = await prisma.department.findMany({
+    where: { tenantId },
+    select: { id: true, name: true },
+  });
+  const departmentByName = new Map(departments.map((row) => [row.name, row.id]));
+
+  let linked = 0;
 
   for (const [email, names] of Object.entries(STAFF_DEPARTMENTS)) {
     const user = await prisma.user.findFirst({
-      where: { email, tenantId },
+      where: { tenantId, email },
       select: { id: true },
     });
-    // A production seed has no demo crew, and a renamed developer account simply
-    // has nothing to link — neither is an error worth failing the seed over.
     if (!user) continue;
 
     for (const name of names) {
-      const departmentId = departments.get(name);
-      if (departmentId === undefined) continue;
+      const departmentId = departmentByName.get(name);
+      if (!departmentId) continue;
 
-      await prisma.staffDepartment.upsert({
-        where: { userId_departmentId: { userId: user.id, departmentId } },
-        update: {},
-        create: { tenantId, userId: user.id, departmentId },
+      const existing = await prisma.staffDepartment.findFirst({
+        where: { userId: user.id, departmentId },
+        select: { id: true },
       });
-      links += 1;
+      if (existing) continue;
+
+      await prisma.staffDepartment.create({
+        data: { tenantId, userId: user.id, departmentId },
+      });
+      linked += 1;
     }
   }
 
-  console.log(`  ✔ ${links} staff↔department link(s)`);
+  console.log(`  ✔ staff departments linked (${linked} new)`);
 }
 
-/** The bookable services, keyed by name so the packages can link to them. */
 async function seedServices(
   tenantId: string,
-  departments: Map<string, string>,
-): Promise<Map<string, string>> {
-  const byName = new Map<string, string>();
-
+  departments: { id: string; name: string }[],
+): Promise<{ id: string; name: string }[]> {
   for (const service of DEMO_SERVICES) {
-    const data = {
-      tenantId,
-      name: service.name,
-      departmentId: departments.get(service.department) ?? null,
-      status: "ACTIVE" as const,
-      memberPrice: service.memberPrice,
-      nonmemberPrice: service.nonmemberPrice,
-      points: service.points,
-      description: service.description,
-      durationMinutes: service.durationMinutes,
-    };
+    const department = departments.find((row) => row.name === service.department);
+    if (!department) continue;
 
+    // No unique constraint on the name, so look the row up rather than
+    // upserting — `findFirst` is tenant-scoped by the extension, which is the
+    // lookup `upsert`'s `where` would have needed.
     const existing = await prisma.service.findFirst({
       where: { tenantId, name: service.name },
       select: { id: true },
     });
-    const row = existing
-      ? await prisma.service.update({ where: { id: existing.id }, data, select: { id: true } })
-      : await prisma.service.create({ data, select: { id: true } });
 
-    byName.set(service.name, row.id);
+    if (existing) {
+      await prisma.service.update({
+        where: { id: existing.id },
+        data: {
+          memberPrice: service.memberPrice,
+          nonmemberPrice: service.nonmemberPrice,
+          durationMinutes: service.durationMinutes,
+          points: service.points,
+          description: service.description,
+          departmentId: department.id,
+        },
+      });
+    } else {
+      await prisma.service.create({
+        data: {
+          tenantId,
+          name: service.name,
+          memberPrice: service.memberPrice,
+          nonmemberPrice: service.nonmemberPrice,
+          durationMinutes: service.durationMinutes,
+          points: service.points,
+          description: service.description,
+          departmentId: department.id,
+        },
+      });
+    }
   }
 
-  console.log(`  ✔ ${byName.size} service(s)`);
-  return byName;
+  console.log(`  ✔ ${DEMO_SERVICES.length} service(s)`);
+
+  return prisma.service.findMany({ where: { tenantId }, select: { id: true, name: true } });
 }
 
-/** The retail shelf. Same natural key as a service, plus stock on hand. */
-async function seedProducts(tenantId: string, departments: Map<string, string>): Promise<void> {
+async function seedProducts(
+  tenantId: string,
+  departments: { id: string; name: string }[],
+): Promise<void> {
   for (const product of DEMO_PRODUCTS) {
-    const data = {
-      tenantId,
-      name: product.name,
-      departmentId: departments.get(product.department) ?? null,
-      status: "ACTIVE" as const,
-      memberPrice: product.memberPrice,
-      nonmemberPrice: product.nonmemberPrice,
-      quantity: product.quantity,
-      points: product.points,
-      description: product.description,
-    };
+    const department = departments.find((row) => row.name === product.department);
+    if (!department) continue;
 
     const existing = await prisma.product.findFirst({
       where: { tenantId, name: product.name },
       select: { id: true },
     });
+
     if (existing) {
-      await prisma.product.update({ where: { id: existing.id }, data });
+      await prisma.product.update({
+        where: { id: existing.id },
+        data: {
+          memberPrice: product.memberPrice,
+          nonmemberPrice: product.nonmemberPrice,
+          quantity: product.quantity,
+          points: product.points,
+          description: product.description,
+          departmentId: department.id,
+        },
+      });
     } else {
-      await prisma.product.create({ data });
+      await prisma.product.create({
+        data: {
+          tenantId,
+          name: product.name,
+          memberPrice: product.memberPrice,
+          nonmemberPrice: product.nonmemberPrice,
+          quantity: product.quantity,
+          points: product.points,
+          description: product.description,
+          departmentId: department.id,
+        },
+      });
     }
   }
 
   console.log(`  ✔ ${DEMO_PRODUCTS.length} product(s)`);
 }
 
-/**
- * The bundles, with the services each one covers.
- *
- * The links are **replaced** rather than merged, so editing the seed's own list
- * is what the database ends up holding — a service removed from a package in
- * `seed-data.ts` really is removed from it on the next seed.
- */
-async function seedPackages(tenantId: string, services: Map<string, string>): Promise<void> {
-  for (const pack of DEMO_PACKAGES) {
-    const data = {
-      tenantId,
-      name: pack.name,
-      status: "ACTIVE" as const,
-      sessionCount: pack.sessionCount,
-      memberPrice: pack.memberPrice,
-      nonmemberPrice: pack.nonmemberPrice,
-      description: pack.description,
-    };
+async function seedPackages(
+  tenantId: string,
+  services: { id: string; name: string }[],
+): Promise<void> {
+  const serviceByName = new Map(services.map((row) => [row.name, row.id]));
+
+  for (const pkg of DEMO_PACKAGES) {
+    const serviceIds = pkg.services
+      .map((name) => serviceByName.get(name))
+      .filter((id): id is string => id !== undefined);
+
+    if (serviceIds.length === 0) continue;
 
     const existing = await prisma.package.findFirst({
-      where: { tenantId, name: pack.name },
+      where: { tenantId, name: pkg.name },
       select: { id: true },
     });
-    const row = existing
-      ? await prisma.package.update({ where: { id: existing.id }, data, select: { id: true } })
-      : await prisma.package.create({ data, select: { id: true } });
 
-    await prisma.packageService.deleteMany({ where: { packageId: row.id } });
-    const serviceIds = pack.services
-      .map((name) => services.get(name))
-      .filter((id): id is string => id !== undefined);
-    if (serviceIds.length > 0) {
-      await prisma.packageService.createMany({
-        data: serviceIds.map((serviceId) => ({ tenantId, packageId: row.id, serviceId })),
+    const packageId =
+      existing?.id ??
+      (
+        await prisma.package.create({
+          data: {
+            tenantId,
+            name: pkg.name,
+            sessionCount: pkg.sessionCount,
+            memberPrice: pkg.memberPrice,
+            nonmemberPrice: pkg.nonmemberPrice,
+            description: pkg.description,
+          },
+          select: { id: true },
+        })
+      ).id;
+
+    if (existing) {
+      await prisma.package.update({
+        where: { id: packageId },
+        data: {
+          sessionCount: pkg.sessionCount,
+          memberPrice: pkg.memberPrice,
+          nonmemberPrice: pkg.nonmemberPrice,
+          description: pkg.description,
+        },
       });
     }
+
+    // A package holds `{ tenantId, packageId, serviceId }` rows — one per
+    // service it covers. `createMany` with `skipDuplicates` keeps a re-seed
+    // from duplicating the join rows.
+    await prisma.packageService.createMany({
+      data: serviceIds.map((serviceId) => ({ tenantId, packageId, serviceId })),
+      skipDuplicates: true,
+    });
   }
 
   console.log(`  ✔ ${DEMO_PACKAGES.length} package(s)`);
 }
 
-/** Prepaid credit: what the customer pays, and what they get to spend. */
-async function seedValuePackages(tenantId: string, services: Map<string, string>): Promise<void> {
-  for (const pack of DEMO_VALUE_PACKAGES) {
-    const data = {
-      tenantId,
-      name: pack.name,
-      status: "ACTIVE" as const,
-      price: pack.price,
-      credit: pack.credit,
-      description: pack.description,
-    };
+async function seedValuePackages(
+  tenantId: string,
+  services: { id: string; name: string }[],
+): Promise<void> {
+  const serviceByName = new Map(services.map((row) => [row.name, row.id]));
+
+  for (const pkg of DEMO_VALUE_PACKAGES) {
+    const serviceIds = pkg.services
+      .map((name) => serviceByName.get(name))
+      .filter((id): id is string => id !== undefined);
+
+    if (serviceIds.length === 0) continue;
 
     const existing = await prisma.valuePackage.findFirst({
-      where: { tenantId, name: pack.name },
+      where: { tenantId, name: pkg.name },
       select: { id: true },
     });
-    const row = existing
-      ? await prisma.valuePackage.update({ where: { id: existing.id }, data, select: { id: true } })
-      : await prisma.valuePackage.create({ data, select: { id: true } });
 
-    await prisma.valuePackageService.deleteMany({ where: { valuePackageId: row.id } });
-    const serviceIds = pack.services
-      .map((name) => services.get(name))
-      .filter((id): id is string => id !== undefined);
-    if (serviceIds.length > 0) {
-      await prisma.valuePackageService.createMany({
-        data: serviceIds.map((serviceId) => ({ tenantId, valuePackageId: row.id, serviceId })),
+    const valuePackageId =
+      existing?.id ??
+      (
+        await prisma.valuePackage.create({
+          data: {
+            tenantId,
+            name: pkg.name,
+            price: pkg.price,
+            credit: pkg.credit,
+            description: pkg.description,
+          },
+          select: { id: true },
+        })
+      ).id;
+
+    if (existing) {
+      await prisma.valuePackage.update({
+        where: { id: valuePackageId },
+        data: { price: pkg.price, credit: pkg.credit, description: pkg.description },
       });
     }
+
+    await prisma.valuePackageService.createMany({
+      data: serviceIds.map((serviceId) => ({ tenantId, valuePackageId, serviceId })),
+      skipDuplicates: true,
+    });
   }
 
   console.log(`  ✔ ${DEMO_VALUE_PACKAGES.length} value package(s)`);
 }
 
-/** The card templates the salon sells. `GiftCard` has no status column. */
+/**
+ * Gift cards carry no catalog prices beyond what the dataset records, and
+ * `seedData.ts` gives each one a population so the `Balance` screen can show
+ * more than the face value — the same way the welcome email does.
+ */
 async function seedGiftCards(tenantId: string): Promise<void> {
   for (const card of DEMO_GIFT_CARDS) {
-    const data = {
-      tenantId,
-      name: card.name,
-      value: card.value,
-      remark: card.remark,
-      // Null is "never expires", which is what a template means — the expiry a
-      // sold card inherits is decided when one is issued.
-      expiresAt: null,
-    };
-
     const existing = await prisma.giftCard.findFirst({
       where: { tenantId, name: card.name },
       select: { id: true },
     });
+
     if (existing) {
-      await prisma.giftCard.update({ where: { id: existing.id }, data });
+      await prisma.giftCard.update({
+        where: { id: existing.id },
+        data: { value: card.value, expiresAt: null, remark: card.remark ?? null },
+      });
     } else {
-      await prisma.giftCard.create({ data });
+      await prisma.giftCard.create({
+        data: {
+          tenantId,
+          name: card.name,
+          value: card.value,
+          expiresAt: null,
+          remark: card.remark ?? null,
+        },
+      });
     }
   }
 
@@ -467,40 +485,316 @@ async function seedGiftCards(tenantId: string): Promise<void> {
 }
 
 /**
- * The customer book, keyed by the per-tenant email ([ADR 0003]).
+ * The customer book — a seed-only lookup table the bookings and sales join on.
  *
- * `createdAt` is backdated from `createdDaysAgo` so a "new customers this week"
- * figure has something honest to count once reports are built (M3) — a salon
- * whose whole book was created in the same second reads as a bug.
+ * Every row is keyed per tenant by email (`@@unique([tenantId, email])`); a
+ * customer without one is simply not in the demo. The `memberId` column is
+ * carried through so a sale's member-pricing rule (`customer?.memberId != null`)
+ * is exercised exactly as the live flow produces it.
  */
 async function seedCustomers(tenantId: string): Promise<void> {
-  const now = Date.now();
-
   for (const customer of DEMO_CUSTOMERS) {
-    const data = {
-      tenantId,
-      name: customer.name,
-      code: customer.code,
-      memberId: customer.memberId ?? null,
-      email: customer.email,
-      phone: customer.phone,
-      gender: customer.gender,
-      createdAt: new Date(now - customer.createdDaysAgo * 24 * 60 * 60 * 1000),
-    };
-
     await prisma.customer.upsert({
       where: { tenantId_email: { tenantId, email: customer.email } },
-      update: data,
-      create: data,
+      update: {
+        name: customer.name,
+        phone: customer.phone,
+        gender: customer.gender,
+        code: customer.code,
+      },
+      create: {
+        tenantId,
+        name: customer.name,
+        email: customer.email,
+        phone: customer.phone,
+        gender: customer.gender,
+        code: customer.code,
+        memberId: customer.memberId ?? null,
+      },
     });
   }
 
   console.log(`  ✔ ${DEMO_CUSTOMERS.length} customer(s)`);
 }
 
-async function main(): Promise<void> {
-  const users = SEED_MODE === "production" ? [resolveAdmin()] : [resolveAdmin(), ...DEMO_USERS];
+/**
+ * Resolves each demo booking against the rows seeded above and upserts it by its
+ * fixed id, rolling every date forward to the current run.
+ *
+ * Duration comes from the **service row**, not from the dataset: the booking's
+ * length is the catalogue's fact, and a dataset that disagreed with the service
+ * would place blocks the grid draws at the wrong height. `finishedAt` is stamped
+ * for completed history so a re-seed replays "done when it ended" rather than
+ * "done at the moment of seeding".
+ *
+ * `prisma.appointment.upsert` is not covered by the tenant-scope extension
+ * (only single-row CRUD is hooked), so `tenantId` is passed explicitly in the
+ * create — the same shape `seedCustomers` already uses.
+ */
+async function seedAppointments(tenantId: string, now: Date): Promise<void> {
+  const services = await prisma.service.findMany({
+    where: { tenantId },
+    select: { id: true, name: true, durationMinutes: true },
+  });
+  const serviceByName = new Map(services.map((row) => [row.name, row]));
 
+  const emails = [
+    ...new Set(DEMO_APPOINTMENTS.flatMap((row) => [row.staffEmail, row.customerEmail])),
+  ];
+  const [users, customers] = await Promise.all([
+    prisma.user.findMany({ where: { email: { in: emails } }, select: { id: true, email: true } }),
+    prisma.customer.findMany({
+      where: { email: { in: emails } },
+      select: { id: true, email: true },
+    }),
+  ]);
+  const userByEmail = new Map(users.map((row) => [row.email, row.id]));
+  const customerByEmail = new Map(customers.map((row) => [row.email, row.id]));
+
+  // The clash rule runs over exactly the windows the upsert is about to store,
+  // so a dataset edit that would double-book a stylist fails here rather than
+  // rendering two blocks on top of each other on the grid.
+  const windows: ClashWindow[] = DEMO_APPOINTMENTS.map((appointment) => {
+    const service = serviceByName.get(appointment.service);
+    if (!service) {
+      throw new Error(`Demo appointment ${appointment.id}: no service "${appointment.service}".`);
+    }
+    if (!userByEmail.has(appointment.staffEmail)) {
+      throw new Error(`Demo appointment ${appointment.id}: no staff ${appointment.staffEmail}.`);
+    }
+    if (!customerByEmail.has(appointment.customerEmail)) {
+      throw new Error(
+        `Demo appointment ${appointment.id}: no customer ${appointment.customerEmail}.`,
+      );
+    }
+    const duration = service.durationMinutes ?? FALLBACK_DURATION_MINUTES;
+    return {
+      id: appointment.id,
+      staffEmail: appointment.staffEmail,
+      status: appointment.status,
+      startsAt: appointmentWindow(appointment, duration, now).startsAt,
+      endsAt: appointmentWindow(appointment, duration, now).endsAt,
+    };
+  });
+  assertNoAppointmentClash(windows);
+
+  for (const appointment of DEMO_APPOINTMENTS) {
+    const service = serviceByName.get(appointment.service);
+    const staffId = userByEmail.get(appointment.staffEmail);
+    const customerId = customerByEmail.get(appointment.customerEmail);
+    // The checks above already refused a miss; these three guards are for
+    // TypeScript, which cannot know that.
+    if (!service || !staffId || !customerId) continue;
+
+    const duration = service.durationMinutes ?? FALLBACK_DURATION_MINUTES;
+    const { startsAt, endsAt } = appointmentWindow(appointment, duration, now);
+
+    await prisma.appointment.upsert({
+      where: { id: appointment.id },
+      create: {
+        id: appointment.id,
+        tenantId,
+        customerId,
+        staffId,
+        serviceId: service.id,
+        startsAt,
+        endsAt,
+        status: appointment.status,
+        durationMinutes: duration,
+        comment: appointment.comment ?? null,
+        ...(appointment.status === "COMPLETED" ? { finishedAt: endsAt } : {}),
+      },
+      update: {
+        customerId,
+        staffId,
+        serviceId: service.id,
+        startsAt,
+        endsAt,
+        status: appointment.status,
+        durationMinutes: duration,
+        comment: appointment.comment ?? null,
+        finishedAt: appointment.status === "COMPLETED" ? endsAt : null,
+      },
+    });
+  }
+
+  console.log(`  ✔ ${DEMO_APPOINTMENTS.length} appointment(s)`);
+}
+
+/**
+ * Rings the demo sales through the real `createSale`, keyed by Q16's idempotency
+ * key, then moves each `soldAt` back to the moment the dataset describes.
+ *
+ * The tenders are assembled from the dataset's own prices (`demoSaleTotalCents`)
+ * so the remainder tender has a total to take a remainder of — and a fresh
+ * ring-up's reply is then checked against that arithmetic, so the pricing rule
+ * and the dataset cannot drift apart in silence. The write itself is untouched:
+ * prices, the five ledgers, holdings, points and the receipt number are the
+ * service's work, which is the whole reason to seed sales this way rather than
+ * inserting rows. A re-seed finds each sale by its key and only moves the date,
+ * so the receipt numbers stay the ones the first run printed.
+ */
+async function seedSales(tenantId: string, now: Date): Promise<void> {
+  const staffEmails = [
+    ...new Set([
+      ...DEMO_SALES.map((sale) => sale.rangUpByEmail),
+      ...DEMO_SALES.flatMap((sale) =>
+        sale.lines.flatMap((line) => (line.staffEmail ? [line.staffEmail] : [])),
+      ),
+    ]),
+  ];
+  const customerEmails = [
+    ...new Set(DEMO_SALES.flatMap((sale) => (sale.customerEmail ? [sale.customerEmail] : []))),
+  ];
+
+  const [users, customers, services, products, packs, cards] = await Promise.all([
+    prisma.user.findMany({
+      where: { email: { in: staffEmails } },
+      select: { id: true, email: true },
+    }),
+    prisma.customer.findMany({
+      where: { email: { in: customerEmails } },
+      select: { id: true, email: true, memberId: true },
+    }),
+    prisma.service.findMany({ where: { tenantId }, select: { id: true, name: true } }),
+    prisma.product.findMany({ where: { tenantId }, select: { id: true, name: true } }),
+    prisma.package.findMany({ where: { tenantId }, select: { id: true, name: true } }),
+    prisma.giftCard.findMany({ where: { tenantId }, select: { id: true, name: true } }),
+  ]);
+
+  const userByEmail = new Map(users.map((row) => [row.email, row.id]));
+  const customerByEmail = new Map(customers.map((row) => [row.email, row]));
+  // One lookup across the four catalogues a demo line can name, keyed by kind
+  // and name — the same two facts the line carries.
+  const itemId = new Map<string, string>([
+    ...services.map((row) => [`SERVICE:${row.name}`, row.id] as const),
+    ...products.map((row) => [`PRODUCT:${row.name}`, row.id] as const),
+    ...packs.map((row) => [`PACKAGE:${row.name}`, row.id] as const),
+    ...cards.map((row) => [`GIFT_CARD:${row.name}`, row.id] as const),
+  ]);
+
+  let replayed = 0;
+
+  for (const sale of DEMO_SALES) {
+    const rangUpBy = userByEmail.get(sale.rangUpByEmail);
+    if (!rangUpBy) {
+      throw new Error(`Demo sale ${sale.key}: no staff ${sale.rangUpByEmail}.`);
+    }
+
+    const customer = sale.customerEmail ? customerByEmail.get(sale.customerEmail) : undefined;
+    if (sale.customerEmail && !customer) {
+      throw new Error(`Demo sale ${sale.key}: no customer ${sale.customerEmail}.`);
+    }
+
+    const lines = sale.lines.map((line) => {
+      const item = itemId.get(`${line.kind}:${line.name}`);
+      if (!item) {
+        throw new Error(`Demo sale ${sale.key}: no ${line.kind} "${line.name}".`);
+      }
+      const staffId = line.staffEmail ? userByEmail.get(line.staffEmail) : undefined;
+      if (line.staffEmail && !staffId) {
+        throw new Error(`Demo sale ${sale.key}: no staff ${line.staffEmail}.`);
+      }
+      return {
+        itemType: line.kind,
+        itemId: item,
+        quantity: line.quantity,
+        ...(staffId ? { staffId } : {}),
+      };
+    });
+
+    // What the dataset says the cart costs, under the member rule the write
+    // applies too. A member line here must price to the member column there, or
+    // the assertion below fails and the dataset is red.
+    // The same membership test the write applies (`customer?.memberId !=
+    // null` in `createSale`): presence of the reference is the whole rule.
+    const member = customer?.memberId != null;
+    const expectedTotal = demoSaleTotalCents(sale, member);
+    const amounts = tenderAmountsCents(expectedTotal, sale.tenders);
+
+    const existing = await prisma.sale.findFirst({
+      where: { idempotencyKey: sale.key },
+      select: { id: true, soldAt: true },
+    });
+
+    const receipt = await createSale({
+      ...(customer ? { customerId: customer.id } : {}),
+      staffId: rangUpBy,
+      ...(sale.note ? { note: sale.note } : {}),
+      lines,
+      payments: sale.tenders.map((tender, index) => ({
+        method: tender.method,
+        amount: Number(centsToMoney(amounts[index] ?? 0)),
+      })),
+      idempotencyKey: sale.key,
+    });
+
+    if (existing) {
+      replayed += 1;
+    } else {
+      // Fresh ring-up: the server's picture of the cart must agree with the
+      // dataset's arithmetic, so a slipped-up price rule fails the seed rather
+      // than repricing the demo records we never meant to rewrite.
+      const paid = amounts.reduce((sum, amount) => sum + amount, 0);
+      if (toCents(receipt.totalAmount) !== expectedTotal || toCents(receipt.paidAmount) !== paid) {
+        throw new Error(
+          `Demo sale ${sale.key}: the server priced the cart ${receipt.totalAmount} ` +
+            `(paid ${receipt.paidAmount}) but the dataset says ${centsToMoney(expectedTotal)} ` +
+            `(paid ${centsToMoney(paid)}).`,
+        );
+      }
+    }
+
+    // `writeSale` stamps `soldAt` with the moment of the write; the demo's
+    // history is dated, so the date is moved back afterwards. And since the
+    // demonstration is that the figures roll with the years, the roll is
+    // itself idempotent — a re-seed moves it forward again, to the same place.
+    await prisma.sale.update({
+      where: { id: receipt.id, tenantId },
+      data: { soldAt: saleMoment(sale, now) },
+    });
+  }
+
+  console.log(
+    `  ✔ ${DEMO_SALES.length} sale(s) ring through createSale ${replayed === 0 ? "freshly" : "again"} ` +
+      `(${replayed} replayed on re-seed)`,
+  );
+}
+
+/**
+ * Puts each product's stock back to the dataset's figure, after the demo sales
+ * have decremented it.
+ *
+ * `SeedProduct.quantity` is documented as "stock on hand **after** a fresh seed"
+ * — the shelf the screens should show — so the reconcile is what makes that
+ * sentence true once real decrements have run against it.
+ */
+async function reconcileProductStock(tenantId: string): Promise<void> {
+  for (const product of DEMO_PRODUCTS) {
+    const row = await prisma.product.findFirst({
+      where: { tenantId, name: product.name },
+      select: { id: true },
+    });
+    if (!row) continue;
+    await prisma.product.update({ where: { id: row.id }, data: { quantity: product.quantity } });
+  }
+
+  console.log(`  ✔ stock reconciled to the dataset for ${DEMO_PRODUCTS.length} product(s)`);
+}
+
+/*
+ * The demo catalogue, the customer book, the book and the till — development
+ * only. Every function below is **idempotent**: a department is found by its
+ * natural key (`@@unique([tenantId, name])`), a service, product, package, gift
+ * card or value package by `(tenantId, name)` — none of those models has a unique
+ * constraint on the name, so the seed looks one up rather than upserting — and a
+ * customer by its per-tenant email (`@@unique([tenantId, email])`, ADR 0003).
+ * Appointments are upserted by the fixed ids `seed-data.ts` gives them and sales
+ * by Q16's idempotency key. `npm run db:seed` on an existing demo database
+ * therefore refreshes the demo rather than duplicating it.
+ */
+
+async function main(): Promise<void> {
   if (SEED_MODE === "production" && !process.env.ADMIN_PASSWORD) {
     console.warn(
       "  ! ADMIN_PASSWORD was not set — the default development password was used. Change it immediately.",
@@ -509,61 +803,93 @@ async function main(): Promise<void> {
 
   const tenantId = await seedTenant();
 
-  for (const staff of DEMO_STAFF) {
-    // A staff member *is* a `User` row — creating staff creates a login, which
-    // is why every row carries a password here. The update branch deliberately
-    // does **not** touch `passwordHash`: re-seeding refreshes the crew, not the
-    // credentials a developer may have changed since.
-    await prisma.user.upsert({
-      where: { email: staff.email },
-      update: {
-        name: staff.name,
-        globalRole: staff.globalRole,
-        tenantId,
-        disabled: false,
-        disabledAt: null,
-      },
-      create: {
-        email: staff.email,
-        name: staff.name,
-        passwordHash: await bcrypt.hash(staff.password, BCRYPT_ROUNDS),
-        globalRole: staff.globalRole,
-        tenantId,
-      },
-    });
-  }
-
-  console.log(`Seeding ${users.length} user(s) in ${SEED_MODE} mode…`);
-
-  const ownerUserId = await upsertUser(users[0] as SeedUser, tenantId);
-
-  // Claim ownership now that the owner exists. The administrator owns the tenant.
-  await prisma.tenant.update({ where: { id: tenantId }, data: { ownerUserId } });
-
-  for (const user of users.slice(1)) {
-    await upsertUser(user, tenantId);
-  }
-
+  // Platform data first, unscoped (see TENANCY.md §7): the module catalogue
+  // belongs to no tenant, and the till checks entitlements through
+  // `moduleEntitlements` — which reads `isCore` off these rows — before it
+  // rings anything up.
   await runAsPlatform(seedModules);
 
-  if (SEED_MODE === "development") {
-    await runAsPlatform(() => seedEntitlements(tenantId));
+  await runAsTenant(tenantId, async () => {
+    // The crew is `DEMO_STAFF` in development (the administrator, the manager,
+    // the front desk and the three performers) and the single administrator in
+    // production. One list, written once: the update branch deliberately does
+    // **not** touch `passwordHash`, so re-seeding refreshes
+    // the crew without resetting credentials a developer changed since.
+    //
+    // `User` is tenant-scoped, so these queries run inside `runAsTenant` —
+    // the extension throws outside a scope rather than writing unscoped.
+    const crew: SeedUser[] =
+      SEED_MODE === "production"
+        ? [resolveAdmin()]
+        : DEMO_STAFF.map((row) => ({
+            email: row.email,
+            name: row.name,
+            password: row.password,
+            globalRole: row.globalRole,
+          }));
 
-    // The demo catalogue and the customer book. Development only, and idempotent
-    // (see the block above `main`), so re-seeding refreshes the demo rather than
-    // duplicating it. Run inside the tenant scope so the Prisma extension scopes
-    // every write the same way a request would.
-    await runAsTenant(tenantId, async () => {
+    console.log(`Seeding ${crew.length} user(s) in ${SEED_MODE} mode…`);
+
+    for (const member of crew) {
+      const existing = await prisma.user.findUnique({
+        where: { email: member.email },
+        select: { id: true },
+      });
+
+      if (existing) {
+        await prisma.user.update({
+          where: { id: existing.id },
+          data: {
+            name: member.name,
+            globalRole: member.globalRole,
+            tenantId,
+            disabled: false,
+            disabledAt: null,
+          },
+        });
+      } else {
+        await prisma.user.create({
+          data: {
+            email: member.email,
+            name: member.name,
+            passwordHash: await bcrypt.hash(member.password, BCRYPT_ROUNDS),
+            globalRole: member.globalRole,
+            tenantId,
+          },
+        });
+        console.log(`  ✔ ${member.globalRole.padEnd(11)} ${member.email}`);
+      }
+    }
+
+    const owner = await prisma.user.findUnique({
+      where: { email: crew[0]?.email ?? resolveAdmin().email },
+      select: { id: true },
+    });
+    if (!owner) throw new Error("Seed failed: the owner account was not created.");
+
+    // Claim ownership now that the owner exists. The administrator owns the tenant.
+    await prisma.tenant.update({ where: { id: tenantId }, data: { ownerUserId: owner.id } });
+
+    if (SEED_MODE === "development") {
+      await seedEntitlements(tenantId);
       const departments = await seedDepartments(tenantId);
-      await seedStaffDepartments(tenantId, departments);
+      await seedStaffDepartments(tenantId);
       const services = await seedServices(tenantId, departments);
       await seedProducts(tenantId, departments);
       await seedPackages(tenantId, services);
       await seedValuePackages(tenantId, services);
       await seedGiftCards(tenantId);
       await seedCustomers(tenantId);
-    });
-  }
+
+      // The book and the till: both are dated relative to the same instant, so
+      // "today" means the same thing on the calendar, the dashboard and the
+      // sales reports.
+      const now = new Date();
+      await seedAppointments(tenantId, now);
+      await seedSales(tenantId, now);
+      await reconcileProductStock(tenantId);
+    }
+  });
 
   console.log("Seed complete.");
 }
