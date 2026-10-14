@@ -1,8 +1,9 @@
 # Legacy POS behavior — Phase 5 evidence
 
-Read from the Laravel/React checkout on 2026-10-09. This file records what the
-old product actually did; it is evidence for product decisions, not an instruction
-to reproduce its data-loss and accounting behavior unchanged.
+Read from the Laravel/React checkout on 2026-10-09, and re-read on 2026-10-14 from
+the sibling checkout [`LEGACY-MAP.md`](LEGACY-MAP.md) §1 now records. This file
+records what the old product actually did; it is evidence for product decisions, not
+an instruction to reproduce its data-loss and accounting behavior unchanged.
 
 ## Cart persistence
 
@@ -82,3 +83,48 @@ unfinished cart metadata and selected customer, scoped by tenant and user. It do
 not persist tenders or idempotency keys, and the API remains authoritative for
 catalogue prices. Hold/resume, void and discounts remain explicit product
 decisions.
+
+## Verified again on 2026-10-14 — the code paths, with line numbers
+
+Re-read at the sibling checkout for the Q31–Q33 drafts ([`../STATE.md`](../STATE.md)
+§4.3). Everything above still holds; these are the lines that carry it, plus four
+findings the first pass did not have.
+
+**Hold.** `SaleController::payByCash` sets `sale_status = $request->isHoldSale ? 0 : 1`
+and `payment_status = 1` **in both cases** — a held sale is marked paid — allocates
+`sale_id = random_int(100000, 999999)` at insert, and calls
+`insertProduct($sale_id, $product, $request->user(), $request->isHoldSale)`, which
+skips `decrement('quantity')` when holding. `sale_status` is read in exactly **one**
+place in the whole checkout — `front-end/src/pages/user/sale/TodaySale.tsx` and its
+`types/dbTypes.ts` — and in no report, so a held sale counted in legacy's totals
+exactly like a completed one.
+
+**Resume is incoherent, not merely hidden.** `SaleController::update` saves
+`sale_status = 1` _before_ it walks the lines, and the two status tests it then
+performs read that same column: `if ($sale_product->sale->sale_status == 1) { // if
+hold sale skip` in the deleted-items loop, and in the line-edit branch
+`if (… == 1) { quantity = quantity + oldQty − newQty } else { quantity = quantity −
+newQty }`. The "hold" branch is therefore unreachable on that path, and the branch
+that runs _restores_ stock a hold never removed — resuming a hold and editing a line
+**increases** `products.quantity`. `TodaySale.tsx` does ship an Edit control, but it
+sits inside a JSX comment (`{/* … */}`); the live control beside it is Delete. So
+there is no working legacy resume flow to copy, only a payload
+(`GET /api/sale/edit/{sale_id}`, a full eager-loaded sale) and an update that the
+shipped UI never reaches.
+
+**Delete.** `TodaySaleController::destroy` is two statements —
+`Sale::where('id', $sale_id)->where('company_id', …)->first()` then `$sale->delete()` —
+behind a live Delete button, answering `204 delete success`. It does not read
+`sale_status`, so a completed sale is deleted as readily as a hold;
+`sale_products.sale_id` is declared `->onDelete('cascade')`, so the line rows go with
+it, while nothing touches stock, tenders, `customer_points`, `customer_outstandings`,
+commissions or performance rows. No `void`, `deleted_at` or reason column exists in
+any of the 42 migrations.
+
+**Discounts.** The migration set has **no discount column and no tax/VAT column**
+(`grep -rn 'vat\|tax' database/migrations` is empty), so the two client-supplied
+values are the whole mechanism: per-line `newPrice` → `paid_price`, and
+`updatedTotalPayableAmount` → `paid_amount` while `total_amount` keeps the list
+total. The consequence that is easy to miss: `insertEmployeeCommission` is called
+with `$product['newPrice']` — and with the package, value-package and service
+equivalents — so **a legacy discount silently reduced the stylist's commission**.

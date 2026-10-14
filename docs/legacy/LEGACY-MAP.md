@@ -23,6 +23,18 @@ build against it.
 > from `…d7bb4e7911` to `…d7bb4e7918` by 2026-10-09; verify the path if the mount
 > changes again. Q1 was only answerable once the real sibling checkout was found,
 > which is the whole of §6 Q1.
+>
+> **Checked 2026-10-14: that `/media/…` path is not present on this workstation**
+> (`/media` is empty, and an `ls` of the full path answers _No such file or
+> directory_). A checkout answering the same description is a **sibling of this
+> repository**: `/home/tuangpi/Documents/Aridient/Glampros/glampro` — it carries
+> `app/artisan`, `composer.json`, `front-end/`, `database/migrations/` and the
+> `app/Http/Controllers/Api/v1/User/Sale/SaleController.php` that
+> [`API-INVENTORY.md`](API-INVENTORY.md) cites. The 2026-10-14 re-read of the POS
+> behaviour (and the Q31–Q33 drafts in [`../STATE.md`](../STATE.md) §4.3) used that
+> one. Two similarly named directories sit beside it (`Glampro`, `glampro from jame
+git`), so check for the `front-end/` + `database/migrations/` pair rather than the
+> name alone.
 
 | Aspect       | Legacy                             | Rebuild                          |
 | ------------ | ---------------------------------- | -------------------------------- |
