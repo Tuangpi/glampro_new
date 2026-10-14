@@ -29,6 +29,8 @@ import {
   SALE_ITEM_KINDS,
   saleDetailSchema,
   saleItemSearchResultSchema,
+  saleListSchema,
+  type CompleteSaleInput,
   type CreateSaleInput,
   type ModuleCode,
   type SaleDetail,
@@ -37,6 +39,9 @@ import {
   type SaleItemSearchQuery,
   type SaleItemSearchResult,
   type SaleLineInput,
+  type SaleList,
+  type SaleListQuery,
+  type SalePaymentInput,
 } from "@glampro/shared";
 
 import { moduleEntitlements } from "../lib/entitlements.js";
@@ -356,7 +361,10 @@ function notSellable(index: number, name: string, reason: string): never {
  * The path is per refusal, so the cart can mark the row that named a stranger rather
  * than failing with one undirected message.
  */
-async function assertStaffExist(input: CreateSaleInput): Promise<void> {
+async function assertStaffExist(input: {
+  staffId?: string;
+  lines: SaleLineInput[];
+}): Promise<void> {
   const ids = new Set<string>();
   if (input.staffId !== undefined) ids.add(input.staffId);
   for (const line of input.lines) {
@@ -661,6 +669,80 @@ async function priceCart(lines: SaleLineInput[], isMember: boolean): Promise<Pri
 }
 
 /**
+ * The customer a cart is for, and its lines priced from the catalogue.
+ *
+ * Shared by the two writes that carry a whole cart — ringing it up and completing a
+ * hold (ADR 0015) — because the rules are the same and have to stay the same: a
+ * foreign customer is not found rather than forbidden, a granting line needs an owner,
+ * every staff id is read back through the tenant scope, and the price comes from the
+ * catalogue and never from the request. A second copy of this would be a second place
+ * for the two writes to disagree.
+ */
+async function resolveCart(input: {
+  customerId?: string;
+  staffId?: string;
+  lines: SaleLineInput[];
+}): Promise<{ priced: PricedLine[]; customerId: string | null }> {
+  // A foreign customer is not found rather than forbidden: the extension scopes the
+  // lookup, so this cannot tell "no such customer" from "not yours", and must not.
+  const customer = input.customerId
+    ? await prisma.customer.findFirst({
+        where: { id: input.customerId },
+        select: { id: true, memberId: true },
+      })
+    : null;
+  if (input.customerId && !customer) {
+    throw notFound("That customer does not exist.", "CUSTOMER_NOT_FOUND");
+  }
+
+  // A granting line needs an owner, or the credit is issued to nobody. Refused before
+  // anything is written rather than as a foreign-key surprise mid-transaction.
+  if (!customer && input.lines.some((line) => GRANTING_KINDS.has(line.itemType))) {
+    throw badRequest("A package, value package or gift card needs a customer.", [
+      { path: "body.customerId", message: "Required to sell something that grants credit." },
+    ]);
+  }
+
+  // Checked before anything is written, so a cart naming a stranger fails whole rather
+  // than as a foreign-key violation mid-transaction — or, worse, as a link that lands.
+  await assertStaffExist(input);
+
+  // "Is a member" is the membership reference legacy kept as free text
+  // (`customers.member_id`). There is no membership table to join, so the presence of
+  // the reference is the whole rule — inventing a tier model is a product decision this
+  // slice does not get to make.
+  const priced = await priceCart(input.lines, customer?.memberId != null);
+
+  return { priced, customerId: customer?.id ?? null };
+}
+
+/**
+ * What a cart adds up to.
+ *
+ * `outstandingAmount` is a *positive* remainder: overpayment is change given, not a
+ * negative debt, and a customer who hands over a hundred for eighty is not owed twenty.
+ * It is computed for a hold as well, where it is the whole total — a hold has taken no
+ * money — but nothing reads it there, because a hold writes no outstanding row.
+ */
+function totalsOf(priced: PricedLine[], payments: SalePaymentInput[]) {
+  const totalQuantity = priced.reduce((sum, line) => sum + line.input.quantity, 0);
+  const totalAmount = priced.reduce((sum, line) => sum.plus(line.lineTotal), new Prisma.Decimal(0));
+  const paidAmount = payments.reduce(
+    (sum, tender) => sum.plus(tender.amount),
+    new Prisma.Decimal(0),
+  );
+
+  return {
+    totalQuantity,
+    totalAmount,
+    paidAmount,
+    outstandingAmount: Prisma.Decimal.max(totalAmount.minus(paidAmount), 0),
+    paymentStatus: (paidAmount.greaterThanOrEqualTo(totalAmount) ? "PAID" : "UNPAID") as
+      "PAID" | "UNPAID",
+  };
+}
+
+/**
  * Writes the sale and everything that hangs off it, in one transaction.
  *
  * **All of it or none of it.** A sale whose receipt number was taken but whose lines
@@ -672,6 +754,11 @@ async function priceCart(lines: SaleLineInput[], isMember: boolean): Promise<Pri
  * The receipt number is allocated here, from the tenant's own counter (ADR 0011), by
  * an atomic increment. Two tills rung up at the same instant therefore take different
  * numbers, and a rolled-back write gives its number back rather than burning it.
+ *
+ * **A hold takes the other branch** (ADR 0015). The sale row is written `HELD` with a
+ * `null` receipt number and its lines, and the transaction ends there: no counter, no
+ * tenders, no `fillLedgers`. Parking a cart therefore burns no receipt number and moves
+ * no stock, and the draft it leaves behind is the row `completeSale` later rings up.
  */
 async function writeSale(
   tenantId: string,
@@ -679,20 +766,38 @@ async function writeSale(
   priced: PricedLine[],
   customerId: string | null,
 ): Promise<string> {
-  const totalQuantity = priced.reduce((sum, line) => sum + line.input.quantity, 0);
-  const totalAmount = priced.reduce((sum, line) => sum.plus(line.lineTotal), new Prisma.Decimal(0));
-  const paidAmount = input.payments.reduce(
-    (sum, tender) => sum.plus(tender.amount),
-    new Prisma.Decimal(0),
-  );
-
-  // A balance is a *positive* remainder: overpayment is change given, not a negative
-  // debt, and a customer who hands over a hundred for eighty is not owed twenty.
-  const outstandingAmount = Prisma.Decimal.max(totalAmount.minus(paidAmount), 0);
-  const paymentStatus = paidAmount.greaterThanOrEqualTo(totalAmount) ? "PAID" : "UNPAID";
+  const totals = totalsOf(priced, input.payments);
   const soldAt = new Date();
+  // `hold` is optional in the contract, so `=== true` is the whole test: an absent flag
+  // is an ordinary sale, which is what every caller before this slice sends.
+  const hold = input.hold === true;
 
   return prisma.$transaction(async (tx) => {
+    if (hold) {
+      const parked = await tx.sale.create({
+        data: {
+          tenantId,
+          customerId,
+          staffId: input.staffId ?? null,
+          status: "HELD",
+          totalQuantity: totals.totalQuantity,
+          totalAmount: totals.totalAmount,
+          // `UNPAID` is accurate — a hold has taken no money — and it is not a debt: an
+          // outstanding row is only ever written by `fillLedgers`, which a hold never
+          // reaches, and every report reads `status = COMPLETED` (ADR 0015 §4).
+          paidAmount: new Prisma.Decimal(0),
+          paymentStatus: "UNPAID",
+          soldAt,
+          note: input.note ?? null,
+          idempotencyKey: input.idempotencyKey ?? null,
+        },
+        select: { id: true },
+      });
+
+      await writeLines(tx, tenantId, parked.id, priced);
+      return parked.id;
+    }
+
     const { receiptCounter } = await tx.tenant.update({
       where: { id: tenantId },
       data: { receiptCounter: { increment: 1 } },
@@ -716,10 +821,10 @@ async function writeSale(
         staffId: input.staffId ?? null,
         // The till rings a sale up; `HELD` is for a quote the cashier has not confirmed.
         status: "COMPLETED",
-        totalQuantity,
-        totalAmount,
-        paidAmount,
-        paymentStatus,
+        totalQuantity: totals.totalQuantity,
+        totalAmount: totals.totalAmount,
+        paidAmount: totals.paidAmount,
+        paymentStatus: totals.paymentStatus,
         soldAt,
         note: input.note ?? null,
         receiptNumber: receiptCounter,
@@ -728,40 +833,74 @@ async function writeSale(
       select: { id: true },
     });
 
-    // `createMany` rather than a nested `create`: the Prisma extension merges
-    // `tenantId` into the payload it is handed and cannot reach inside a nested write,
-    // which is why every other service links with `deleteMany`/`createMany` too. The
-    // `position` is what puts the lines back in cart order on the receipt.
-    await tx.saleLine.createMany({
-      data: priced.map((line, index) => ({
-        tenantId,
-        saleId: sale.id,
-        itemType: line.item.itemType,
-        itemId: line.item.itemId,
-        // Snapshotted at sale time, so archiving a service keeps the receipt readable.
-        itemName: line.item.itemName,
-        quantity: line.input.quantity,
-        unitPrice: line.item.unitPrice,
-        lineTotal: line.lineTotal,
-        staffId: line.input.staffId ?? null,
-        position: index,
-      })),
-    });
+    await writeLines(tx, tenantId, sale.id, priced);
+    await writePayments(tx, tenantId, sale.id, input.payments);
 
-    // One row per tender, so a split is two rows rather than a string no report can sum.
-    await tx.salePayment.createMany({
-      data: input.payments.map((tender) => ({
-        tenantId,
-        saleId: sale.id,
-        method: tender.method,
-        amount: tender.amount,
-        sessionId: tender.sessionId ?? null,
-      })),
-    });
-
-    await fillLedgers(tx, tenantId, sale.id, customerId, priced, paymentStatus, outstandingAmount);
+    await fillLedgers(
+      tx,
+      tenantId,
+      sale.id,
+      customerId,
+      priced,
+      totals.paymentStatus,
+      totals.outstandingAmount,
+    );
 
     return sale.id;
+  });
+}
+
+/**
+ * One row per line, in cart order.
+ *
+ * `createMany` rather than a nested `create`: the Prisma extension merges `tenantId`
+ * into the payload it is handed and cannot reach inside a nested write, which is why
+ * every other service links with `deleteMany`/`createMany` too. The `position` is what
+ * puts the lines back in cart order on the receipt.
+ *
+ * Shared with `completeSale`, which rewrites the lines of a hold it is ringing up: the
+ * ordering rule is the same one, and it is worth writing once.
+ */
+async function writeLines(
+  tx: SaleTransaction,
+  tenantId: string,
+  saleId: string,
+  priced: PricedLine[],
+): Promise<void> {
+  await tx.saleLine.createMany({
+    data: priced.map((line, index) => ({
+      tenantId,
+      saleId,
+      itemType: line.item.itemType,
+      itemId: line.item.itemId,
+      // Snapshotted at sale time, so archiving a service keeps the receipt readable.
+      itemName: line.item.itemName,
+      quantity: line.input.quantity,
+      unitPrice: line.item.unitPrice,
+      lineTotal: line.lineTotal,
+      staffId: line.input.staffId ?? null,
+      position: index,
+    })),
+  });
+}
+
+/** One row per tender, so a split is two rows rather than a string no report can sum. */
+async function writePayments(
+  tx: SaleTransaction,
+  tenantId: string,
+  saleId: string,
+  payments: SalePaymentInput[],
+): Promise<void> {
+  if (payments.length === 0) return;
+
+  await tx.salePayment.createMany({
+    data: payments.map((tender) => ({
+      tenantId,
+      saleId,
+      method: tender.method,
+      amount: tender.amount,
+      sessionId: tender.sessionId ?? null,
+    })),
   });
 }
 
@@ -1068,6 +1207,10 @@ function findByIdempotencyKey(key: string) {
  *
  * The key is optional because the legacy importer has none to give, and refusing it
  * there would break Phase 9 — an unkeyed write is simply not idempotent.
+ *
+ * `input.hold` parks the cart instead of ringing it up, and the difference begins and
+ * ends at `writeSale`: the customer, the staff and the prices are resolved here either
+ * way, so a hold is refused for exactly the reasons a sale is (ADR 0015).
  */
 export async function createSale(input: CreateSaleInput): Promise<SaleDetail> {
   const tenantId = requireTenantScope();
@@ -1078,37 +1221,8 @@ export async function createSale(input: CreateSaleInput): Promise<SaleDetail> {
     if (replay) return getSale(replay.id);
   }
 
-  // A foreign customer is not found rather than forbidden: the extension scopes the
-  // lookup, so this cannot tell "no such customer" from "not yours", and must not.
-  const customer = input.customerId
-    ? await prisma.customer.findFirst({
-        where: { id: input.customerId },
-        select: { id: true, memberId: true },
-      })
-    : null;
-  if (input.customerId && !customer) {
-    throw notFound("That customer does not exist.", "CUSTOMER_NOT_FOUND");
-  }
+  const { priced, customerId } = await resolveCart(input);
 
-  // A granting line needs an owner, or the credit is issued to nobody. Refused before
-  // anything is written rather than as a foreign-key surprise mid-transaction.
-  if (!customer && input.lines.some((line) => GRANTING_KINDS.has(line.itemType))) {
-    throw badRequest("A package, value package or gift card needs a customer.", [
-      { path: "body.customerId", message: "Required to sell something that grants credit." },
-    ]);
-  }
-
-  // Checked before anything is written, so a cart naming a stranger fails whole rather
-  // than as a foreign-key violation mid-transaction — or, worse, as a link that lands.
-  await assertStaffExist(input);
-
-  // "Is a member" is the membership reference legacy kept as free text
-  // (`customers.member_id`). There is no membership table to join, so the presence of
-  // the reference is the whole rule — inventing a tier model is a product decision this
-  // slice does not get to make.
-  const priced = await priceCart(input.lines, customer?.memberId != null);
-
-  const customerId = customer?.id ?? null;
   try {
     return await getSale(await writeSale(tenantId, input, priced, customerId));
   } catch (error) {
@@ -1119,5 +1233,188 @@ export async function createSale(input: CreateSaleInput): Promise<SaleDetail> {
       if (winner) return getSale(winner.id);
     }
     throw error;
+  }
+}
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Hold, resume and discard (Phase 5g)
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/**
+ * `GET /api/sales` — the till's sale list, which today is the parked carts.
+ *
+ * Newest first, capped and unpaged: this is the workbench a cashier scans for the cart
+ * they parked, not a history screen (`MAX_SALE_LIST` holds the reasoning). `lineCount`
+ * is the relation's own count rather than a second read, so the number the list draws
+ * and the number of rows a resumed cart draws come from one query.
+ *
+ * `status` arrives already defaulted to `HELD` by the contract, so "no filter" cannot
+ * mean "everything" by accident.
+ */
+export async function listSales(query: SaleListQuery): Promise<SaleList> {
+  const rows = await prisma.sale.findMany({
+    where: { status: query.status },
+    select: {
+      id: true,
+      receiptNumber: true,
+      status: true,
+      soldAt: true,
+      customerId: true,
+      customer: { select: { name: true } },
+      staffId: true,
+      staff: { select: { name: true } },
+      note: true,
+      totalQuantity: true,
+      totalAmount: true,
+      _count: { select: { lines: true } },
+    },
+    // `id` breaks ties, so two carts parked in the same millisecond still have a stable
+    // order and the list does not shuffle under the cashier's finger.
+    orderBy: [{ soldAt: "desc" }, { id: "desc" }],
+    take: query.limit,
+  });
+
+  // Parsed once for the whole answer, so a column this reader left out is caught here
+  // rather than reaching the browser outside its contract (AGENTS.md rule 6).
+  return saleListSchema.parse({
+    items: rows.map((row) => ({
+      id: row.id,
+      receiptNumber: row.receiptNumber,
+      status: row.status,
+      soldAt: row.soldAt.toISOString(),
+      customerId: row.customerId,
+      customerName: row.customer?.name ?? null,
+      staffId: row.staffId,
+      staffName: row.staff?.name ?? null,
+      note: row.note,
+      lineCount: row._count.lines,
+      totalQuantity: row.totalQuantity,
+      totalAmount: amount(row.totalAmount),
+    })),
+  });
+}
+
+/**
+ * `POST /api/sales/:id/complete` — rings up a cart that was parked (ADR 0015).
+ *
+ * The customer, the staff and the prices are resolved by the ordinary `resolveCart`, so
+ * a hold is completed under exactly the rules it would have been rung up under. What is
+ * *not* ordinary is where the money goes:
+ *
+ * - The hold's line rows are **deleted and rewritten**. The cart may have been edited
+ *   between the resume and the payment, and a draft nobody has printed is not history —
+ *   so the receipt is the cart as it was rung up, priced from the catalogue now.
+ * - `soldAt` moves to this moment, because that is when the sale happened: the reports
+ *   window on `soldAt`, and a cart parked yesterday must not land in yesterday's takings.
+ * - The receipt number is allocated **after** the guard below, so a completion that
+ *   loses a race does not burn one.
+ *
+ * A sale that is already `COMPLETED` returns its own receipt rather than writing a
+ * second one, which is what makes a double-tap safe without an idempotency key (see
+ * `completeSaleSchema`).
+ */
+export async function completeSale(saleId: string, input: CompleteSaleInput): Promise<SaleDetail> {
+  const tenantId = requireTenantScope();
+
+  const held = await prisma.sale.findFirst({
+    where: { id: saleId },
+    select: { id: true, status: true, staffId: true },
+  });
+  if (!held) throw notFound("That sale does not exist.", "SALE_NOT_FOUND");
+
+  // A sequential double-tap — the common case — is answered here, from the row itself.
+  if (held.status === "COMPLETED") return getSale(held.id);
+  if (held.status === "VOID") {
+    throw conflict("This sale was voided, so it cannot be completed.", "SALE_ALREADY_VOID");
+  }
+
+  const { priced, customerId } = await resolveCart(input);
+  const totals = totalsOf(priced, input.payments);
+  const soldAt = new Date();
+  // Whoever completes the sale rang it up, so the till's signed-in cashier wins. The
+  // holder is the fallback for a caller with no principal of its own (a service test).
+  const staffId = input.staffId ?? held.staffId;
+
+  await prisma.$transaction(async (tx) => {
+    // The guard comes **first**, before the counter moves: only one till may take a
+    // hold, and a loser has to give its number back rather than burn it. It is the same
+    // count-checked update `fillLedgers` puts on stock, applied to a status.
+    const taken = await tx.sale.updateMany({
+      where: { id: held.id, status: "HELD" },
+      data: {
+        customerId,
+        staffId,
+        status: "COMPLETED",
+        totalQuantity: totals.totalQuantity,
+        totalAmount: totals.totalAmount,
+        paidAmount: totals.paidAmount,
+        paymentStatus: totals.paymentStatus,
+        soldAt,
+        note: input.note ?? null,
+      },
+    });
+    if (taken.count === 0) {
+      // A concurrent completion took the row. The message says what happened rather than
+      // reporting success on a write that did not land.
+      throw conflict("This cart has already been rung up.", "HOLD_ALREADY_COMPLETED");
+    }
+
+    const { receiptCounter } = await tx.tenant.update({
+      where: { id: tenantId },
+      data: { receiptCounter: { increment: 1 } },
+      select: { receiptCounter: true },
+    });
+    if (receiptCounter > MAX_RECEIPT_NUMBER) {
+      throw conflict(
+        "This salon has used every available receipt number. Please contact your provider.",
+        "RECEIPT_NUMBER_EXHAUSTED",
+      );
+    }
+
+    await tx.sale.update({ where: { id: held.id }, data: { receiptNumber: receiptCounter } });
+
+    // Rewritten, not read back: the resume may have edited the cart, and `position`
+    // starts again at zero so the receipt reprints it in cart order.
+    await tx.saleLine.deleteMany({ where: { saleId: held.id } });
+    await writeLines(tx, tenantId, held.id, priced);
+    await writePayments(tx, tenantId, held.id, input.payments);
+
+    await fillLedgers(
+      tx,
+      tenantId,
+      held.id,
+      customerId,
+      priced,
+      totals.paymentStatus,
+      totals.outstandingAmount,
+    );
+  });
+
+  return getSale(held.id);
+}
+
+/**
+ * `DELETE /api/sales/:id` — abandons a parked cart (ADR 0015).
+ *
+ * A hold wrote no ledger and holds no receipt number, so there is nothing to reverse and
+ * the row goes for real: a soft delete would put abandoned carts and voided sales in one
+ * bucket. `SaleLine` cascades with it, so the draft leaves nothing behind.
+ *
+ * A sale that is no longer held is **refused** rather than deleted — deleting a receipt
+ * is the thing the void exists to prevent — and the count-checked delete is also what
+ * makes two tills discarding one hold safe: the second matches nothing.
+ */
+export async function discardHold(saleId: string): Promise<void> {
+  const held = await prisma.sale.findFirst({ where: { id: saleId }, select: { id: true } });
+  if (!held) throw notFound("That sale does not exist.", "SALE_NOT_FOUND");
+
+  const removed = await prisma.sale.deleteMany({ where: { id: held.id, status: "HELD" } });
+  if (removed.count === 0) {
+    throw conflict(
+      "Only a cart that is still held can be discarded. A sale that was rung up is voided instead.",
+      "SALE_NOT_HELD",
+    );
   }
 }

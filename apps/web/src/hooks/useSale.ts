@@ -3,7 +3,9 @@
  *
  * No new contract: the search query and the write reuse `saleItemSearchQuerySchema`
  * and `createSaleSchema` from `@glampro/shared`, so everything below is shaped by
- * what those two schemas already say.
+ * what those two schemas already say. The hold flow at the bottom reuses
+ * `createSaleSchema`'s `hold` flag, `completeSaleSchema` and `saleListSchema`, so a
+ * parked cart is described in exactly the words the API accepts (ADR 0015).
  *
  * The open cart lives in the TanStack Query cache under
  * `queryKeys.sale.openCart(identity)` rather than in a context. The rail badge and the
@@ -20,22 +22,25 @@
  * there is for a value package or a gift card. A cart that froze the price at
  * add time would disagree with the receipt the server writes.
  */
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import {
   DEFAULT_SALE_ITEM_LIMIT,
   MAX_SALE_LINES,
-  type CustomerSummary,
+  type CompleteSaleInput,
   type CreateSaleInput,
+  type CustomerDetail,
+  type CustomerSummary,
   type SaleDetail,
   type SaleItem,
   type SaleItemKind,
   type SaleItemSearchResult,
   type SaleLineInput,
+  type SaleList,
 } from "@glampro/shared";
 
 import { queryKeys } from "@/constants/queryKeys";
 import { useAuth } from "@/contexts/AuthContext";
-import { get, getPaginated, post } from "@/lib/api";
+import { del, get, getPaginated, post } from "@/lib/api";
 import {
   clearSaleDraft,
   readSaleDraft,
@@ -191,6 +196,28 @@ export function toSaleLineInputs(lines: CartLine[]): SaleLineInput[] {
   }));
 }
 
+/**
+ * A parked cart, back in the till.
+ *
+ * `price` is the figure the hold was parked at and `memberPrice` is `null`, because a
+ * stored line carries **one** price and not the catalogue's member/non-member pair.
+ * Inventing the second here would be the browser naming a price, so a resumed line
+ * draws the quote it was parked with and the server re-prices every line from the
+ * catalogue when the sale is finally rung up (`completeSale`). The receipt is the
+ * figure that counts, and it is not this one.
+ */
+export function cartLinesFrom(sale: SaleDetail): CartLine[] {
+  return sale.lines.map((line) => ({
+    itemType: line.itemType,
+    itemId: line.itemId,
+    name: line.itemName,
+    quantity: line.quantity,
+    price: line.unitPrice,
+    memberPrice: null,
+    ...(line.staffId ? { staffId: line.staffId } : {}),
+  }));
+}
+
 export interface SaleItemFilters {
   search?: string;
   kind?: SaleItemKind;
@@ -249,6 +276,8 @@ export interface SaleCart {
   setQuantity: (key: string, quantity: number) => void;
   setStaff: (key: string, staffId: string | undefined) => void;
   removeLine: (key: string) => void;
+  /** Replaces the whole cart at once — what picking up a parked cart does. */
+  setLines: (lines: CartLine[]) => void;
   clearCart: () => void;
 }
 
@@ -299,6 +328,9 @@ export function useSaleCart(): SaleCart {
     removeLine: (key) => {
       update((lines) => removeCartLine(lines, key));
     },
+    setLines: (lines) => {
+      update(() => lines);
+    },
     clearCart: () => {
       update(() => []);
     },
@@ -323,11 +355,140 @@ export function useCreateSale() {
   return useMutation({
     mutationFn: (input: CreateSaleInput) => post<SaleDetail>("/sales", input),
     onSuccess: () => {
-      queryClient.setQueryData<CartLine[]>(queryKeys.sale.openCart(identity ?? "anonymous"), []);
-      clearSaleDraft(identity);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.sale.items() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.products.count() });
+      invalidateAfterSale(queryClient, identity, false);
+    },
+  });
+}
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Hold, resume and discard (Phase 5g)
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/**
+ * What a completed write does to the cache.
+ *
+ * The cart is spent, so it empties and its browser draft goes with it. The server-backed
+ * views a sale moves are refetched: the item grid (stock fell) and the catalogue's list
+ * and low-stock count. Customer aggregates are not — a completed sale writes points and
+ * outstandings no screen reads yet, so there is nothing to refresh.
+ *
+ * `fromHold` adds the hold list, because a cart that was *parked* has to leave it. A
+ * plain sale passes `false` rather than refetching a list it cannot have changed.
+ */
+function invalidateAfterSale(
+  queryClient: QueryClient,
+  identity: string | null,
+  fromHold: boolean,
+): void {
+  queryClient.setQueryData<CartLine[]>(queryKeys.sale.openCart(identity ?? "anonymous"), []);
+  clearSaleDraft(identity);
+  void queryClient.invalidateQueries({ queryKey: queryKeys.sale.items() });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.products.count() });
+  if (fromHold) void queryClient.invalidateQueries({ queryKey: queryKeys.sale.holds() });
+}
+
+/**
+ * The salon's parked carts — `GET /api/sales?status=HELD`.
+ *
+ * Tenant-wide rather than per-user, because that is the point of a shared hold: a
+ * colleague has to be able to finish the cart somebody else parked (ADR 0015).
+ */
+export function useHeldSales() {
+  return useQuery({
+    queryKey: queryKeys.sale.holds(),
+    queryFn: () => get<SaleList>("/sales", { status: "HELD" }),
+  });
+}
+
+/**
+ * The cart a hold posts: the same lines and no money anywhere.
+ *
+ * `payments` and `idempotencyKey` are dropped from the type rather than merely left
+ * empty, because the API refuses a hold that carries a tender — money changing hands is
+ * what completion *is* — and a hook that could express one would be a hook that could
+ * post a cart the server rejects.
+ */
+export type HoldSaleInput = Omit<CreateSaleInput, "hold" | "idempotencyKey" | "payments">;
+
+/**
+ * Parks the cart: `POST /api/sales` with `hold`.
+ *
+ * The server writes the draft — no receipt number, no tender, no ledger row — and the
+ * cart empties here, because it is a row now and every till can see it (ADR 0015).
+ */
+export function useHoldSale() {
+  const queryClient = useQueryClient();
+  const { tenant, user } = useAuth();
+  const identity = tenant && user ? saleDraftIdentity(tenant.id, user.id) : null;
+
+  return useMutation({
+    mutationFn: (input: HoldSaleInput) => post<SaleDetail>("/sales", { ...input, hold: true }),
+    onSuccess: () => {
+      invalidateAfterSale(queryClient, identity, true);
+    },
+  });
+}
+
+/**
+ * Picks a parked cart up: the hold's lines and its customer, ready to be edited and
+ * rung up.
+ *
+ * Two reads rather than one, and deliberately. The hold list answers with a **summary** —
+ * no lines — so that fifty parked carts are not fifty carts' worth of rows in one
+ * response, and the customer row comes with it because `isMember` is read off
+ * `Customer.memberId`: a cart priced as a walk-in and then posted for a member would
+ * show the cashier the wrong figures on the way to the same receipt.
+ */
+export function useResumeHold() {
+  return useMutation({
+    mutationFn: async (saleId: string) => {
+      const sale = await get<SaleDetail>(`/sales/${saleId}`);
+      const customer = sale.customerId
+        ? await get<CustomerDetail>(`/customers/${sale.customerId}`)
+        : null;
+      return { sale, customer };
+    },
+  });
+}
+
+/**
+ * Rings a parked cart up: `POST /api/sales/:id/complete`.
+ *
+ * Not a new sale — the same row changes state, so the receipt that comes back carries
+ * the id the hold already had. The cart empties with it, because the sale has consumed
+ * it, and the hold list is refetched because the row has just left it.
+ */
+export function useCompleteSale() {
+  const queryClient = useQueryClient();
+  const { tenant, user } = useAuth();
+  const identity = tenant && user ? saleDraftIdentity(tenant.id, user.id) : null;
+
+  return useMutation({
+    mutationFn: ({ saleId, input }: { saleId: string; input: CompleteSaleInput }) =>
+      post<SaleDetail>(`/sales/${saleId}/complete`, input),
+    onSuccess: () => {
+      invalidateAfterSale(queryClient, identity, true);
+    },
+  });
+}
+
+/**
+ * Abandons a parked cart.
+ *
+ * A hold is the only sale the API will delete: it wrote no ledger and holds no receipt
+ * number, so there is nothing to reverse. A sale that was rung up is refused (409) and
+ * is voided instead, which Phase 5h adds.
+ */
+export function useDiscardHold() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (saleId: string) => del<{ id: string }>(`/sales/${saleId}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sale.holds() });
     },
   });
 }

@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { DEFAULT_SALE_ITEM_LIMIT, MAX_SALE_ITEM_LIMIT } from "../constants.js";
-import { SALE_ITEM_KINDS, saleItemSchema, saleItemSearchQuerySchema } from "./sales.js";
+import { DEFAULT_SALE_ITEM_LIMIT, MAX_SALE_ITEM_LIMIT, MAX_SALE_LIST } from "../constants.js";
+import {
+  SALE_ITEM_KINDS,
+  completeSaleSchema,
+  createSaleSchema,
+  saleItemSchema,
+  saleItemSearchQuerySchema,
+  saleListQuerySchema,
+  saleSummarySchema,
+} from "./sales.js";
 
 /** The fields every kind carries, so each case below only states what differs. */
 const base = { id: "item-1", name: "Aloha", price: "10.00", memberPrice: null };
@@ -109,5 +117,137 @@ describe("saleItemSchema", () => {
       saleItemSchema.safeParse({ ...withoutPrice, kind: "GIFT_CARD", expiresAt: null }).success,
       false,
     );
+  });
+});
+
+/** The smallest accepted cart: one line, and no tender. */
+const cart = { lines: [{ itemType: "SERVICE", itemId: "s1", quantity: 1 }] };
+
+describe("createSaleSchema", () => {
+  it("defaults the tenders rather than requiring them, and leaves an ordinary sale unflagged", () => {
+    const parsed = createSaleSchema.parse(cart);
+
+    assert.deepEqual(parsed.payments, []);
+    // `hold` absent is an ordinary sale, which is what every caller before Phase 5g
+    // sends — so the flag has to stay optional rather than defaulted to `false` in a
+    // way that would make it a required field of `CreateSaleInput`.
+    assert.equal(parsed.hold, undefined);
+  });
+
+  it("parks a cart when `hold` is set, with no tender to park", () => {
+    const parsed = createSaleSchema.parse({ ...cart, hold: true });
+
+    assert.equal(parsed.hold, true);
+    assert.deepEqual(parsed.payments, []);
+  });
+
+  it("refuses a hold that carries a payment, on the tender field", () => {
+    const result = createSaleSchema.safeParse({
+      ...cart,
+      hold: true,
+      payments: [{ method: "CASH", amount: 80 }],
+    });
+
+    assert.equal(result.success, false);
+    // The path is what puts the message on the payment control rather than in a
+    // banner: money changing hands is what completion *is* (ADR 0015).
+    assert.deepEqual(
+      result.success ? [] : result.error.issues.map((issue) => issue.path.join(".")),
+      ["payments"],
+    );
+  });
+
+  it("still takes a payment on an ordinary sale, so the rule is about the hold", () => {
+    const parsed = createSaleSchema.parse({
+      ...cart,
+      payments: [{ method: "CASH", amount: 80 }],
+    });
+
+    assert.equal(parsed.payments.length, 1);
+  });
+});
+
+describe("completeSaleSchema", () => {
+  it("is the cart without a hold flag, because completing is what a hold is for", () => {
+    // The flag is not merely ignored — it is not part of the shape at all, so a client
+    // cannot hand a completion a mode it does not have. `saleBodySchema` is a plain
+    // object, which is what makes `.shape` readable here.
+    assert.equal("hold" in completeSaleSchema.shape, false);
+    assert.equal("idempotencyKey" in completeSaleSchema.shape, false);
+  });
+
+  it("accepts the cart a resume posts: lines, tenders and the customer", () => {
+    const parsed = completeSaleSchema.parse({
+      customerId: "c1",
+      lines: [
+        { itemType: "SERVICE", itemId: "s1", quantity: 2, staffId: "u1" },
+        { itemType: "PRODUCT", itemId: "p1", quantity: 1 },
+      ],
+      payments: [
+        { method: "CASH", amount: 100 },
+        { method: "CARD", amount: 20 },
+      ],
+    });
+
+    assert.equal(parsed.lines.length, 2);
+    assert.equal(parsed.payments.length, 2, "a split is two rows, as on the creating write");
+  });
+});
+
+describe("saleListQuerySchema", () => {
+  it("defaults to the parked carts, so asking for nothing is not asking for everything", () => {
+    const parsed = saleListQuerySchema.parse({});
+
+    assert.equal(parsed.status, "HELD");
+    assert.equal(parsed.limit, MAX_SALE_LIST);
+  });
+
+  it("coerces a limit that arrived as a query string and refuses one above the ceiling", () => {
+    assert.equal(saleListQuerySchema.parse({ limit: "10" }).limit, 10);
+    assert.equal(
+      saleListQuerySchema.safeParse({ limit: String(MAX_SALE_LIST + 1) }).success,
+      false,
+    );
+  });
+
+  it("refuses a status it does not know rather than widening to every sale", () => {
+    assert.equal(saleListQuerySchema.safeParse({ status: "DELETED" }).success, false);
+    for (const status of ["HELD", "COMPLETED", "VOID"]) {
+      assert.equal(saleListQuerySchema.safeParse({ status }).success, true, status);
+    }
+  });
+});
+
+describe("saleSummarySchema", () => {
+  /** A parked cart, which is the row this shape exists for. */
+  const held = {
+    id: "sale-1",
+    receiptNumber: null,
+    status: "HELD",
+    soldAt: "2026-03-04T10:15:00.000Z",
+    customerId: null,
+    customerName: null,
+    staffId: "u1",
+    staffName: "Ava Owner",
+    note: null,
+    lineCount: 2,
+    totalQuantity: 3,
+    totalAmount: "80.00",
+  };
+
+  it("carries a held cart with no receipt number, which is the whole point", () => {
+    assert.equal(saleSummarySchema.parse(held).receiptNumber, null);
+  });
+
+  it("carries the number once the sale is rung up", () => {
+    const rung = saleSummarySchema.parse({ ...held, status: "COMPLETED", receiptNumber: 1042 });
+
+    assert.equal(rung.receiptNumber, 1042);
+  });
+
+  it("refuses a receipt number below the sequence's first value", () => {
+    // `0` is not a number this salon ever prints, so accepting it would be accepting a
+    // row no receipt can explain.
+    assert.equal(saleSummarySchema.safeParse({ ...held, receiptNumber: 0 }).success, false);
   });
 });

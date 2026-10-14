@@ -272,11 +272,14 @@ async function request(method: "GET", path: string, accessToken?: string): Promi
  *
  * `token` is separate from `body` so the "not signed in" case can post a valid body with
  * no token — otherwise a 401 and a 422 would be indistinguishable.
+ *
+ * `body` is optional because `DELETE` carries none: `JSON.stringify(undefined)` is
+ * `undefined`, which `fetch` sends as no body at all.
  */
 async function send(
-  method: "POST" | "PATCH",
+  method: "POST" | "PATCH" | "DELETE",
   path: string,
-  body: unknown,
+  body?: unknown,
   accessToken?: string,
 ): Promise<Response> {
   return fetch(`${baseUrl}${path}`, {
@@ -285,7 +288,104 @@ async function send(
       "content-type": "application/json",
       ...(accessToken ? { authorization: `Bearer ${accessToken}` } : {}),
     },
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+/**
+ * One row of the sale list, as much of it as these tests read.
+ *
+ * Deliberately a second interface rather than a slice of `ReceiptBody`: the list answers
+ * with a summary and no lines, and a test that reused the receipt's type would compile
+ * while asserting nothing about that difference.
+ */
+interface SaleSummaryBody {
+  id: string;
+  receiptNumber: number | null;
+  status: string;
+  customerName: string | null;
+  staffId: string | null;
+  staffName: string | null;
+  lineCount: number;
+  totalQuantity: number;
+  totalAmount: string;
+}
+
+/**
+ * A cart that touches no stock: one cut, credited to a stylist, and no payment.
+ *
+ * `staffId` is what makes the ledger half of the hold tests observable — performance is
+ * written per attributed line — and the line carries no product, so a hold test cannot
+ * fail because an earlier test in this file ate the shampoo.
+ */
+async function holdBody(staffId?: string): Promise<Record<string, unknown>> {
+  return {
+    hold: true,
+    lines: [
+      {
+        itemType: "SERVICE",
+        itemId: await seededIdOf("SERVICE"),
+        quantity: 1,
+        ...(staffId === undefined ? {} : { staffId }),
+      },
+    ],
+  };
+}
+
+/** The lines `holdBody` parked, as the completion re-sends them. */
+async function completeBody(staffId?: string): Promise<Record<string, unknown>> {
+  const { lines } = await holdBody(staffId);
+  return { lines, payments: [{ method: "CASH", amount: 50 }] };
+}
+
+/**
+ * A product with exactly the stock the test needs.
+ *
+ * The suite's own shampoo is deliberately small (3) and the write tests above are eating
+ * it, so a stock assertion against that row would be an assertion about test order. This
+ * one is the hold's own evidence; `purge` clears it with the rest of the salon's catalogue.
+ */
+async function stockProduct(name: string, quantity: number): Promise<string> {
+  const row = await runAsPlatform(() =>
+    prisma.product.create({
+      data: {
+        tenantId: TENANT_A,
+        name,
+        memberPrice: "10.00",
+        nonmemberPrice: "10.00",
+        quantity,
+      },
+      select: { id: true },
+    }),
+  );
+  return row.id;
+}
+
+/** Stock on hand, read outside any tenant scope so the assertion is about the row. */
+async function stockOf(productId: string): Promise<number> {
+  const row = await runAsPlatform(() =>
+    prisma.product.findUniqueOrThrow({ where: { id: productId }, select: { quantity: true } }),
+  );
+  return row.quantity;
+}
+
+/** A salon's receipt counter, which a hold must leave where it found it. */
+async function receiptCounter(): Promise<number> {
+  const row = await runAsPlatform(() =>
+    prisma.tenant.findUniqueOrThrow({ where: { id: TENANT_A }, select: { receiptCounter: true } }),
+  );
+  return row.receiptCounter;
+}
+
+/** How many rows one sale left in one ledger table, counted for this suite's salon. */
+function ledgerRowsFor(saleId: string) {
+  return runAsPlatform(async () => {
+    const where = { tenantId: TENANT_A, saleId };
+    return Promise.all([
+      prisma.employeePerformance.count({ where }),
+      prisma.customerPoint.count({ where }),
+      prisma.customerOutstanding.count({ where }),
+    ]);
   });
 }
 
@@ -561,6 +661,231 @@ describe(
           prisma.tenant.update({ where: { id: TENANT_A }, data: { status: "ACTIVE" } }),
         );
       }
+    });
+
+    /*
+     * ───────────────────────────────────────────────────────────────────────────
+     * Hold, resume and discard (Phase 5g, ADR 0015)
+     * ───────────────────────────────────────────────────────────────────────────
+     *
+     * The assertions that matter are the ones that separate a draft from a sale: a hold
+     * spends no receipt number and writes no ledger row, and completion is what allocates
+     * both. A test that only checked "POST with hold returns 201" would pass with the
+     * whole distinction gone.
+     */
+    describe("parking a cart and picking it up again", () => {
+      /** The cart the tests below pick up, parked by the first of them. */
+      let parked: ReceiptBody | undefined;
+
+      it("parks a cart without taking a receipt number, a tender or a ledger row", async () => {
+        const before = await receiptCounter();
+
+        const response = await send("POST", "/api/sales", await holdBody(ownerId), token);
+        assert.equal(response.status, 201);
+
+        parked = await dataOf<ReceiptBody>(response);
+        assert.equal(parked.status, "HELD");
+        assert.equal(
+          parked.receiptNumber,
+          null,
+          "a hold must not spend a number the salon never printed",
+        );
+        assert.equal(parked.paidAmount, "0.00");
+        assert.equal(parked.totalAmount, "50.00", "the non-member price of one cut");
+        assert.deepEqual(parked.payments, [], "a hold takes no money");
+        assert.equal(parked.lines.length, 1);
+
+        assert.equal(
+          await receiptCounter(),
+          before,
+          "parking a cart must not move the salon's receipt sequence",
+        );
+        // The ledger is what a void would have to reverse, so at hold time there is
+        // nothing to reverse — which is the point of the whole decision.
+        assert.deepEqual(
+          await ledgerRowsFor(parked.id),
+          [0, 0, 0],
+          "performance, points and outstanding are filled at completion, not at hold",
+        );
+      });
+
+      it("lists the salon's parked carts, and nothing else, by default", async () => {
+        const response = await request("GET", "/api/sales", token);
+        assert.equal(response.status, 200);
+
+        const body = await dataOf<{ items: SaleSummaryBody[] }>(response);
+        const row = body.items.find((item) => item.id === parked?.id);
+        assert.ok(row, `the cart parked above must be in the list, got ${JSON.stringify(body)}`);
+        assert.equal(row.status, "HELD");
+        assert.equal(row.receiptNumber, null);
+        assert.equal(row.lineCount, 1, "one line, which is one row the resumed cart draws");
+        assert.equal(row.totalQuantity, 1);
+        assert.equal(row.totalAmount, "50.00");
+        assert.equal(row.staffId, ownerId, "who parked it, so a colleague knows whose cart it is");
+
+        // `?status=` defaults to HELD in the contract rather than to "everything", so a
+        // till that asks for nothing cannot be handed the salon's whole history.
+        assert.ok(body.items.every((item) => item.status === "HELD"));
+      });
+
+      it("refuses a status it does not know rather than widening to every sale", async () => {
+        const response = await request("GET", "/api/sales?status=DELETED", token);
+
+        assert.equal(response.status, 422);
+        assert.equal((await envelope(response)).code, "VALIDATION_FAILED");
+      });
+
+      it("rings the parked cart up: the number and the ledger arrive together", async () => {
+        const response = await send(
+          "POST",
+          `/api/sales/${parked?.id}/complete`,
+          await completeBody(ownerId),
+          token,
+        );
+        assert.equal(response.status, 200);
+
+        const receipt = await dataOf<ReceiptBody>(response);
+        assert.equal(receipt.id, parked?.id, "completion writes the hold, it does not add a sale");
+        assert.equal(receipt.status, "COMPLETED");
+        assert.equal(receipt.paymentStatus, "PAID");
+        assert.equal(receipt.paidAmount, "50.00");
+        assert.equal(receipt.outstandingAmount, "0.00");
+        assert.equal(typeof receipt.receiptNumber, "number");
+        assert.ok((receipt.receiptNumber ?? 0) >= 1);
+        assert.equal(receipt.staffId, ownerId);
+        assert.deepEqual(
+          receipt.lines.map((line) => [line.itemName, line.lineTotal]),
+          [["Aloha Cut", "50.00"]],
+          "the receipt holds the cart that was rung up, re-priced from the catalogue",
+        );
+        assert.deepEqual(receipt.payments, [{ method: "CASH", amount: "50.00", sessionId: null }]);
+
+        // The performance row is the one ledger an attributed line writes, and it exists
+        // only now.
+        assert.deepEqual(await ledgerRowsFor(receipt.id), [1, 0, 0]);
+        const performance = await runAsPlatform(() =>
+          prisma.employeePerformance.findFirstOrThrow({
+            where: { tenantId: TENANT_A, saleId: receipt.id },
+            select: { userId: true, amount: true },
+          }),
+        );
+        assert.equal(performance.userId, ownerId);
+        assert.equal(performance.amount.toFixed(2), "50.00");
+      });
+    });
+
+    /** Parks one cart, for the tests that are about completing or discarding it. */
+    async function freshHold(staffId?: string): Promise<ReceiptBody> {
+      return dataOf<ReceiptBody>(await send("POST", "/api/sales", await holdBody(staffId), token));
+    }
+
+    describe("completing a parked cart twice, and abandoning one", () => {
+      it("answers a second completion with the receipt the first one wrote", async () => {
+        const held = await freshHold(ownerId);
+        const first = await send(
+          "POST",
+          `/api/sales/${held.id}/complete`,
+          await completeBody(ownerId),
+          token,
+        );
+        const second = await send(
+          "POST",
+          `/api/sales/${held.id}/complete`,
+          await completeBody(ownerId),
+          token,
+        );
+
+        assert.equal(first.status, 200);
+        assert.equal(second.status, 200, "a double-tap must not be an error the cashier sees");
+        const a = await dataOf<ReceiptBody>(first);
+        const b = await dataOf<ReceiptBody>(second);
+        assert.equal(b.id, a.id);
+        assert.equal(b.receiptNumber, a.receiptNumber, "and must not print a second receipt");
+
+        // One sale, one tender, one performance row: the replay wrote nothing.
+        assert.equal((await ledgerRowsFor(a.id))[0], 1);
+        const tenders = await runAsPlatform(() =>
+          prisma.salePayment.count({ where: { tenantId: TENANT_A, saleId: a.id } }),
+        );
+        assert.equal(tenders, 1, "the second tap must not take the money twice");
+      });
+
+      it("refuses to discard a sale that was rung up", async () => {
+        const rungUp = await freshHold(ownerId);
+        await send("POST", `/api/sales/${rungUp.id}/complete`, await completeBody(ownerId), token);
+
+        const response = await send("DELETE", `/api/sales/${rungUp.id}`, undefined, token);
+
+        // Deleting a receipt is the thing the void exists to prevent, so this is a refusal
+        // rather than a second way to be rid of a sale.
+        assert.equal(response.status, 409);
+        assert.equal((await envelope(response)).code, "SALE_NOT_HELD");
+        assert.equal((await request("GET", `/api/sales/${rungUp.id}`, token)).status, 200);
+      });
+
+      it("discards a parked cart, and it is gone for good", async () => {
+        const abandoned = await freshHold();
+
+        const response = await send("DELETE", `/api/sales/${abandoned.id}`, undefined, token);
+        assert.equal(response.status, 200);
+        assert.deepEqual(await dataOf<{ id: string }>(response), { id: abandoned.id });
+
+        const gone = await request("GET", `/api/sales/${abandoned.id}`, token);
+        assert.equal(gone.status, 404);
+        assert.equal((await envelope(gone)).code, "SALE_NOT_FOUND");
+
+        // And off the hold list, so nobody can pick up a cart that no longer exists.
+        const list = await dataOf<{ items: SaleSummaryBody[] }>(
+          await request("GET", "/api/sales", token),
+        );
+        assert.equal(
+          list.items.some((item) => item.id === abandoned.id),
+          false,
+        );
+      });
+
+      it("refuses a hold that carries a payment", async () => {
+        const response = await send(
+          "POST",
+          "/api/sales",
+          { ...(await holdBody()), payments: [{ method: "CASH", amount: 50 }] },
+          token,
+        );
+
+        // Money changing hands is what completion *is*, so a hold with tenders is refused
+        // rather than written into a half-state the ledgers cannot describe.
+        assert.equal(response.status, 422);
+        assert.ok(
+          (await envelope(response)).details?.some((detail) => detail.path === "body.payments"),
+          "the till puts this on the payment control, not in a banner",
+        );
+      });
+
+      it("reserves no stock while parked, and takes it when the sale is rung up", async () => {
+        const productId = await stockProduct("Hold Stock", 2);
+        const lines = [{ itemType: "PRODUCT", itemId: productId, quantity: 2 }];
+
+        const parkedStock = await dataOf<ReceiptBody>(
+          await send("POST", "/api/sales", { hold: true, lines }, token),
+        );
+        assert.equal(
+          await stockOf(productId),
+          2,
+          "a hold reserves nothing — the quote does not take the last bottle off the shelf",
+        );
+
+        const receipt = await dataOf<ReceiptBody>(
+          await send(
+            "POST",
+            `/api/sales/${parkedStock.id}/complete`,
+            { lines, payments: [{ method: "CASH", amount: 20 }] },
+            token,
+          ),
+        );
+        assert.equal(receipt.status, "COMPLETED");
+        assert.equal(receipt.totalAmount, "20.00");
+        assert.equal(await stockOf(productId), 0, "ringing it up is what takes the stock");
+      });
     });
   },
 );

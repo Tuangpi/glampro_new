@@ -2,9 +2,10 @@
  * Sale — handoff screens 01 and 02, the till.
  *
  * **MVP slice M1** (`docs/mvp.md`): category tabs → search → grid → cart
- * (quantity, per-line staff) → tender (cash, card, split) → receipt. Hold/resume
- * and void from the till, line discounts, receipt printing and keyboard shortcuts
- * remain full-phase work. The unfinished cart and customer now survive reloads.
+ * (quantity, per-line staff) → tender (cash, card, split) → receipt. Since Phase 5g
+ * the cart can also be **held** and picked up again at any till in the salon
+ * [ADR 0015]. Void from the till, line discounts, receipt printing and keyboard
+ * shortcuts remain full-phase work. The unfinished cart and customer survive reloads.
  *
  * Four things this page decides rather than re-derives:
  *
@@ -43,9 +44,11 @@ import { Search } from "@/components/icons";
 import CartPanel from "@/components/sale/CartPanel";
 import { type StaffOption } from "@/components/sale/CartLine";
 import CustomerPicker from "@/components/sale/CustomerPicker";
+import HeldCartsPanel from "@/components/sale/HeldCartsPanel";
 import PaymentDialog from "@/components/sale/PaymentDialog";
 import ReceiptView from "@/components/sale/ReceiptView";
 import SaleItemGrid from "@/components/sale/SaleItemGrid";
+import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Tabs from "@/components/ui/Tabs";
 import { showToast } from "@/components/ui/toast-store";
@@ -54,9 +57,15 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useServiceList } from "@/hooks/useServices";
 import { useStaffList } from "@/hooks/useStaff";
 import {
+  cartLinesFrom,
   lineUnitPrice,
   toSaleLineInputs,
+  useCompleteSale,
   useCreateSale,
+  useDiscardHold,
+  useHeldSales,
+  useHoldSale,
+  useResumeHold,
   useSaleCart,
   useSaleItems,
 } from "@/hooks/useSale";
@@ -94,6 +103,10 @@ export default function Sale() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<SaleDetail | null>(null);
+  /** The parked cart this till is ringing up, or `null` for an ordinary sale. */
+  const [heldSaleId, setHeldSaleId] = useState<string | null>(null);
+  /** The hold whose pickup or discard is in flight, so that row's buttons wait. */
+  const [busyHoldId, setBusyHoldId] = useState<string | null>(null);
 
   // Typing should not fire a query per keystroke, but the box must still feel
   // immediate, so the term is debounced rather than submitted.
@@ -110,6 +123,13 @@ export default function Sale() {
 
   const cart = useSaleCart();
   const createSale = useCreateSale();
+  // The hold flow (ADR 0015): park the cart, read the salon's parked carts, pick one
+  // up, ring it up, or abandon it.
+  const holdSale = useHoldSale();
+  const completeSale = useCompleteSale();
+  const resumeHold = useResumeHold();
+  const discardHold = useDiscardHold();
+  const heldCarts = useHeldSales();
   // No `kind` filter: one request answers every searchable kind, and the response
   // names the kinds this salon may sell. See the module comment.
   const items = useSaleItems({ search: search || undefined });
@@ -181,19 +201,26 @@ export default function Sale() {
 
   async function takePayment(payments: SalePaymentInput[], idempotencyKey: string) {
     setCheckoutError(null);
+    const cartBody = {
+      ...(customer ? { customerId: customer.id } : {}),
+      lines: toSaleLineInputs(cart.lines),
+      payments,
+    };
     try {
-      const sale = await createSale.mutateAsync({
-        ...(customer ? { customerId: customer.id } : {}),
-        lines: toSaleLineInputs(cart.lines),
-        payments,
-        // Q16: the key of *this* attempt, so a double-tap cannot ring the sale up
-        // twice (see `PaymentDialog`).
-        idempotencyKey,
-      });
-      // The cart is cleared by `useCreateSale`'s own success handler, so the rail
-      // badge drops with the sale rather than waiting for the receipt to close.
+      // A parked cart is **rung up**, not re-posted: the same row takes the money, so
+      // the receipt keeps the id the hold already had and the draft's lines are
+      // rewritten where they stand (ADR 0015). Everything else about the write is the
+      // same one an ordinary sale makes, including the server pricing every line.
+      // The idempotency key is only for the create: completing twice is answered by
+      // the sale's own status, which needs no key from here.
+      const sale = heldSaleId
+        ? await completeSale.mutateAsync({ saleId: heldSaleId, input: cartBody })
+        : await createSale.mutateAsync({ ...cartBody, idempotencyKey });
+      // The cart is cleared by the mutation's own success handler, so the rail badge
+      // drops with the sale rather than waiting for the receipt to close.
       setCheckoutOpen(false);
       setCustomer(null);
+      setHeldSaleId(null);
       setReceipt(sale);
       showToast(
         "success",
@@ -208,12 +235,77 @@ export default function Sale() {
     }
   }
 
+  /**
+   * Parks the cart, and the salon can see it.
+   *
+   * Not a browser draft: a hold is a row every till reads, so a cart parked at this
+   * counter can be finished at another (ADR 0015). No payment is involved — the API
+   * refuses a hold that carries one — so the checkout dialog never opens on this path.
+   */
+  async function holdCart() {
+    if (isReadOnly) {
+      showToast("error", "This salon's subscription is suspended, so the till cannot take money.");
+      return;
+    }
+
+    try {
+      await holdSale.mutateAsync({
+        ...(customer ? { customerId: customer.id } : {}),
+        lines: toSaleLineInputs(cart.lines),
+      });
+      // The cart is empty by now — the hook's success handler did it, because the
+      // cart is a row rather than a draft.
+      setCustomer(null);
+      setHeldSaleId(null);
+      showToast("info", "Cart held. It is on the held list for anyone at the counter.");
+    } catch (error) {
+      showToast("error", getErrorMessage(error));
+    }
+  }
+
+  /** Picks a parked cart up: its lines and its customer, back in the till. */
+  async function pickUpHold(id: string) {
+    setBusyHoldId(id);
+    try {
+      const { sale, customer: heldCustomer } = await resumeHold.mutateAsync(id);
+      cart.setLines(cartLinesFrom(sale));
+      setCustomer(heldCustomer);
+      setHeldSaleId(sale.id);
+      setCheckoutError(null);
+      showToast("info", "Cart picked up. Take payment to ring it up.");
+    } catch (error) {
+      showToast("error", getErrorMessage(error));
+    } finally {
+      setBusyHoldId(null);
+    }
+  }
+
+  /** Abandons a parked cart. The API refuses anything that was already rung up. */
+  async function discardHeldCart(id: string) {
+    setBusyHoldId(id);
+    try {
+      await discardHold.mutateAsync(id);
+      // The cart on screen may be the one that has just gone.
+      if (heldSaleId === id) {
+        setHeldSaleId(null);
+        cart.clearCart();
+        setCustomer(null);
+      }
+      showToast("info", "Held cart discarded.");
+    } catch (error) {
+      showToast("error", getErrorMessage(error));
+    } finally {
+      setBusyHoldId(null);
+    }
+  }
+
   /** Back to an empty till. The cart is already empty — the sale consumed it. */
   function startNewSale() {
     setReceipt(null);
     setCheckoutOpen(false);
     setCheckoutError(null);
     setCustomer(null);
+    setHeldSaleId(null);
     setSearchInput("");
     setSearch("");
     setKind("SERVICE");
@@ -308,18 +400,56 @@ export default function Sale() {
             </section>
           </div>
 
-          <CartPanel
-            lines={cart.lines}
-            isMember={isMember}
-            staffForService={staffForService}
-            needsCustomer={needsCustomer}
-            disabled={isReadOnly}
-            onQuantity={cart.setQuantity}
-            onStaff={cart.setStaff}
-            onRemove={cart.removeLine}
-            onClear={cart.clearCart}
-            onCheckout={openCheckout}
-          />
+          <div className="flex flex-col gap-4">
+            {heldSaleId ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-purple/40 bg-surface-2 px-4 py-2.5">
+                <p className="text-xs text-ink-body">
+                  Ringing up the <span className="font-bold text-ink">held cart</span> you picked
+                  up. Taking payment completes it; the lines are re-priced from the catalogue.
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    // Nothing was written: the hold is still parked, and this only
+                    // clears the till.
+                    setHeldSaleId(null);
+                    cart.clearCart();
+                    setCustomer(null);
+                  }}
+                >
+                  Leave it held
+                </Button>
+              </div>
+            ) : null}
+
+            <CartPanel
+              lines={cart.lines}
+              isMember={isMember}
+              staffForService={staffForService}
+              needsCustomer={needsCustomer}
+              disabled={isReadOnly}
+              onQuantity={cart.setQuantity}
+              onStaff={cart.setStaff}
+              onRemove={cart.removeLine}
+              onClear={cart.clearCart}
+              onCheckout={openCheckout}
+              onHold={() => void holdCart()}
+              holdPending={holdSale.isPending}
+            />
+
+            <HeldCartsPanel
+              holds={heldCarts.data?.items ?? []}
+              isPending={heldCarts.isPending}
+              isError={heldCarts.isError}
+              activeId={heldSaleId}
+              busyId={busyHoldId}
+              disabled={isReadOnly}
+              onPickUp={(id) => void pickUpHold(id)}
+              onDiscard={(id) => void discardHeldCart(id)}
+              onRetry={() => void heldCarts.refetch()}
+            />
+          </div>
         </div>
       )}
 
@@ -328,7 +458,7 @@ export default function Sale() {
           totalCents={totalCents}
           hasCustomer={customer !== null}
           needsCustomer={needsCustomer}
-          isPending={createSale.isPending}
+          isPending={createSale.isPending || completeSale.isPending}
           errorMessage={checkoutError}
           onClose={() => setCheckoutOpen(false)}
           onConfirm={(payments, key) => void takePayment(payments, key)}

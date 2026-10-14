@@ -1,8 +1,8 @@
 /**
  * The cart panel — the right column of handoff screen 01, visible at all times.
  *
- * A `Card` with one line per `CartLine` component, the sale totals in its body
- * and the take-payment button in its footer. The totals are cents-exact
+ * A `Card` with one line per `CartLine` component, the sale totals in its body and the
+ * take-payment and hold buttons in its footer. The totals are cents-exact
  * (`lib/money.ts`) and re-derived from the customer on every render, because a
  * customer attached after the search must re-price the cart without searching
  * again — the same reason the search returns both prices.
@@ -35,6 +35,10 @@ export interface CartPanelProps {
   onRemove: (key: string) => void;
   onClear: () => void;
   onCheckout: () => void;
+  /** Parks the cart for later — a draft, not a sale (ADR 0015). */
+  onHold: () => void;
+  /** A hold is in flight, so both footer actions wait on it. */
+  holdPending: boolean;
 }
 
 export default function CartPanel({
@@ -48,6 +52,8 @@ export default function CartPanel({
   onRemove,
   onClear,
   onCheckout,
+  onHold,
+  holdPending,
 }: CartPanelProps) {
   const units = lines.reduce((sum, line) => sum + line.quantity, 0);
   const priced = lines.map((line) => ({
@@ -86,9 +92,27 @@ export default function CartPanel({
                 payment.
               </p>
             ) : null}
-            <Button size="lg" disabled={disabled} onClick={onCheckout}>
-              Take payment
-            </Button>
+            {/* Hold and pay sit side by side: parking a cart is the other thing a
+                cashier does with a full one, and hiding it behind a menu is how a
+                till ends up with a cart nobody can leave the counter with. */}
+            <div className="flex gap-2">
+              <Button
+                variant="secondary"
+                disabled={disabled || holdPending}
+                loading={holdPending}
+                onClick={onHold}
+              >
+                Hold
+              </Button>
+              <Button
+                className="flex-1"
+                size="lg"
+                disabled={disabled || holdPending}
+                onClick={onCheckout}
+              >
+                Take payment
+              </Button>
+            </div>
           </div>
         ) : undefined
       }

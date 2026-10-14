@@ -1,23 +1,35 @@
 import { Router } from "express";
 import {
+  completeSaleSchema,
   createSaleSchema,
   idParamSchema,
   saleItemSearchQuerySchema,
+  saleListQuerySchema,
+  type CompleteSaleInput,
   type CreateSaleInput,
   type SaleItemSearchQuery,
+  type SaleListQuery,
 } from "@glampro/shared";
 
 import { auth, requireWritableTenant } from "../middleware/auth.js";
 import { requireModule } from "../middleware/requireModule.js";
 import { validate, validated } from "../middleware/validate.js";
 import { unauthorized } from "../lib/http-error.js";
-import { createSale, getSale, searchSaleItems } from "../services/sale.service.js";
+import {
+  completeSale,
+  createSale,
+  discardHold,
+  getSale,
+  listSales,
+  searchSaleItems,
+} from "../services/sale.service.js";
 
 /**
  * Sales — handoff screens 01–02, `/api/sales`.
  *
- * Three routes: the item search the cashier types into (5b.1), the write that rings the
- * cart up, and the receipt it returns (5b.2).
+ * Five routes, in three groups: the item search the cashier types into (5b.1); the write
+ * that rings the cart up and the receipt it returns (5b.2); and the hold flow that parks
+ * a cart, lists the parked ones, rings one up later and abandons one (5g, ADR 0015).
  *
  * The guard is `sales`, a **core** module, so it always passes for a tenant. It is
  * mounted deliberately: it is what enters the tenant scope with the same refusal shape
@@ -27,9 +39,9 @@ import { createSale, getSale, searchSaleItems } from "../services/sale.service.j
  * in `searchableKinds`, while `POST /` refuses it outright. `sale.service.ts` holds the
  * reasoning for that asymmetry.
  *
- * The write additionally carries `requireWritableTenant()`: a suspended salon may read
- * its history but may not take money, which is the same rule every other write here
- * follows.
+ * Every write carries `requireWritableTenant()`: a suspended salon may read its history
+ * but may not take money, which is the same rule every other write here follows. The
+ * list and the single receipt do not — reading stays open (TENANCY.md §6).
  */
 export const salesRouter = Router();
 
@@ -42,6 +54,27 @@ salesRouter.get(
     try {
       const query = validated<SaleItemSearchQuery>(req, "query");
       res.status(200).json({ data: await searchSaleItems(query) });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/**
+ * The till's sale list — the parked carts, unless `?status=` says otherwise.
+ *
+ * Mounted **before** `/:id` deliberately, and for the reason the comment below gives: a
+ * literal path stays ahead of a parameterised one.
+ */
+salesRouter.get(
+  "/",
+  auth,
+  requireModule("sales"),
+  validate(saleListQuerySchema, "query"),
+  async (req, res, next) => {
+    try {
+      const query = validated<SaleListQuery>(req, "query");
+      res.status(200).json({ data: await listSales(query) });
     } catch (error) {
       next(error);
     }
@@ -94,6 +127,61 @@ salesRouter.post(
       const input = validated<CreateSaleInput>(req, "body");
       const receipt = await createSale({ ...input, staffId: input.staffId ?? req.user.id });
       res.status(201).json({ data: receipt });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/**
+ * Rings up a cart that was parked (ADR 0015).
+ *
+ * `200`, not `201`: the resource existed before this request — a hold is a row with an
+ * id — so nothing was created. The body is the receipt, the same shape the write above
+ * answers with, because the confirmation screen is one screen whichever path reached it.
+ *
+ * The cashier completing the sale is the signed-in user when the body names nobody: the
+ * hold may have been parked by a colleague, and `Sale.staffId` is "who rang it up".
+ */
+salesRouter.post(
+  "/:id/complete",
+  auth,
+  requireModule("sales"),
+  requireWritableTenant(),
+  validate(idParamSchema, "params"),
+  validate(completeSaleSchema),
+  async (req, res, next) => {
+    try {
+      if (!req.user) throw unauthorized();
+      const { id } = validated<{ id: string }>(req, "params");
+      const input = validated<CompleteSaleInput>(req, "body");
+      const receipt = await completeSale(id, { ...input, staffId: input.staffId ?? req.user.id });
+      res.status(200).json({ data: receipt });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/**
+ * Abandons a parked cart.
+ *
+ * `200` with the deleted id rather than a bodyless `204`, because every other response
+ * on this mount travels in the `{ data }` envelope and a caller that has to know which
+ * shape it is holding is a caller that will get it wrong. `discardHold` refuses a sale
+ * that is no longer held, so this cannot be used to delete a receipt.
+ */
+salesRouter.delete(
+  "/:id",
+  auth,
+  requireModule("sales"),
+  requireWritableTenant(),
+  validate(idParamSchema, "params"),
+  async (req, res, next) => {
+    try {
+      const { id } = validated<{ id: string }>(req, "params");
+      await discardHold(id);
+      res.status(200).json({ data: { id } });
     } catch (error) {
       next(error);
     }

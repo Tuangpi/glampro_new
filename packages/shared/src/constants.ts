@@ -110,6 +110,17 @@ export const MAX_SALE_LINES = 100;
 export const MAX_SALE_PAYMENTS = 10;
 
 /**
+ * How many rows the till's sale list answers with.
+ *
+ * A hold is a draft somebody walks back for within the hour, so the list is a
+ * workbench rather than a report: newest first, with a ceiling and no cursor. A hold
+ * that has fallen off this page is a cart nobody came back for, and what happens to
+ * those is Phase 9's question rather than the till's
+ * ([ADR 0015](../../decisions/0015-a-held-sale-is-a-tenant-visible-draft.md)).
+ */
+export const MAX_SALE_LIST = 50;
+
+/**
  * The highest receipt number a salon can reach.
  *
  * Legacy wrote `random_int(100000, 999999)` into `sales.sale_id` — a

@@ -21,6 +21,7 @@ import { z } from "zod";
 
 import {
   DEFAULT_SALE_ITEM_LIMIT,
+  MAX_SALE_LIST,
   MAX_RECEIPT_NUMBER,
   MAX_SALE_ITEM_LIMIT,
   MAX_SALE_LINES,
@@ -249,7 +250,12 @@ export const salePaymentInputSchema = z.object({
 export type SalePaymentInput = z.infer<typeof salePaymentInputSchema>;
 
 /**
- * `POST /api/sales` — the whole sale in one request.
+ * The cart a till posts — what was sold, to whom, and what was handed over.
+ *
+ * One object behind the two writes that carry a whole cart, because they differ in
+ * *when* they write, not in what they say: ringing a cart up, and completing a cart
+ * that was parked first (ADR 0015). A second, near-identical shape would be a
+ * second place for a line to be described.
  *
  * `customerId` is optional because the till draws a **Walk-in** chip: a walk-in
  * sale has no customer row, and the legacy schema's non-null `customer_id` is how
@@ -257,21 +263,113 @@ export type SalePaymentInput = z.infer<typeof salePaymentInputSchema>;
  * that **grant** something (a package, a value package, a gift card) do need an
  * owner, and the service refuses those without one rather than silently issuing
  * credit to nobody.
- *
- * `idempotencyKey` is **Q16**. Legacy's `pay-by-cash` posts a payment with no key
- * anywhere, so a double-tap charges twice; the key is stored on the sale and a
- * replay returns the sale that already exists instead of writing a second one.
  */
-export const createSaleSchema = z.object({
+const saleBodySchema = z.object({
   customerId: z.string().min(1).max(64).optional(),
   staffId: z.string().min(1).max(64).optional(),
   note: z.string().trim().max(1000).optional(),
   lines: z.array(saleLineInputSchema).min(1).max(MAX_SALE_LINES),
   payments: z.array(salePaymentInputSchema).max(MAX_SALE_PAYMENTS).default([]),
-  idempotencyKey: z.string().trim().min(8).max(128).optional(),
 });
 
+/**
+ * `POST /api/sales` — the whole sale in one request.
+ *
+ * `idempotencyKey` is **Q16**. Legacy's `pay-by-cash` posts a payment with no key
+ * anywhere, so a double-tap charges twice; the key is stored on the sale and a
+ * replay returns the sale that already exists instead of writing a second one.
+ *
+ * `hold` parks the cart instead of ringing it up: the sale is written with
+ * `status: HELD`, no receipt number, no tenders and no ledger rows, and the till can
+ * pick it up later at any till in the salon (ADR 0015). It takes **no payment** —
+ * money changing hands is what completion *is*, so a hold carrying tenders is
+ * refused here rather than written into a half-state.
+ */
+export const createSaleSchema = saleBodySchema
+  .extend({
+    hold: z.boolean().optional(),
+    idempotencyKey: z.string().trim().min(8).max(128).optional(),
+  })
+  .refine((input) => !(input.hold === true && input.payments.length > 0), {
+    message: "A held sale takes no payment; resume it and complete it to take money.",
+    path: ["payments"],
+  });
+
 export type CreateSaleInput = z.infer<typeof createSaleSchema>;
+
+/**
+ * `POST /api/sales/:id/complete` — ring up a cart that was parked.
+ *
+ * The same cart as the create, minus `hold` and `idempotencyKey`. No key: a hold is
+ * already one row with one id, so the replay case is answered by the sale's own
+ * status — a second completion of a `COMPLETED` sale returns the receipt it already
+ * has rather than writing a second one, which is stronger than a key and needs no
+ * client cooperation.
+ *
+ * The lines are re-sent rather than read back off the hold, and that is the point:
+ * the cart may have been edited after the resume, and the server prices whatever it
+ * is handed from the catalogue. The hold's own line rows are rewritten in the same
+ * transaction, because a draft nobody has printed is not history (ADR 0015).
+ */
+export const completeSaleSchema = saleBodySchema;
+
+export type CompleteSaleInput = z.infer<typeof completeSaleSchema>;
+
+/**
+ * `GET /api/sales?status=&limit=` — the till's sale list.
+ *
+ * `status` **defaults to `HELD`**, because the only list the till draws today is the
+ * parked carts it can pick up; the default is stated here rather than left to the
+ * route so the contract says what "no filter" means. An unknown value is **refused
+ * rather than ignored**, the same rule `?kind=` follows on the item search: a typo
+ * in a filter must not quietly widen a query to everything.
+ *
+ * The whole `SaleStatus` enum is accepted rather than a `?held=true` boolean, so the
+ * voided-sales list Phase 5h adds is `?status=VOID` on this route instead of a
+ * second one.
+ */
+export const saleListQuerySchema = z.object({
+  status: saleStatusSchema.default("HELD"),
+  limit: z.coerce.number().int().min(1).max(MAX_SALE_LIST).default(MAX_SALE_LIST),
+});
+
+export type SaleListQuery = z.infer<typeof saleListQuerySchema>;
+
+/**
+ * One row of the sale list — enough to recognise a sale and decide whether to open
+ * it, and no more.
+ *
+ * **No lines.** The list is what a cashier scans to find the cart they parked; the
+ * lines arrive when they open one (`GET /api/sales/:id`), so a salon with fifty
+ * holds does not answer one request with fifty carts' worth of rows.
+ */
+export const saleSummarySchema = z.object({
+  id: z.string(),
+  /** `null` until the sale is completed; a held cart has not printed anything yet. */
+  receiptNumber: z.number().int().min(1).max(MAX_RECEIPT_NUMBER).nullable(),
+  status: saleStatusSchema,
+  /** When it was parked, or when it was rung up. The list draws "20 minutes ago". */
+  soldAt: z.string(),
+  customerId: z.string().nullable(),
+  customerName: z.string().nullable(),
+  staffId: z.string().nullable(),
+  /** Who parked it, so a colleague knows whose cart this is. */
+  staffName: z.string().nullable(),
+  note: z.string().nullable(),
+  /** Distinct lines, which is the number of rows the resumed cart draws. */
+  lineCount: z.number().int(),
+  /** Units across those lines — what tells two one-line holds apart. */
+  totalQuantity: z.number().int(),
+  totalAmount: z.string(),
+});
+
+export type SaleSummary = z.infer<typeof saleSummarySchema>;
+
+export const saleListSchema = z.object({
+  items: z.array(saleSummarySchema),
+});
+
+export type SaleList = z.infer<typeof saleListSchema>;
 
 /**
  * A line of a stored sale — the receipt's row.

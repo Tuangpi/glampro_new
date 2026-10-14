@@ -24,23 +24,26 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { SaleDetail, SaleItemKind } from "@glampro/shared";
+import type { SaleDetail, SaleItemKind, SaleSummary } from "@glampro/shared";
 
 const { useSaleItems, useSaleCustomers } = vi.hoisted(() => ({
   useSaleItems: vi.fn(),
   useSaleCustomers: vi.fn(),
 }));
 
-const { post, getErrorMessage } = vi.hoisted(() => ({
+const { get, del, post, getErrorMessage } = vi.hoisted(() => ({
+  get: vi.fn(),
+  del: vi.fn(),
   post: vi.fn(),
   getErrorMessage: vi.fn<() => string>(() => "Something went wrong."),
 }));
 
 vi.mock("@/lib/api", () => ({
-  get: vi.fn(),
+  get,
   getPaginated: vi.fn(),
   post,
   patch: vi.fn(),
+  del,
   getErrorMessage,
 }));
 
@@ -191,6 +194,10 @@ beforeEach(() => {
   useStaffList.mockReturnValue(listResult([]));
   getErrorMessage.mockReturnValue("Something went wrong.");
   post.mockReset().mockResolvedValue(receipt());
+  // The salon has nothing parked unless a test says so; `get` is what reads the hold
+  // list, a held cart and its customer.
+  get.mockReset().mockResolvedValue({ items: [] });
+  del.mockReset().mockResolvedValue({ id: "sale-9" });
 });
 
 describe("the category tabs", () => {
@@ -414,5 +421,154 @@ describe("a suspended salon", () => {
 
     expect(within(cartPanel()).getByText("The cart is empty")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Take payment" })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * One row of the hold list, typed as the contract's own `SaleSummary` so a field
+ * renamed on the server is a compile error here rather than a blank row.
+ */
+const HELD_ROW: SaleSummary = {
+  id: "sale-9",
+  receiptNumber: null,
+  status: "HELD",
+  soldAt: "2026-03-04T10:15:00.000Z",
+  customerId: "c1",
+  customerName: "Mrs Loi",
+  staffId: "u1",
+  staffName: "Ava Owner",
+  note: null,
+  lineCount: 1,
+  totalQuantity: 1,
+  totalAmount: "80.00",
+};
+
+/** That hold as `GET /api/sales/sale-9` answers: the receipt-shaped cart, unpaid. */
+function heldCart(): SaleDetail {
+  return receipt({
+    id: "sale-9",
+    receiptNumber: null,
+    status: "HELD",
+    paymentStatus: "UNPAID",
+    // The cart is for a named customer, which is what a resumed till re-attaches so
+    // the lines are priced for them.
+    customerId: "c1",
+    customerName: "Mrs Loi",
+    paidAmount: "0.00",
+    outstandingAmount: "80.00",
+    pointsEarned: 0,
+    payments: [],
+  });
+}
+
+/** Points `get` at the hold list, the parked cart and its customer. */
+function withHeldCart(rows: SaleSummary[] = [HELD_ROW]) {
+  get.mockImplementation((url: string) => {
+    if (url === "/customers/c1") return Promise.resolve(CUSTOMER);
+    if (url === "/sales/sale-9") return Promise.resolve(heldCart());
+    if (url === "/sales") return Promise.resolve({ items: rows });
+    return Promise.resolve(undefined);
+  });
+}
+
+/** The held-carts card, found by its heading so the cart's own region is excluded. */
+function heldPanel(): HTMLElement {
+  return screen.getByRole("heading", { name: "Held carts" }).closest("section") as HTMLElement;
+}
+
+describe("holding a cart", () => {
+  it("parks it instead of ringing it up, and the cart goes with it", async () => {
+    const user = userEvent.setup();
+    renderSale();
+
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.click(screen.getByRole("button", { name: "Hold" }));
+
+    await waitFor(() => {
+      expect(post).toHaveBeenCalledWith("/sales", {
+        lines: [{ itemType: "SERVICE", itemId: "s1", quantity: 1 }],
+        // No tender and no key: a held sale takes no payment (ADR 0015).
+        hold: true,
+      });
+    });
+
+    // The cart is a row now, so the till starts from nothing and no tender dialog
+    // was ever opened on this path.
+    expect(within(cartPanel()).getByText("The cart is empty")).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("shows what the salon has parked, and who parked it", async () => {
+    withHeldCart();
+    renderSale();
+
+    expect(await screen.findByText("Held by Ava Owner")).toBeInTheDocument();
+    expect(screen.getByText("1 cart waiting.")).toBeInTheDocument();
+    expect(within(heldPanel()).getByText("Mrs Loi")).toBeInTheDocument();
+    // The row is a summary, not the cart: the lines arrive when it is opened.
+    expect(within(heldPanel()).getByText(/1 item/)).toBeInTheDocument();
+  });
+
+  it("abandons one when the cashier discards it", async () => {
+    withHeldCart();
+    const user = userEvent.setup();
+    renderSale();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Discard the cart held by Ava Owner" }),
+    );
+
+    await waitFor(() => expect(del).toHaveBeenCalledWith("/sales/sale-9"));
+  });
+});
+
+describe("picking a parked cart up", () => {
+  it("fills the till, then completes the hold instead of creating a sale", async () => {
+    withHeldCart();
+    post.mockResolvedValue(receipt({ id: "sale-9", receiptNumber: 77 }));
+    const user = userEvent.setup();
+    renderSale();
+
+    await user.click(await screen.findByRole("button", { name: "Pick up" }));
+
+    // The lines come back at the price they were parked with: a stored line carries one
+    // figure rather than the catalogue's member/non-member pair, and the server re-prices
+    // everything at completion.
+    expect(await screen.findByText("1 line · 1 item")).toBeInTheDocument();
+    expect(within(cartPanel()).getAllByText("$80.00")).toHaveLength(2);
+    expect(screen.getByText(/Ringing up the/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Take payment" }));
+    await user.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Take payment" }),
+    );
+
+    await waitFor(() => {
+      expect(post).toHaveBeenCalledWith("/sales/sale-9/complete", {
+        customerId: "c1",
+        lines: [{ itemType: "SERVICE", itemId: "s1", quantity: 1 }],
+        payments: [{ method: "CASH", amount: 80 }],
+      });
+    });
+
+    // The hold took the money rather than a second sale being written: the receipt is the
+    // row the cart was parked as, which is what the id in the URL says.
+    expect(await screen.findByText("Receipt #77")).toBeInTheDocument();
+  });
+
+  it("leaves the hold parked when the cashier puts the cart back", async () => {
+    withHeldCart();
+    const user = userEvent.setup();
+    renderSale();
+
+    await user.click(await screen.findByRole("button", { name: "Pick up" }));
+    await screen.findByText(/Ringing up the/);
+
+    await user.click(screen.getByRole("button", { name: "Leave it held" }));
+
+    expect(within(cartPanel()).getByText("The cart is empty")).toBeInTheDocument();
+    // Nothing was written either way: the cart is still on the list.
+    expect(post).not.toHaveBeenCalled();
+    expect(del).not.toHaveBeenCalled();
   });
 });

@@ -35,6 +35,13 @@ export const queryKeys = {
     items: () => ["sale", "items"] as const,
     openCart: (identity: string) => ["sale", "openCart", identity] as const,
     customers: () => ["sale", "customers"] as const,
+    /**
+     * One stored sale — a held cart being picked up. The id is in the key, so two
+     * holds read in the same session cannot answer each other's fetch.
+     */
+    detail: (id: string) => ["sale", "detail", id] as const,
+    /** The parked carts. One prefix, so a hold, a pickup and a discard all move it. */
+    holds: () => ["sale", "holds"] as const,
   },
 
   appointments: {
