@@ -218,18 +218,24 @@ server's message on a `409` (ADR 0014) or a department refusal (ADR 0013). The
 pure `rescheduleFields` seam turns a drop into the PATCH; the server re-validates
 every move.
 
+**The calendar slice is closed** (2026-10-13): the criterion below is met — a
+booking can be created through the guided flow or dragged in the grid, rescheduled
+and completed, with duration and staff assignment coming from the service. What
+the slice did not take is the deferral table below, and nothing was ever specified
+beyond 6c, so there is no "6d".
+
 Handoff screens 03 and 06. Criterion: an appointment can be created through the
 guided flow or dragged in the calendar, rescheduled and completed, and duration and
 staff assignment come from the service rather than from free text.
 
 ### Deferred from Phase 6 — the drawn things the model could not back
 
-| Deferred                               | Why it is not here                                                                                                                                                                          | Returns with                                                                                      |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Week and Month views                   | The handoff drew a Day/Week/Month toggle, but every query is a **day window**; a week or month has no endpoint to read and no clash rule across days                                        | A range query and a cross-day overlap rule                                                        |
-| A **shift / break** block on the track | There is no shift or rota table — only the leave half was modelled (`EmployeeLeave`), and it is not read here yet                                                                           | A shift model, so availability can be read to book someone (carried from _Deferred from Phase 4_) |
-| The **skill matrix**                   | Performer eligibility is department-wide (ADR 0013); the legacy `employee_services` mapping was not modelled, so a stylist cannot yet be filtered by the services they can actually perform | A staff↔service capability model                                                                  |
-| **Reminders**                          | No notification channel or scheduled-job surface exists                                                                                                                                     | A notification model and a job runner                                                             |
+| Deferred                               | Why it is not here                                                                                                                                                                                                                                                                  | Returns with                                                                                      |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Week and Month views                   | The handoff drew a Day/Week/Month toggle, but the grid's geometry (`buildCalendarColumns`, the 08:00–20:00 gutter) is one day and the list filters `startsAt` **inside** the window — the endpoint itself already takes any `from`/`to`, and the 6b clash rule is already cross-day | Multi-day grid geometry and a straddle-aware read                                                 |
+| A **shift / break** block on the track | There is no shift or rota table — only the leave half was modelled (`EmployeeLeave`), and it is not read here yet                                                                                                                                                                   | A shift model, so availability can be read to book someone (carried from _Deferred from Phase 4_) |
+| The **skill matrix**                   | Performer eligibility is department-wide (ADR 0013); the legacy `employee_services` mapping was not modelled, so a stylist cannot yet be filtered by the services they can actually perform                                                                                         | A staff↔service capability model                                                                  |
+| **Reminders**                          | No notification channel or scheduled-job surface exists                                                                                                                                                                                                                             | A notification model and a job runner                                                             |
 
 ## Phase 7 — Dashboard and reports
 
@@ -237,8 +243,9 @@ staff assignment come from the service rather than from free text.
 customers, low stock) and `/reports` with a date range and two to three tables.
 The tiles need **no** seed change: `/api/reports` is mounted behind
 `requireModule("dashboard")`, which is core and therefore always entitled. The
-`reports` add-on guards screen 10's wider tables, so the seed gains that
-entitlement when those land, not for M3.
+`reports` add-on guards screen 10's wider tables, and `prisma/seed.ts` has granted
+it to the demo salon since M3 landed, so a fresh `db:reset` opens screen 10
+without a second seed change.
 The full report catalogue, export, charts and scheduled reports stay full-phase work.
 
 **M3's first half landed 2026-10-08** — `GET /api/reports/dashboard`
@@ -247,8 +254,18 @@ The full report catalogue, export, charts and scheduled reports stay full-phase 
 `StatTile`s in `pages/Dashboard.tsx`. The tile **window is the browser's day**, sent
 as two instants: the salon's timezone lives in the clock in front of the screen, and
 letting the server guess it would put "today" somewhere the salon is not. A failed
-summary leaves the figures reading "—" rather than zero. `/reports` itself — the
-date-range screen, its tables and the `Reports` rail entry — is what is left.
+summary leaves the figures reading "—" rather than zero.
+
+**M3's second half landed 2026-10-09** — `/reports` itself:
+`reportRangeQuerySchema` (an explicit range plus a validated IANA timezone) and
+`reportOverviewSchema` in `packages/shared/src/schemas/report.ts`;
+`reportOverview()` in `services/report.service.ts`, which folds completed,
+tenant-scoped sales only, keeps decimal cents as strings and labels each receipt
+in the caller's timezone; `GET /api/reports/overview` behind `auth` +
+`requireModule("reports")`, while the dashboard read stays core; and
+`hooks/useReports.ts` + `pages/Reports.tsx` with a 30-day default range, four
+totals and three real tables. The rail's last entry now resolves, so **M3 is
+closed** and what remains in Phase 7 is the full-phase list below.
 
 Handoff screens 05 and 10, backed by the report and export routes catalogued in
 [`legacy/API-INVENTORY.md`](legacy/API-INVENTORY.md). Criterion: every tile and
