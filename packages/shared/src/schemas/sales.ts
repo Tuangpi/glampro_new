@@ -435,6 +435,19 @@ export const saleDetailSchema = z.object({
   staffId: z.string().nullable(),
   staffName: z.string().nullable(),
   note: z.string().nullable(),
+  /**
+   * When it was voided, or `null` while it stands (ADR 0016). Carried on the receipt so
+   * a reprinted one cannot be mistaken for a live sale, and so the screen can say why.
+   */
+  voidedAt: z.string().nullable(),
+  /** Why, in whoever voided it's own words. `null` unless `status` is `VOID`. */
+  voidReason: z.string().nullable(),
+  /**
+   * Who answered for it, by name. `null` when the account that voided it has since been
+   * deleted — the `SetNull` link the schema keeps on purpose, so losing a manager does
+   * not lose the sale.
+   */
+  voidedByName: z.string().nullable(),
   totalQuantity: z.number().int(),
   totalAmount: z.string(),
   paidAmount: z.string(),
@@ -447,3 +460,20 @@ export const saleDetailSchema = z.object({
 });
 
 export type SaleDetail = z.infer<typeof saleDetailSchema>;
+
+/**
+ * `POST /api/sales/:id/void` — takes a rung-up sale off the books (ADR 0016).
+ *
+ * The **reason is required** and the actor is deliberately **not** in the body: it comes
+ * from the verified JWT, because a caller who could name the person who voided something
+ * could name somebody else, and the point of recording an actor is that it cannot be
+ * chosen.
+ *
+ * Three characters is the floor that keeps `"x"` from being an audit record; five
+ * hundred is the ceiling that keeps a reason a sentence rather than a transcript.
+ */
+export const voidSaleSchema = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+
+export type VoidSaleInput = z.infer<typeof voidSaleSchema>;

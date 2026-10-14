@@ -42,6 +42,7 @@ import {
   type SaleList,
   type SaleListQuery,
   type SalePaymentInput,
+  type VoidSaleInput,
 } from "@glampro/shared";
 
 import { moduleEntitlements } from "../lib/entitlements.js";
@@ -1101,6 +1102,11 @@ const SALE_SELECT = {
   staffId: true,
   staff: { select: { name: true } },
   note: true,
+  voidedAt: true,
+  voidReason: true,
+  // The void's actor, by name. A `SetNull` link, so this is `null` for a sale voided by
+  // an account that has since been deleted — the sale itself survives that.
+  voidedBy: { select: { name: true } },
   totalQuantity: true,
   totalAmount: true,
   paidAmount: true,
@@ -1141,6 +1147,9 @@ function toSaleDetail(row: Prisma.SaleGetPayload<{ select: typeof SALE_SELECT }>
     staffId: row.staffId,
     staffName: row.staff?.name ?? null,
     note: row.note,
+    voidedAt: row.voidedAt?.toISOString() ?? null,
+    voidReason: row.voidReason,
+    voidedByName: row.voidedBy?.name ?? null,
     totalQuantity: row.totalQuantity,
     totalAmount: amount(row.totalAmount),
     paidAmount: amount(row.paidAmount),
@@ -1417,4 +1426,196 @@ export async function discardHold(saleId: string): Promise<void> {
       "SALE_NOT_HELD",
     );
   }
+}
+
+/*
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Void (Phase 5h, ADR 0016)
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
+/** What a void needs to know about the sale it is reversing. */
+const VOIDABLE_SALE_SELECT = {
+  id: true,
+  status: true,
+  customerId: true,
+  lines: {
+    select: { id: true, itemType: true, itemId: true, quantity: true },
+    orderBy: { position: "asc" },
+  },
+  // Summed, then negated: the offsetting row is the *net* of what this sale recorded, so
+  // a sale that already carries a correction reverses to zero rather than below it.
+  points: { select: { point: true } },
+} satisfies Prisma.SaleSelect;
+
+type VoidableSale = Prisma.SaleGetPayload<{ select: typeof VOIDABLE_SALE_SELECT }>;
+
+/**
+ * The two reversals a void refuses to make.
+ *
+ * Both are cases where undoing the sale would need a decision with money attached that a
+ * void is not allowed to make (ADR 0016 §6). They run **inside** the void's transaction,
+ * so a refused void rolls back and leaves the sale exactly as it was.
+ *
+ * - **Credit the sale granted has been spent.** A package used, a gift card drawn down,
+ *   prepaid credit consumed: undoing the sale would take away something the customer has
+ *   already had the benefit of, and what they keep is a goodwill call.
+ * - **A balance with a payment against it.** Money came in after the sale, so undoing it
+ *   means putting money back — a refund, which is a different verb.
+ */
+async function assertVoidable(tx: SaleTransaction, sale: VoidableSale): Promise<void> {
+  const lineIds = sale.lines.map((line) => line.id);
+  if (lineIds.length > 0) {
+    const [packages, credits, cards] = await Promise.all([
+      tx.customerPackageHolding.findMany({
+        where: { saleLineId: { in: lineIds } },
+        select: { quantity: true, quantityRemaining: true },
+      }),
+      tx.customerValuePackageHolding.findMany({
+        where: { saleLineId: { in: lineIds } },
+        select: { amount: true, amountRemaining: true },
+      }),
+      tx.customerGiftCardHolding.findMany({
+        where: { saleLineId: { in: lineIds } },
+        select: { value: true, valueRemaining: true },
+      }),
+    ]);
+
+    const spent =
+      packages.some((holding) => holding.quantityRemaining < holding.quantity) ||
+      credits.some((holding) => holding.amountRemaining.lessThan(holding.amount)) ||
+      cards.some((holding) => holding.valueRemaining.lessThan(holding.value));
+
+    if (spent) {
+      throw conflict(
+        "Credit this sale granted has already been used, so the sale cannot be voided. Reverse the redemption first.",
+        "HOLDING_ALREADY_SPENT",
+      );
+    }
+  }
+
+  // `saleId` is unique on the outstanding, so this is at most one row however many
+  // payments hang off it.
+  const outstanding = await tx.customerOutstanding.findFirst({
+    where: { saleId: sale.id },
+    select: { _count: { select: { payments: true } } },
+  });
+  if (outstanding !== null && outstanding._count.payments > 0) {
+    throw conflict(
+      "This sale's balance has been paid against, so voiding it would mean refunding money. Reverse the payment first.",
+      "OUTSTANDING_ALREADY_PAID",
+    );
+  }
+}
+
+/**
+ * Reverses what `fillLedgers` wrote, inside the transaction that flips the status.
+ *
+ * Written as rows rather than edits wherever the ledger is a history:
+ *
+ * - **Stock** goes back on the shelf. No upper guard, unlike the decrement: the goods are
+ *   real and they have come back, so a stock level that was edited down by hand in the
+ *   meantime is the salon's business and not a reason to refuse.
+ * - **Points** get an offsetting negative row on the same sale. Never an edit, never a
+ *   delete — `CustomerPoint`'s own schema comment makes this the rule for a correction.
+ * - **Holdings, the outstanding, performance and commission** are deleted. Nothing has
+ *   been spent (see `assertVoidable`) and a voided sale earned nobody anything; what the
+ *   lines recorded survives on `SaleLine`, which stays.
+ */
+async function reverseForVoid(
+  tx: SaleTransaction,
+  tenantId: string,
+  sale: VoidableSale,
+): Promise<void> {
+  for (const line of sale.lines) {
+    if (line.itemType !== "PRODUCT") continue;
+    await tx.product.updateMany({
+      where: { id: line.itemId },
+      data: { quantity: { increment: line.quantity } },
+    });
+  }
+
+  const pointsEarned = sale.points.reduce((sum, entry) => sum + entry.point, 0);
+  if (sale.customerId !== null && pointsEarned !== 0) {
+    await tx.customerPoint.create({
+      data: { tenantId, customerId: sale.customerId, saleId: sale.id, point: -pointsEarned },
+    });
+  }
+
+  const lineIds = sale.lines.map((line) => line.id);
+  if (lineIds.length > 0) {
+    await tx.customerPackageHolding.deleteMany({ where: { saleLineId: { in: lineIds } } });
+    await tx.customerValuePackageHolding.deleteMany({ where: { saleLineId: { in: lineIds } } });
+    await tx.customerGiftCardHolding.deleteMany({ where: { saleLineId: { in: lineIds } } });
+  }
+
+  await tx.customerOutstanding.deleteMany({ where: { saleId: sale.id } });
+  await tx.employeePerformance.deleteMany({ where: { saleId: sale.id } });
+  await tx.employeeCommission.deleteMany({ where: { saleId: sale.id } });
+}
+
+/**
+ * `POST /api/sales/:id/void` — takes a rung-up sale off the books (ADR 0016).
+ *
+ * The sale **stays**: its lines, its receipt number and its tenders are the record of
+ * what happened, and only the status changes. Everything `fillLedgers` wrote is reversed
+ * in the same transaction (`reverseForVoid`), so no ledger can be left half-undone by a
+ * failure midway.
+ *
+ * A second void is answered from the row rather than written again: the first reason and
+ * the first actor stand, so a double-tap cannot rewrite an audit trail.
+ *
+ * The actor is a parameter rather than a field of `input`, because it has to come from the
+ * verified token and never from the body — see `voidSaleSchema`.
+ */
+export async function voidSale(
+  saleId: string,
+  input: VoidSaleInput,
+  actorId: string,
+): Promise<SaleDetail> {
+  const tenantId = requireTenantScope();
+
+  const sale = await prisma.sale.findFirst({
+    where: { id: saleId },
+    select: VOIDABLE_SALE_SELECT,
+  });
+  if (!sale) throw notFound("That sale does not exist.", "SALE_NOT_FOUND");
+
+  // Already void: the receipt it has is the answer, and neither the reason nor the actor
+  // is rewritten.
+  if (sale.status === "VOID") return getSale(sale.id);
+
+  // A cart that was never rung up has no ledger and no receipt number, so there is
+  // nothing to void — `DELETE /api/sales/:id` is its ending (ADR 0015).
+  if (sale.status === "HELD") {
+    throw conflict(
+      "This cart was never rung up, so there is nothing to void. Discard it instead.",
+      "SALE_NOT_COMPLETED",
+    );
+  }
+
+  await prisma.$transaction(async (tx) => {
+    // Both refusals run here rather than before, so a void that is going to be refused
+    // rolls back inside the same transaction that would have changed the row.
+    await assertVoidable(tx, sale);
+
+    // Count-guarded, like the hold's completion and the stock decrement: two managers
+    // voiding one sale at the same instant cannot both reverse it.
+    const voided = await tx.sale.updateMany({
+      where: { id: sale.id, status: "COMPLETED" },
+      data: {
+        status: "VOID",
+        voidedAt: new Date(),
+        voidReason: input.reason,
+        voidedById: actorId,
+      },
+    });
+    if (voided.count === 0) {
+      throw conflict("This sale has already been voided.", "SALE_ALREADY_VOID");
+    }
+
+    await reverseForVoid(tx, tenantId, sale);
+  });
+
+  return getSale(sale.id);
 }

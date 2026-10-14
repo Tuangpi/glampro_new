@@ -5,13 +5,15 @@ import {
   idParamSchema,
   saleItemSearchQuerySchema,
   saleListQuerySchema,
+  voidSaleSchema,
   type CompleteSaleInput,
   type CreateSaleInput,
   type SaleItemSearchQuery,
   type SaleListQuery,
+  type VoidSaleInput,
 } from "@glampro/shared";
 
-import { auth, requireWritableTenant } from "../middleware/auth.js";
+import { auth, requireRole, requireWritableTenant } from "../middleware/auth.js";
 import { requireModule } from "../middleware/requireModule.js";
 import { validate, validated } from "../middleware/validate.js";
 import { unauthorized } from "../lib/http-error.js";
@@ -22,14 +24,16 @@ import {
   getSale,
   listSales,
   searchSaleItems,
+  voidSale,
 } from "../services/sale.service.js";
 
 /**
  * Sales — handoff screens 01–02, `/api/sales`.
  *
- * Five routes, in three groups: the item search the cashier types into (5b.1); the write
- * that rings the cart up and the receipt it returns (5b.2); and the hold flow that parks
- * a cart, lists the parked ones, rings one up later and abandons one (5g, ADR 0015).
+ * Six routes, in four groups: the item search the cashier types into (5b.1); the write that
+ * rings the cart up and the receipt it returns (5b.2); the hold flow that parks a cart,
+ * lists the parked ones, rings one up later and abandons one (5g, ADR 0015); and the void
+ * that takes a rung-up sale off the books (5h, ADR 0016).
  *
  * The guard is `sales`, a **core** module, so it always passes for a tenant. It is
  * mounted deliberately: it is what enters the tenant scope with the same refusal shape
@@ -157,6 +161,36 @@ salesRouter.post(
       const input = validated<CompleteSaleInput>(req, "body");
       const receipt = await completeSale(id, { ...input, staffId: input.staffId ?? req.user.id });
       res.status(200).json({ data: receipt });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+/**
+ * Voids a rung-up sale (ADR 0016).
+ *
+ * `requireRole` is what puts this out of a cashier's reach: authorising your own reversal
+ * is not a control, and the first admin-only write in this build (`staff.routes.ts`) is
+ * the same rule.
+ *
+ * The reason arrives in the body and the actor does **not** — it is the verified token's
+ * user, which is why `voidSale` takes them as two arguments rather than one object.
+ */
+salesRouter.post(
+  "/:id/void",
+  auth,
+  requireModule("sales"),
+  requireWritableTenant(),
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  validate(idParamSchema, "params"),
+  validate(voidSaleSchema),
+  async (req, res, next) => {
+    try {
+      if (!req.user) throw unauthorized();
+      const { id } = validated<{ id: string }>(req, "params");
+      const { reason } = validated<VoidSaleInput>(req, "body");
+      res.status(200).json({ data: await voidSale(id, { reason }, req.user.id) });
     } catch (error) {
       next(error);
     }

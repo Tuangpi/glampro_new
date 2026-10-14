@@ -6,10 +6,12 @@ import {
   SALE_ITEM_KINDS,
   completeSaleSchema,
   createSaleSchema,
+  saleDetailSchema,
   saleItemSchema,
   saleItemSearchQuerySchema,
   saleListQuerySchema,
   saleSummarySchema,
+  voidSaleSchema,
 } from "./sales.js";
 
 /** The fields every kind carries, so each case below only states what differs. */
@@ -249,5 +251,81 @@ describe("saleSummarySchema", () => {
     // `0` is not a number this salon ever prints, so accepting it would be accepting a
     // row no receipt can explain.
     assert.equal(saleSummarySchema.safeParse({ ...held, receiptNumber: 0 }).success, false);
+  });
+});
+
+/** A receipt as the API serialises one, so the cases below vary only what they test. */
+const receipt = {
+  id: "sale-1",
+  receiptNumber: 1042,
+  status: "COMPLETED",
+  paymentStatus: "PAID",
+  soldAt: "2026-03-04T10:15:00.000Z",
+  customerId: null,
+  customerName: null,
+  staffId: "u1",
+  staffName: "Ava Owner",
+  note: null,
+  voidedAt: null,
+  voidReason: null,
+  voidedByName: null,
+  totalQuantity: 1,
+  totalAmount: "80.00",
+  paidAmount: "80.00",
+  outstandingAmount: "0.00",
+  pointsEarned: 5,
+  lines: [],
+  payments: [],
+};
+
+describe("saleDetailSchema", () => {
+  it("carries the void's three fields as null while the sale stands", () => {
+    const standing = saleDetailSchema.parse(receipt);
+
+    assert.equal(standing.voidedAt, null);
+    assert.equal(standing.voidReason, null);
+    assert.equal(standing.voidedByName, null);
+  });
+
+  it("carries why and by whom once it is voided, and still a receipt", () => {
+    const voided = saleDetailSchema.parse({
+      ...receipt,
+      status: "VOID",
+      voidedAt: "2026-03-04T11:00:00.000Z",
+      voidReason: "Rung up twice",
+      voidedByName: "Ava Owner",
+    });
+
+    assert.equal(voided.status, "VOID");
+    assert.equal(voided.voidReason, "Rung up twice");
+    // The number and the tenders stay: a void is a state change, not a delete.
+    assert.equal(voided.receiptNumber, 1042);
+  });
+
+  it("requires the void fields rather than letting a receipt leave them undefined", () => {
+    const withoutReason: Record<string, unknown> = { ...receipt };
+    delete withoutReason["voidReason"];
+
+    assert.equal(saleDetailSchema.safeParse(withoutReason).success, false);
+  });
+});
+
+describe("voidSaleSchema", () => {
+  it("trims the reason, and carries no actor", () => {
+    const parsed = voidSaleSchema.parse({ reason: "  Rung up twice  " });
+
+    assert.equal(parsed.reason, "Rung up twice");
+    // Who voided it is the token's user, so there is no field for a caller to name
+    // somebody else in (ADR 0016).
+    assert.equal("voidedById" in voidSaleSchema.shape, false);
+    assert.equal("actorId" in voidSaleSchema.shape, false);
+  });
+
+  it("refuses a reason too short to be a record, or too long to be one", () => {
+    assert.equal(voidSaleSchema.safeParse({ reason: "no" }).success, false);
+    // Trimmed before the floor is measured, so whitespace cannot pad a two-letter reason.
+    assert.equal(voidSaleSchema.safeParse({ reason: "  no  " }).success, false);
+    assert.equal(voidSaleSchema.safeParse({ reason: "x".repeat(501) }).success, false);
+    assert.equal(voidSaleSchema.safeParse({ reason: "x".repeat(500) }).success, true);
   });
 });

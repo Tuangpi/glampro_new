@@ -48,11 +48,12 @@ import HeldCartsPanel from "@/components/sale/HeldCartsPanel";
 import PaymentDialog from "@/components/sale/PaymentDialog";
 import ReceiptView from "@/components/sale/ReceiptView";
 import SaleItemGrid from "@/components/sale/SaleItemGrid";
+import VoidSaleDialog from "@/components/sale/VoidSaleDialog";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Tabs from "@/components/ui/Tabs";
 import { showToast } from "@/components/ui/toast-store";
-import { SALE_KIND_LABELS } from "@/constants/sale";
+import { SALE_KIND_LABELS, VOID_SALE_ROLES } from "@/constants/sale";
 import { useAuth } from "@/contexts/AuthContext";
 import { useServiceList } from "@/hooks/useServices";
 import { useStaffList } from "@/hooks/useStaff";
@@ -68,6 +69,7 @@ import {
   useResumeHold,
   useSaleCart,
   useSaleItems,
+  useVoidSale,
 } from "@/hooks/useSale";
 import { getErrorMessage } from "@/lib/api";
 import { cartTotalCents } from "@/lib/money";
@@ -107,6 +109,8 @@ export default function Sale() {
   const [heldSaleId, setHeldSaleId] = useState<string | null>(null);
   /** The hold whose pickup or discard is in flight, so that row's buttons wait. */
   const [busyHoldId, setBusyHoldId] = useState<string | null>(null);
+  const [voidOpen, setVoidOpen] = useState(false);
+  const [voidError, setVoidError] = useState<string | null>(null);
 
   // Typing should not fire a query per keystroke, but the box must still feel
   // immediate, so the term is debounced rather than submitted.
@@ -130,6 +134,15 @@ export default function Sale() {
   const resumeHold = useResumeHold();
   const discardHold = useDiscardHold();
   const heldCarts = useHeldSales();
+  const voidSale = useVoidSale();
+
+  /**
+   * Whether this user may void a receipt (ADR 0016).
+   *
+   * A mirror of the API's `requireRole`, used only to decide whether to draw the action:
+   * the server is what enforces it, and a button that always 403s is worse than none.
+   */
+  const canVoid = user !== null && VOID_SALE_ROLES.includes(user.globalRole);
   // No `kind` filter: one request answers every searchable kind, and the response
   // names the kinds this salon may sell. See the module comment.
   const items = useSaleItems({ search: search || undefined });
@@ -299,6 +312,32 @@ export default function Sale() {
     }
   }
 
+  /**
+   * Voids the receipt on screen (ADR 0016).
+   *
+   * The reason is the only thing to send: the actor is the token's, so nothing here can
+   * name somebody else. The server answers with the voided receipt, which replaces the
+   * one on screen — the same sale, with a status the receipt now says out loud.
+   */
+  async function voidReceipt(reason: string) {
+    if (!receipt) return;
+    setVoidError(null);
+    try {
+      const voided = await voidSale.mutateAsync({ saleId: receipt.id, reason });
+      setVoidOpen(false);
+      setReceipt(voided);
+      showToast(
+        "info",
+        voided.receiptNumber === null ? "Sale voided." : `Receipt #${voided.receiptNumber} voided.`,
+      );
+    } catch (error) {
+      // Stay open with the server's own reason: a refusal here is usually something the
+      // manager can act on — a package the customer has already used, a balance that has
+      // been paid against.
+      setVoidError(getErrorMessage(error));
+    }
+  }
+
   /** Back to an empty till. The cart is already empty — the sale consumed it. */
   function startNewSale() {
     setReceipt(null);
@@ -306,6 +345,8 @@ export default function Sale() {
     setCheckoutError(null);
     setCustomer(null);
     setHeldSaleId(null);
+    setVoidOpen(false);
+    setVoidError(null);
     setSearchInput("");
     setSearch("");
     setKind("SERVICE");
@@ -344,7 +385,29 @@ export default function Sale() {
 
       {/* After a sale the till is gone until "New sale" — see the module comment. */}
       {receipt ? (
-        <ReceiptView sale={receipt} onNewSale={startNewSale} />
+        <>
+          <ReceiptView
+            sale={receipt}
+            onNewSale={startNewSale}
+            canVoid={canVoid}
+            onVoid={() => {
+              setVoidError(null);
+              setVoidOpen(true);
+            }}
+          />
+
+          {voidOpen ? (
+            <VoidSaleDialog
+              receiptLabel={
+                receipt.receiptNumber === null ? "This sale" : `Receipt #${receipt.receiptNumber}`
+              }
+              isPending={voidSale.isPending}
+              errorMessage={voidError}
+              onClose={() => setVoidOpen(false)}
+              onConfirm={(reason) => void voidReceipt(reason)}
+            />
+          ) : null}
+        </>
       ) : (
         <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <div className="flex flex-col gap-4">

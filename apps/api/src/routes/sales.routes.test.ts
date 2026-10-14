@@ -41,6 +41,7 @@ const { CORE_MODULE_CODES, MODULE_CODES } = await import("@glampro/shared");
 const PASSWORD = "correct-horse-1";
 const DOMAIN = "sales-items-rt.test";
 const EMAIL = `owner@${DOMAIN}`;
+const CASHIER_EMAIL = `cashier@${DOMAIN}`;
 
 const TENANT_A = "sales-items-a";
 const TENANT_B = "sales-items-b";
@@ -97,6 +98,25 @@ async function seed(): Promise<void> {
         passwordHash,
         globalRole: "SUPER_ADMIN",
       },
+    });
+
+    // A cashier, so the void's role guard can be asserted against somebody who is not an
+    // owner. The password is the same one the owner signs in with.
+    await prisma.user.create({
+      data: {
+        tenantId: TENANT_A,
+        email: CASHIER_EMAIL,
+        name: "Cam Cashier",
+        passwordHash,
+        globalRole: "STAFF",
+      },
+    });
+
+    // A customer with no membership reference, so it pays the non-member price. The
+    // ledgers that need an owner — a package's holding, a part-paid balance — have one
+    // through it.
+    await prisma.customer.create({
+      data: { tenantId: TENANT_A, name: "Ana Aloha", phone: "+1 555 0100" },
     });
 
     // A's catalogue: one of everything, so each tab has something to be missing.
@@ -196,8 +216,12 @@ interface ReceiptBody {
   totalAmount: string;
   paidAmount: string;
   outstandingAmount: string;
+  pointsEarned: number;
   staffId: string | null;
   staffName: string | null;
+  voidedAt: string | null;
+  voidReason: string | null;
+  voidedByName: string | null;
   lines: {
     itemType: string;
     itemName: string;
@@ -237,6 +261,17 @@ async function seededIdOf(kind: "SERVICE" | "PRODUCT"): Promise<string> {
   const row = await runAsPlatform(() =>
     prisma.product.findFirstOrThrow({
       where: { tenantId: TENANT_A, name: "Aloha Shampoo" },
+      select: { id: true },
+    }),
+  );
+  return row.id;
+}
+
+/** The suite's own customer id, read through the platform scope the way `purge` does. */
+async function seededCustomerId(): Promise<string> {
+  const row = await runAsPlatform(() =>
+    prisma.customer.findFirstOrThrow({
+      where: { tenantId: TENANT_A, name: "Ana Aloha" },
       select: { id: true },
     }),
   );
@@ -394,6 +429,8 @@ describe(
   { skip: databaseUrl ? false : "DATABASE_URL is not set" },
   () => {
     let token = "";
+    /** A `STAFF` token, so the void's role guard has somebody to refuse. */
+    let cashierToken = "";
     /** The signed-in owner's id, so "who rang it up" defaults can be asserted. */
     let ownerId = "";
     /** The receipt the write test above produced, re-read by the receipt test below. */
@@ -420,6 +457,14 @@ describe(
           prisma.user.findUniqueOrThrow({ where: { email: EMAIL }, select: { id: true } }),
         )
       ).id;
+
+      const cashier = await fetch(`${baseUrl}/api/auth/login`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: CASHIER_EMAIL, password: PASSWORD }),
+      });
+      assert.equal(cashier.status, 200, "could not sign in as the cashier");
+      cashierToken = (await dataOf<{ accessToken: string }>(cashier)).accessToken;
     });
 
     after(async () => {
@@ -885,6 +930,300 @@ describe(
         assert.equal(receipt.status, "COMPLETED");
         assert.equal(receipt.totalAmount, "20.00");
         assert.equal(await stockOf(productId), 0, "ringing it up is what takes the stock");
+      });
+    });
+
+    /*
+     * ───────────────────────────────────────────────────────────────────────────
+     * Void (Phase 5h, ADR 0016)
+     * ───────────────────────────────────────────────────────────────────────────
+     *
+     * What matters here is that a void is a **reversal**, not a delete: the receipt
+     * survives with its number and its lines, and every ledger `fillLedgers` wrote is
+     * undone in the same transaction. A test that only checked `status === "VOID"` would
+     * pass with the entire reversal missing, which is exactly what legacy shipped.
+     */
+    describe("voiding a rung-up sale", () => {
+      /**
+       * A cart with no stock in it, so these tests cannot run out of shampoo part-way
+       * through — the suite's own product is deliberately tiny and the write tests above
+       * have been eating it.
+       */
+      async function serviceCart(): Promise<Record<string, unknown>> {
+        return {
+          lines: [{ itemType: "SERVICE", itemId: await seededIdOf("SERVICE"), quantity: 1 }],
+          payments: [{ method: "CASH", amount: 50 }],
+        };
+      }
+
+      /** Rings a cart up and returns its receipt — the thing a void acts on. */
+      async function ringUp(body?: Record<string, unknown>): Promise<ReceiptBody> {
+        const response = await send("POST", "/api/sales", body ?? (await serviceCart()), token);
+        assert.equal(response.status, 201);
+        return dataOf<ReceiptBody>(response);
+      }
+
+      it("reverses every ledger, keeping the receipt, its number and its tenders", async () => {
+        const productId = await stockProduct("Void Stock", 2);
+        const customerId = await seededCustomerId();
+        const sale = await ringUp({
+          customerId,
+          lines: [
+            {
+              itemType: "SERVICE",
+              itemId: await seededIdOf("SERVICE"),
+              quantity: 1,
+              staffId: ownerId,
+            },
+            { itemType: "PRODUCT", itemId: productId, quantity: 2 },
+          ],
+          // 50.00 for the cut (non-member: this customer carries no membership
+          // reference) plus 2 × 10.00 = 70.00.
+          payments: [{ method: "CASH", amount: 70 }],
+        });
+
+        assert.equal(await stockOf(productId), 0, "the sale took the stock");
+        assert.deepEqual(
+          await ledgerRowsFor(sale.id),
+          [1, 1, 0],
+          "one performance row and one point row, and no balance",
+        );
+
+        const response = await send(
+          "POST",
+          `/api/sales/${sale.id}/void`,
+          { reason: "Customer changed their mind" },
+          token,
+        );
+        assert.equal(response.status, 200);
+
+        const voided = await dataOf<ReceiptBody>(response);
+        assert.equal(voided.id, sale.id, "the receipt is the same sale, not a new one");
+        assert.equal(voided.status, "VOID");
+        assert.equal(voided.receiptNumber, sale.receiptNumber, "the number stays consumed");
+        assert.equal(voided.paymentStatus, "PAID", "what was handed over did happen");
+        assert.equal(voided.voidReason, "Customer changed their mind");
+        assert.equal(voided.voidedByName, "Ola Owner", "the actor is the token's user");
+        assert.equal(typeof voided.voidedAt, "string");
+        // Still a receipt: the lines and the tenders are on it.
+        assert.equal(voided.lines.length, 2);
+        assert.deepEqual(voided.payments, [{ method: "CASH", amount: "70.00", sessionId: null }]);
+        assert.equal(voided.pointsEarned, 0, "the points net to zero rather than being erased");
+
+        // Each ledger in turn.
+        assert.equal(await stockOf(productId), 2, "the stock came back");
+        assert.deepEqual(
+          await ledgerRowsFor(sale.id),
+          [0, 2, 0],
+          "performance is gone and the points are an offsetting pair",
+        );
+        const points = await runAsPlatform(() =>
+          prisma.customerPoint.findMany({
+            where: { tenantId: TENANT_A, saleId: sale.id },
+            select: { point: true },
+          }),
+        );
+        assert.deepEqual(
+          points.map((row) => row.point).sort((a, b) => a - b),
+          [-5, 5],
+          "the earned row stays and a negative row offsets it — history is not edited",
+        );
+      });
+
+      it("is idempotent, and does not rewrite the first reason or the first actor", async () => {
+        const sale = await ringUp();
+
+        const first = await send(
+          "POST",
+          `/api/sales/${sale.id}/void`,
+          { reason: "Rung up twice" },
+          token,
+        );
+        const second = await send(
+          "POST",
+          `/api/sales/${sale.id}/void`,
+          { reason: "A different story" },
+          token,
+        );
+
+        assert.equal(first.status, 200);
+        assert.equal(second.status, 200, "a double-tap is not an error to interpret");
+        const a = await dataOf<ReceiptBody>(first);
+        const b = await dataOf<ReceiptBody>(second);
+        assert.equal(b.voidReason, "Rung up twice", "the first reason stands");
+        assert.equal(b.voidedAt, a.voidedAt, "and so does the first moment");
+      });
+
+      it("refuses a cart that was never rung up, which is discarded instead", async () => {
+        const held = await dataOf<ReceiptBody>(
+          await send("POST", "/api/sales", await holdBody(), token),
+        );
+
+        const response = await send(
+          "POST",
+          `/api/sales/${held.id}/void`,
+          { reason: "Not wanted" },
+          token,
+        );
+
+        // A hold has no ledger and no receipt number, so there is nothing to reverse; the
+        // two endings point at each other (ADR 0015 §6, ADR 0016 §7).
+        assert.equal(response.status, 409);
+        assert.equal((await envelope(response)).code, "SALE_NOT_COMPLETED");
+        assert.equal(
+          (await dataOf<ReceiptBody>(await request("GET", `/api/sales/${held.id}`, token))).status,
+          "HELD",
+          "and the refusal changed nothing",
+        );
+      });
+
+      it("refuses credit the sale granted that the customer has already used", async () => {
+        await setEntitlement("packages", true);
+        const customerId = await seededCustomerId();
+        const packageId = (
+          await runAsPlatform(() =>
+            prisma.package.findFirstOrThrow({
+              where: { tenantId: TENANT_A, name: "Aloha Bundle" },
+              select: { id: true },
+            }),
+          )
+        ).id;
+
+        const sale = await ringUp({
+          customerId,
+          lines: [{ itemType: "PACKAGE", itemId: packageId, quantity: 1 }],
+          payments: [{ method: "CASH", amount: 300 }],
+        });
+
+        // One session spent is the whole difference between "the sale should not have
+        // happened" and "the customer keeps what they used".
+        const holding = await runAsPlatform(() =>
+          prisma.customerPackageHolding.findFirstOrThrow({
+            where: { tenantId: TENANT_A, packageId, customerId },
+            select: { id: true },
+          }),
+        );
+        await runAsPlatform(() =>
+          prisma.customerPackageHolding.update({
+            where: { id: holding.id },
+            data: { quantityRemaining: { decrement: 1 } },
+          }),
+        );
+
+        const response = await send(
+          "POST",
+          `/api/sales/${sale.id}/void`,
+          { reason: "Customer wants a refund" },
+          token,
+        );
+
+        assert.equal(response.status, 409);
+        assert.equal((await envelope(response)).code, "HOLDING_ALREADY_SPENT");
+        assert.equal(
+          (await dataOf<ReceiptBody>(await request("GET", `/api/sales/${sale.id}`, token))).status,
+          "COMPLETED",
+          "a refused void reverses nothing at all",
+        );
+      });
+
+      it("refuses a balance that has already been paid against", async () => {
+        const customerId = await seededCustomerId();
+        const sale = await ringUp({
+          customerId,
+          lines: [{ itemType: "SERVICE", itemId: await seededIdOf("SERVICE"), quantity: 1 }],
+          // 50.00 due, 20.00 handed over: the rest is a debt on the customer's account.
+          payments: [{ method: "CASH", amount: 20 }],
+        });
+
+        const outstanding = await runAsPlatform(() =>
+          prisma.customerOutstanding.findFirstOrThrow({
+            where: { tenantId: TENANT_A, saleId: sale.id },
+            select: { id: true, unpaidAmount: true },
+          }),
+        );
+        await runAsPlatform(() =>
+          prisma.customerOutstandingPayment.create({
+            data: {
+              tenantId: TENANT_A,
+              customerId,
+              outstandingId: outstanding.id,
+              saleId: sale.id,
+              paidAmount: outstanding.unpaidAmount,
+              paidAt: new Date(),
+            },
+          }),
+        );
+
+        const response = await send(
+          "POST",
+          `/api/sales/${sale.id}/void`,
+          { reason: "Customer disputes this" },
+          token,
+        );
+
+        // Money came in after the sale, so undoing it means refunding — a different verb.
+        assert.equal(response.status, 409);
+        assert.equal((await envelope(response)).code, "OUTSTANDING_ALREADY_PAID");
+      });
+
+      it("cancels a balance nobody has paid against, with the sale", async () => {
+        const customerId = await seededCustomerId();
+        const sale = await ringUp({
+          customerId,
+          lines: [{ itemType: "SERVICE", itemId: await seededIdOf("SERVICE"), quantity: 1 }],
+          payments: [{ method: "CASH", amount: 20 }],
+        });
+
+        const response = await send(
+          "POST",
+          `/api/sales/${sale.id}/void`,
+          { reason: "Wrong price quoted" },
+          token,
+        );
+        assert.equal(response.status, 200);
+
+        const rows = await runAsPlatform(() =>
+          prisma.customerOutstanding.count({ where: { tenantId: TENANT_A, saleId: sale.id } }),
+        );
+        assert.equal(rows, 0, "the debt is cancelled with the sale that created it");
+      });
+
+      it("refuses a cashier, who may not authorise their own reversal", async () => {
+        const sale = await ringUp();
+
+        const response = await send(
+          "POST",
+          `/api/sales/${sale.id}/void`,
+          { reason: "Cashier changed their mind" },
+          cashierToken,
+        );
+
+        assert.equal(response.status, 403);
+        assert.equal((await envelope(response)).code, "FORBIDDEN");
+        assert.equal(
+          (await dataOf<ReceiptBody>(await request("GET", `/api/sales/${sale.id}`, token))).status,
+          "COMPLETED",
+        );
+      });
+
+      it("requires a reason, and answers an unknown sale as not found", async () => {
+        const sale = await ringUp();
+
+        const brief = await send("POST", `/api/sales/${sale.id}/void`, { reason: "no" }, token);
+        assert.equal(brief.status, 422);
+        assert.ok(
+          (await envelope(brief)).details?.some((detail) => detail.path === "body.reason"),
+          "the reason is required by the contract, not merely expected",
+        );
+
+        const missing = await send(
+          "POST",
+          "/api/sales/no-such-sale/void",
+          { reason: "Never existed" },
+          token,
+        );
+        assert.equal(missing.status, 404);
+        assert.equal((await envelope(missing)).code, "SALE_NOT_FOUND");
       });
     });
   },

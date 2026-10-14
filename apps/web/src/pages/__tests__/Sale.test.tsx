@@ -61,11 +61,13 @@ vi.mock("@/hooks/useServices", () => ({ useServiceList }));
 vi.mock("@/hooks/useStaff", () => ({ useStaffList }));
 
 const isReadOnly = vi.hoisted(() => ({ value: false }));
+/** The signed-in role, writable per test so the void action can be asserted absent. */
+const role = vi.hoisted(() => ({ value: "SUPER_ADMIN" }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({
     isReadOnly: isReadOnly.value,
     tenant: { id: "tenant-1" },
-    user: { id: "user-1" },
+    user: { id: "user-1", globalRole: role.value },
   }),
 }));
 
@@ -148,6 +150,9 @@ function receipt(overrides: Partial<SaleDetail> = {}): SaleDetail {
     staffId: "u1",
     staffName: "Ava Owner",
     note: null,
+    voidedAt: null,
+    voidReason: null,
+    voidedByName: null,
     totalQuantity: 1,
     totalAmount: "80.00",
     paidAmount: "80.00",
@@ -188,6 +193,7 @@ function cartPanel(): HTMLElement {
 
 beforeEach(() => {
   isReadOnly.value = false;
+  role.value = "SUPER_ADMIN";
   useSaleItems.mockReturnValue(itemsResult(["SERVICE", "PRODUCT"], [SERVICE, PRODUCT]));
   useSaleCustomers.mockReturnValue(listResult([CUSTOMER]));
   useServiceList.mockReturnValue(listResult([]));
@@ -570,5 +576,85 @@ describe("picking a parked cart up", () => {
     // Nothing was written either way: the cart is still on the list.
     expect(post).not.toHaveBeenCalled();
     expect(del).not.toHaveBeenCalled();
+  });
+});
+
+/** Rings a sale up through the UI, so the receipt is on screen for the void tests. */
+async function ringUpAReceipt(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+  await user.click(screen.getByRole("button", { name: "Take payment" }));
+  await user.click(
+    within(await screen.findByRole("dialog")).getByRole("button", { name: "Take payment" }),
+  );
+  await screen.findByText("Receipt #1042");
+}
+
+describe("voiding a rung-up sale", () => {
+  it("asks for a reason, posts it, and draws the voided receipt the server sent back", async () => {
+    const user = userEvent.setup();
+    renderSale();
+    await ringUpAReceipt(user);
+
+    await user.click(screen.getByRole("button", { name: "Void sale" }));
+
+    const dialog = await screen.findByRole("dialog");
+    // The reason is required by the contract, so the button waits for one that would pass.
+    expect(within(dialog).getByRole("button", { name: "Void it" })).toBeDisabled();
+
+    post.mockResolvedValueOnce(
+      receipt({
+        status: "VOID",
+        voidedAt: "2026-03-04T11:00:00.000Z",
+        voidReason: "Rung up twice",
+        voidedByName: "Ava Owner",
+      }),
+    );
+
+    await user.type(within(dialog).getByLabelText("Reason for voiding this sale"), "Rung up twice");
+    await user.click(within(dialog).getByRole("button", { name: "Void it" }));
+
+    // The actor is not in the body: the API takes it from the token (ADR 0016).
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith("/sales/sale-1/void", { reason: "Rung up twice" }),
+    );
+
+    // The banner and the badge come from the server's own row, not from the browser
+    // guessing at the new state.
+    expect(await screen.findByText(/^Voided on/)).toBeInTheDocument();
+    expect(screen.getByText("Rung up twice")).toBeInTheDocument();
+    expect(screen.getByText("Void")).toBeInTheDocument();
+    // And the action is gone: a voided sale has nothing left to take off the books.
+    expect(screen.queryByRole("button", { name: "Void sale" })).not.toBeInTheDocument();
+  });
+
+  it("keeps the dialog open with the server's refusal", async () => {
+    const user = userEvent.setup();
+    getErrorMessage.mockReturnValue("Credit this sale granted has already been used.");
+    renderSale();
+    await ringUpAReceipt(user);
+
+    post.mockRejectedValueOnce(new Error("Conflict"));
+
+    await user.click(screen.getByRole("button", { name: "Void sale" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByLabelText("Reason for voiding this sale"), "Wrong bundle");
+    await user.click(within(dialog).getByRole("button", { name: "Void it" }));
+
+    // A refusal is usually something the manager can act on, so it is shown in place
+    // rather than thrown away with the dialog.
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Credit this sale granted has already been used.",
+    );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("offers no void action to a cashier", async () => {
+    role.value = "STAFF";
+    const user = userEvent.setup();
+    renderSale();
+    await ringUpAReceipt(user);
+
+    // The server would 403 anyway; a button that always fails is worse than none.
+    expect(screen.queryByRole("button", { name: "Void sale" })).not.toBeInTheDocument();
   });
 });

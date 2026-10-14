@@ -57,3 +57,12 @@ export const PAYMENT_METHOD_BADGE: Record<SalePaymentMethod, BadgeVariant> = {
   CHEQUE: "neutral",
   OTHER: "neutral",
 };
+
+/**
+ * The roles that may void a sale.
+ *
+ * A mirror of the API's `requireRole("SUPER_ADMIN", "MANAGER")`, and only ever used to
+ * *hide* an action: the server is what enforces it. A cashier offered a button that
+ * always 403s is worse than one offered nothing (ADR 0016).
+ */
+export const VOID_SALE_ROLES: readonly string[] = ["SUPER_ADMIN", "MANAGER"];

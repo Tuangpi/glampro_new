@@ -480,7 +480,7 @@ export function useCompleteSale() {
  *
  * A hold is the only sale the API will delete: it wrote no ledger and holds no receipt
  * number, so there is nothing to reverse. A sale that was rung up is refused (409) and
- * is voided instead, which Phase 5h adds.
+ * is voided instead (ADR 0016).
  */
 export function useDiscardHold() {
   const queryClient = useQueryClient();
@@ -489,6 +489,31 @@ export function useDiscardHold() {
     mutationFn: (saleId: string) => del<{ id: string }>(`/sales/${saleId}`),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.sale.holds() });
+    },
+  });
+}
+
+/**
+ * Voids a rung-up sale: `POST /api/sales/:id/void` (ADR 0016).
+ *
+ * The **reason** is the whole request; the actor is the token's, not the browser's, which
+ * is why it cannot be passed in from here. The server answers with the *voided* receipt,
+ * so the screen redraws from the server's own row rather than guessing at the new state.
+ *
+ * A void puts stock back, so the item grid and the catalogue's low-stock count move with
+ * it. The hold list does not: the API refuses a voided hold, so a `HELD` sale cannot be
+ * the one this touched.
+ */
+export function useVoidSale() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ saleId, reason }: { saleId: string; reason: string }) =>
+      post<SaleDetail>(`/sales/${saleId}/void`, { reason }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sale.items() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.products.list() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.products.count() });
     },
   });
 }

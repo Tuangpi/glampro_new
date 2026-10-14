@@ -14,6 +14,10 @@
  * the one subtraction — `paidAmount - totalAmount` — and it is drawn as an
  * outstanding balance instead when it runs the other way, because a short tender
  * is a debt (`CustomerOutstanding`) and not negative change.
+ *
+ * A **voided** sale draws through this same component with a banner and a badge, which is
+ * the point of a void being a state change rather than a delete: the receipt is still a
+ * receipt, and it has to say what it now is (ADR 0016).
  */
 import type { SaleDetail } from "@glampro/shared";
 
@@ -29,30 +33,55 @@ export interface ReceiptViewProps {
   sale: SaleDetail;
   /** Clears the receipt and returns the till to an empty cart. */
   onNewSale: () => void;
+  /**
+   * Whether the signed-in user may void — owner or manager (ADR 0016). Only ever used to
+   * **hide** the action: the API refuses anybody else with a 403, and a button that
+   * always fails is worse than no button.
+   */
+  canVoid: boolean;
+  /** Opens the void dialog. */
+  onVoid: () => void;
 }
 
-export default function ReceiptView({ sale, onNewSale }: ReceiptViewProps) {
+export default function ReceiptView({ sale, onNewSale, canVoid, onVoid }: ReceiptViewProps) {
   const changeCents = priceToCents(sale.paidAmount) - priceToCents(sale.totalAmount);
+  // A void is only reachable from a sale that stands: a voided one has nothing left to
+  // take off the books, and the service says the same thing.
+  const voidable = sale.status === "COMPLETED" && canVoid;
 
   return (
     <div className="flex flex-col gap-6">
       <Card
-        title={`Receipt ${sale.receiptNumber === null ? "(number pending)" : `#${sale.receiptNumber}`}`}
+        title={
+          <span className="inline-flex flex-wrap items-center gap-2">
+            {`Receipt ${sale.receiptNumber === null ? "(number pending)" : `#${sale.receiptNumber}`}`}
+            {/* On the title as well as in the banner, because a printed sheet is read
+                from the top — a copy that does not say VOID reads as a live receipt. */}
+            {sale.status === "VOID" ? <Badge variant="danger">Void</Badge> : null}
+          </span>
+        }
         description={`${formatDateTime(sale.soldAt)} · ${sale.customerName ?? "Walk-in"} · rung up by ${sale.staffName ?? "the till"}`}
         actions={
-          // The browser's own print dialog — no PDF library needed, because the
-          // receipt is already rendered here with the server's numbers. It covers
-          // both a physical printer and "Save as PDF"; `print:hidden` strips the
-          // app chrome so only the receipt reaches the paper.
-          <Button
-            variant="secondary"
-            size="sm"
-            className="print:hidden"
-            onClick={() => window.print()}
-          >
-            <Printer aria-hidden />
-            Print
-          </Button>
+          <>
+            {/* The browser's own print dialog — no PDF library needed, because the
+                receipt is already rendered here with the server's numbers. It covers
+                both a physical printer and "Save as PDF"; `print:hidden` strips the
+                app chrome so only the receipt reaches the paper. */}
+            <Button
+              variant="secondary"
+              size="sm"
+              className="print:hidden"
+              onClick={() => window.print()}
+            >
+              <Printer aria-hidden />
+              Print
+            </Button>
+            {voidable ? (
+              <Button variant="danger" size="sm" className="print:hidden" onClick={onVoid}>
+                Void sale
+              </Button>
+            ) : null}
+          </>
         }
         footer={
           <div className="flex items-center justify-between gap-4">
@@ -135,16 +164,35 @@ export default function ReceiptView({ sale, onNewSale }: ReceiptViewProps) {
         ) : null}
       </Card>
 
-      <p
-        role="status"
-        className="flex items-center gap-2 rounded-card border border-line bg-success-soft px-4.5 py-3.5 text-sm text-success-text print:hidden"
-      >
-        <CheckCircle aria-hidden className="shrink-0" />
-        {sale.receiptNumber === null
-          ? "The sale is rung up. It will get a receipt number shortly."
-          : `Sale rung up as receipt #${sale.receiptNumber}.`}
-        <Banknote aria-hidden className="ml-auto shrink-0 text-ink-muted" />
-      </p>
+      {sale.status === "VOID" ? (
+        // Printed as well as drawn: a sheet that does not say VOID could be filed as a
+        // live receipt, which is the one mistake the void exists to prevent.
+        <div
+          role="status"
+          className="flex flex-col gap-1 rounded-card border border-danger/40 bg-danger/10 px-4.5 py-3.5 text-sm text-danger"
+        >
+          <p className="font-bold">
+            Voided{sale.voidedAt === null ? "" : ` on ${formatDateTime(sale.voidedAt)}`}
+            {sale.voidedByName === null ? "" : ` by ${sale.voidedByName}`}.
+          </p>
+          <p>{sale.voidReason ?? "No reason was recorded."}</p>
+          <p className="text-xs">
+            The number, the lines and the tenders stay on the record. This sale no longer counts
+            towards any total.
+          </p>
+        </div>
+      ) : (
+        <p
+          role="status"
+          className="flex items-center gap-2 rounded-card border border-line bg-success-soft px-4.5 py-3.5 text-sm text-success-text print:hidden"
+        >
+          <CheckCircle aria-hidden className="shrink-0" />
+          {sale.receiptNumber === null
+            ? "The sale is rung up. It will get a receipt number shortly."
+            : `Sale rung up as receipt #${sale.receiptNumber}.`}
+          <Banknote aria-hidden className="ml-auto shrink-0 text-ink-muted" />
+        </p>
+      )}
     </div>
   );
 }

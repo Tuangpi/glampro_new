@@ -183,7 +183,11 @@ model User {
   /// Sales this user rang up, and the lines credited to them. Per-line credit is
   /// the redesign's model — legacy had four fixed `sold_by_one..four` slots on the
   /// sale, which cannot express "these two people shared this one service".
-  sales        Sale[]
+  sales        Sale[] @relation("SaleStaff")
+  /// Sales this user voided. An audit trail rather than a work list: the relation exists
+  /// so the receipt can print a name, and it is the one `Sale`↔`User` link that does not
+  /// cascade ([ADR 0016](../../docs/decisions/0016-a-void-is-a-recorded-whole-sale-reversal.md)).
+  voidedSales  Sale[] @relation("SaleVoidedBy")
   saleLines    SaleLine[]
   performances EmployeePerformance[]
   leaves       EmployeeLeave[]
@@ -804,14 +808,24 @@ model Sale {
   /// Legacy `sale_date` + `sale_time`.
   soldAt   DateTime
   note     String?
-  /// When a `VOID` sale was voided, so the receipt can say why.
+  /// **Q32.** When a `VOID` sale was voided, so the receipt can say so.
   voidedAt DateTime?
+  /// Why, in the words of whoever voided it. Free text and required at the API boundary,
+  /// nullable here because a sale that was never voided has no reason and a back-fill
+  /// would be inventing one ([ADR 0016](../../docs/decisions/0016-a-void-is-a-recorded-whole-sale-reversal.md)).
+  voidReason String?
+  /// Who answered for it — the verified JWT's user, never anything the request named.
+  voidedById String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  staff      User?    @relation(fields: [staffId], references: [id], onDelete: Cascade)
+  staff      User?    @relation("SaleStaff", fields: [staffId], references: [id], onDelete: Cascade)
+  /// `SetNull` where every other link to `User` on this model cascades: deleting a
+  /// departing manager must not delete the sales they voided. The reason column and the
+  /// `VOID` status keep the record either way.
+  voidedBy   User?    @relation("SaleVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
   lines      SaleLine[]
   payments    SalePayment[]
   commissions EmployeeCommission[]
