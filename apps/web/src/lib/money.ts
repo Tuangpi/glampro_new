@@ -38,3 +38,19 @@ export function cartTotalCents(
 ): number {
   return lines.reduce((sum, line) => sum + lineTotalCents(line.unitPrice, line.quantity), 0);
 }
+
+/**
+ * A unit price after a percentage discount.
+ *
+ * Rounded on the **unit** price, half-up, which is exactly what the server does to the
+ * same catalogue price (`priceCart` in `sale.service.ts`) — so the cart's preview and the
+ * receipt agree to the penny rather than to within a rounding step (ADR 0017).
+ *
+ * `0` and `undefined` are the same thing here: a line nobody discounted.
+ */
+export function discountedPrice(unitPrice: string, discountPercent: number | undefined): string {
+  if (!discountPercent) return unitPrice;
+
+  const cents = priceToCents(unitPrice);
+  return centsToPrice(cents - Math.round((cents * discountPercent) / 100));
+}

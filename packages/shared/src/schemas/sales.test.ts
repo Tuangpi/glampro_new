@@ -6,9 +6,12 @@ import {
   SALE_ITEM_KINDS,
   completeSaleSchema,
   createSaleSchema,
+  discountPercentSchema,
   saleDetailSchema,
   saleItemSchema,
   saleItemSearchQuerySchema,
+  saleLineInputSchema,
+  saleLineSchema,
   saleListQuerySchema,
   saleSummarySchema,
   voidSaleSchema,
@@ -272,6 +275,7 @@ const receipt = {
   totalQuantity: 1,
   totalAmount: "80.00",
   paidAmount: "80.00",
+  discountAmount: "0.00",
   outstandingAmount: "0.00",
   pointsEarned: 5,
   lines: [],
@@ -285,6 +289,13 @@ describe("saleDetailSchema", () => {
     assert.equal(standing.voidedAt, null);
     assert.equal(standing.voidReason, null);
     assert.equal(standing.voidedByName, null);
+  });
+
+  it("carries the discount the lines came to", () => {
+    const discounted = saleDetailSchema.parse({ ...receipt, discountAmount: "33.34" });
+
+    assert.equal(discounted.discountAmount, "33.34");
+    assert.equal(saleDetailSchema.parse(receipt).discountAmount, "0.00");
   });
 
   it("carries why and by whom once it is voided, and still a receipt", () => {
@@ -327,5 +338,76 @@ describe("voidSaleSchema", () => {
     assert.equal(voidSaleSchema.safeParse({ reason: "  no  " }).success, false);
     assert.equal(voidSaleSchema.safeParse({ reason: "x".repeat(501) }).success, false);
     assert.equal(voidSaleSchema.safeParse({ reason: "x".repeat(500) }).success, true);
+  });
+});
+
+describe("discountPercentSchema", () => {
+  it("accepts a rate up to the whole line, and one that arrived as text", () => {
+    assert.equal(discountPercentSchema.parse(0), 0);
+    assert.equal(discountPercentSchema.parse(100), 100);
+    assert.equal(discountPercentSchema.parse("12.5"), 12.5);
+  });
+
+  it("refuses a rate above the whole line, and a negative one", () => {
+    // A discount above 100% would be a price the client chose in the negative.
+    assert.equal(discountPercentSchema.safeParse(100.01).success, false);
+    assert.equal(discountPercentSchema.safeParse(-1).success, false);
+  });
+
+  it("refuses a rate the money column could not hold", () => {
+    // `Decimal(5,2)` rounds this *after* the money was computed from it, so the stored
+    // rate would no longer explain the stored amount (ADR 0017).
+    assert.equal(discountPercentSchema.safeParse(12.345).success, false);
+    assert.equal(discountPercentSchema.safeParse(12.34).success, true);
+    assert.equal(discountPercentSchema.safeParse(12.3).success, true);
+  });
+});
+
+describe("saleLineInputSchema", () => {
+  /** The smallest legal line, so each case below states only what it varies. */
+  const line = { itemType: "SERVICE", itemId: "s1", quantity: 1 };
+
+  it("takes a rate, and leaves it absent when nobody discounted", () => {
+    assert.equal(saleLineInputSchema.parse(line).discountPercent, undefined);
+    assert.equal(saleLineInputSchema.parse({ ...line, discountPercent: 10 }).discountPercent, 10);
+  });
+
+  it("still carries no price, so a rate is the only price-shaped field it takes", () => {
+    // The founding rule: the request says what was sold and how many. A rate can be here
+    // precisely because it is not an amount (ADR 0017).
+    assert.equal("unitPrice" in saleLineInputSchema.shape, false);
+    assert.equal("price" in saleLineInputSchema.shape, false);
+    assert.equal("lineTotal" in saleLineInputSchema.shape, false);
+  });
+});
+
+describe("saleLineSchema", () => {
+  /** A receipt line, so each case below states only what it varies. */
+  const stored = {
+    id: "l1",
+    itemType: "SERVICE",
+    itemId: "s1",
+    itemName: "Root colour",
+    quantity: 2,
+    unitPrice: "33.33",
+    lineTotal: "66.66",
+    discountPercent: "33.33",
+    discountAmount: "33.34",
+    staffId: null,
+    staffName: null,
+  };
+
+  it("carries the rate and the money that rate took off, both as strings", () => {
+    const line = saleLineSchema.parse(stored);
+
+    assert.equal(line.discountPercent, "33.33");
+    assert.equal(line.discountAmount, "33.34");
+  });
+
+  it("requires them, so a discounted line cannot leave its rate undefined", () => {
+    const withoutRate: Record<string, unknown> = { ...stored };
+    delete withoutRate["discountPercent"];
+
+    assert.equal(saleLineSchema.safeParse(withoutRate).success, false);
   });
 });

@@ -25,12 +25,13 @@ defines when a file has to be written.
 | 0014 | [A double-booked member of staff is refused, not warned](0014-double-booked-staff-are-refused.md)                        | Accepted |
 | 0015 | [A held sale is a tenant-visible draft](0015-a-held-sale-is-a-tenant-visible-draft.md)                                   | Accepted |
 | 0016 | [A void is a recorded whole-sale reversal](0016-a-void-is-a-recorded-whole-sale-reversal.md)                             | Accepted |
+| 0017 | [A discount is a recorded line percentage](0017-a-discount-is-a-recorded-line-percentage.md)                             | Accepted |
 
 `0001` is unallocated: `0002` is referenced by name from
 [`../saas/TENANCY.md`](../saas/TENANCY.md) and
 [`../legacy/LEGACY-MAP.md`](../legacy/LEGACY-MAP.md), and renumbering a referenced
 decision is worse than leaving the first slot empty. The next new decision is
-`0015`.
+`0018`.
 
 ## Rules
 

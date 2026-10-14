@@ -156,6 +156,7 @@ function receipt(overrides: Partial<SaleDetail> = {}): SaleDetail {
     totalQuantity: 1,
     totalAmount: "80.00",
     paidAmount: "80.00",
+    discountAmount: "0.00",
     outstandingAmount: "0.00",
     pointsEarned: 5,
     lines: [
@@ -167,6 +168,8 @@ function receipt(overrides: Partial<SaleDetail> = {}): SaleDetail {
         quantity: 1,
         unitPrice: "80.00",
         lineTotal: "80.00",
+        discountPercent: "0.00",
+        discountAmount: "0.00",
         staffId: null,
         staffName: null,
       },
@@ -588,6 +591,75 @@ async function ringUpAReceipt(user: ReturnType<typeof userEvent.setup>) {
   );
   await screen.findByText("Receipt #1042");
 }
+
+describe("discounting a line", () => {
+  it("prices the line, shows a Discount row, and posts the rate rather than a price", async () => {
+    const user = userEvent.setup();
+    renderSale();
+
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+
+    // The rate is committed on blur, the same way the quantity is, so typing "1" of "10"
+    // never briefly sets one percent.
+    const discount = screen.getByLabelText("Discount percent for Root colour");
+    await user.type(discount, "25");
+    await user.tab();
+
+    // 80.00 less a quarter is 60.00 — the cart re-prices the line from the rate, in cents.
+    await waitFor(() => {
+      expect(within(cartPanel()).getAllByText("$60.00").length).toBeGreaterThan(0);
+    });
+    expect(within(cartPanel()).getByText("Discount")).toBeInTheDocument();
+    expect(within(cartPanel()).getByText("−$20.00")).toBeInTheDocument();
+    expect(within(cartPanel()).getByText(/25% off \$80\.00/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Take payment" }));
+    await user.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Take payment" }),
+    );
+
+    // The body carries the **rate**: the server turns it into money against the
+    // catalogue's own price, which is the thing the till must not be able to name.
+    await waitFor(() => {
+      expect(post).toHaveBeenCalledWith("/sales", {
+        lines: [{ itemType: "SERVICE", itemId: "s1", quantity: 1, discountPercent: 25 }],
+        payments: [{ method: "CASH", amount: 60 }],
+        idempotencyKey: expect.stringMatching(/^[0-9a-f-]{32,36}$/),
+      });
+    });
+  });
+
+  it("clears the discount when the box is emptied, so no rate is posted", async () => {
+    const user = userEvent.setup();
+    renderSale();
+
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+
+    const discount = screen.getByLabelText("Discount percent for Root colour");
+    await user.type(discount, "10");
+    await user.tab();
+    await waitFor(() => expect(within(cartPanel()).getByText("Discount")).toBeInTheDocument());
+
+    await user.clear(discount);
+    await user.tab();
+
+    // A line nobody discounted sends no rate at all, so the receipt says nothing about a
+    // discount that was taken off again.
+    await waitFor(() =>
+      expect(within(cartPanel()).queryByText("Discount")).not.toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Take payment" }));
+    await user.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Take payment" }),
+    );
+
+    await waitFor(() => {
+      const [call] = post.mock.calls;
+      expect(call?.[1].lines[0]).toEqual({ itemType: "SERVICE", itemId: "s1", quantity: 1 });
+    });
+  });
+});
 
 describe("voiding a rung-up sale", () => {
   it("asks for a reason, posts it, and draws the voided receipt the server sent back", async () => {

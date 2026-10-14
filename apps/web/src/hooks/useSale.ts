@@ -41,6 +41,7 @@ import {
 import { queryKeys } from "@/constants/queryKeys";
 import { useAuth } from "@/contexts/AuthContext";
 import { del, get, getPaginated, post } from "@/lib/api";
+import { discountedPrice } from "@/lib/money";
 import {
   clearSaleDraft,
   readSaleDraft,
@@ -68,6 +69,17 @@ export interface CartLine {
   memberPrice: string | null;
   /** Who gets credit for this line. Absent for product lines (the MVP rule). */
   staffId?: string;
+  /**
+   * The reduction the cashier applied, as a **rate** (ADR 0017). The one price-shaped
+   * thing the till may send, and a rate rather than an amount so it cannot name a price:
+   * the server turns it into money against the catalogue's own figure, which is what the
+   * receipt charges. Absent is a line nobody discounted.
+   *
+   * It belongs to the line, so adding another unit of the same item grows the line and
+   * inherits its rate rather than starting an undiscounted twin (`addCartLine`). The
+   * cashier set it on the line and can see it there.
+   */
+  discountPercent?: number;
 }
 
 /**
@@ -82,9 +94,24 @@ export function cartLineKey(line: Pick<CartLine, "itemType" | "itemId" | "staffI
 /**
  * The price one unit costs for the customer on this sale — always derived, so
  * switching between a member and a walk-in re-prices the cart without searching
- * again (the reason the search returns both prices).
+ * again (the reason the search returns both prices), and so a line's discount is
+ * applied the way the server applies it (ADR 0017).
  */
 export function lineUnitPrice(
+  line: Pick<CartLine, "price" | "memberPrice" | "discountPercent">,
+  isMember: boolean,
+): string {
+  return discountedPrice(listUnitPrice(line, isMember), line.discountPercent);
+}
+
+/**
+ * The same line at the catalogue's price, with no discount — what the cart's `Discount`
+ * row subtracts from.
+ *
+ * Only the till's own totals need it: everything that *shows* a price charges the
+ * discounted one, because that is what the receipt will.
+ */
+export function listUnitPrice(
   line: Pick<CartLine, "price" | "memberPrice">,
   isMember: boolean,
 ): string {
@@ -94,7 +121,9 @@ export function lineUnitPrice(
 
 /**
  * Adds one unit of the item. An identical line grows instead: a till adds
- * another shampoo to the line it already has rather than starting a new one.
+ * another shampoo to the line it already has rather than starting a new one —
+ * and it grows the line's **discount with it**, because a rate belongs to the
+ * line the cashier set it on rather than to the units added after it (ADR 0017).
  *
  * Returns whether the line landed. Past 100 distinct lines it does not,
  * because the write would be refused (`MAX_SALE_LINES` says a hundred lines is
@@ -177,6 +206,29 @@ export function setCartLineStaff(
 }
 
 /**
+ * Sets or clears a line's discount rate (ADR 0017).
+ *
+ * A blank, a non-number or a rate of zero **clears** it, so an untouched line sends no
+ * `discountPercent` at all: the receipt then says nothing about a discount nobody made,
+ * rather than printing "0% off". The rate is rounded to two decimals and clamped to
+ * 0–100, which is exactly what `discountPercentSchema` accepts — a rate the server would
+ * refuse must not be reachable by typing.
+ */
+export function setCartLineDiscount(
+  lines: CartLine[],
+  key: string,
+  percent: number | undefined,
+): CartLine[] {
+  const cleared = percent === undefined || !Number.isFinite(percent) || percent <= 0;
+  const rate = cleared ? undefined : Math.min(Math.round(percent * 100) / 100, 100);
+
+  return lines.map((line) => {
+    if (cartLineKey(line) !== key) return line;
+    return { ...line, discountPercent: rate };
+  });
+}
+
+/**
  * Removes a line outright.
  */
 export function removeCartLine(lines: CartLine[], key: string): CartLine[] {
@@ -193,6 +245,9 @@ export function toSaleLineInputs(lines: CartLine[]): SaleLineInput[] {
     itemId: line.itemId,
     quantity: line.quantity,
     ...(line.staffId ? { staffId: line.staffId } : {}),
+    // Absent rather than `0` when nobody discounted: the rate is what the receipt
+    // discloses, and "0% off" is a disclosure of nothing (ADR 0017).
+    ...(line.discountPercent ? { discountPercent: line.discountPercent } : {}),
   }));
 }
 
@@ -215,6 +270,9 @@ export function cartLinesFrom(sale: SaleDetail): CartLine[] {
     price: line.unitPrice,
     memberPrice: null,
     ...(line.staffId ? { staffId: line.staffId } : {}),
+    // The rate comes back with the line: it is part of what the cashier set, and the
+    // completion re-prices the cart from the same catalogue the hold was priced from.
+    ...(Number(line.discountPercent) > 0 ? { discountPercent: Number(line.discountPercent) } : {}),
   }));
 }
 
@@ -275,6 +333,8 @@ export interface SaleCart {
   addItem: (item: SaleItem, staffId: string | undefined, isMember: boolean) => boolean;
   setQuantity: (key: string, quantity: number) => void;
   setStaff: (key: string, staffId: string | undefined) => void;
+  /** Sets or clears a line's discount rate; `undefined` clears it (ADR 0017). */
+  setDiscount: (key: string, percent: number | undefined) => void;
   removeLine: (key: string) => void;
   /** Replaces the whole cart at once — what picking up a parked cart does. */
   setLines: (lines: CartLine[]) => void;
@@ -324,6 +384,9 @@ export function useSaleCart(): SaleCart {
     },
     setStaff: (key, staffId) => {
       update((lines) => setCartLineStaff(lines, key, staffId));
+    },
+    setDiscount: (key, percent) => {
+      update((lines) => setCartLineDiscount(lines, key, percent));
     },
     removeLine: (key) => {
       update((lines) => removeCartLine(lines, key));

@@ -925,6 +925,18 @@ model SaleLine {
   /// factor cannot silently rewrite a historical total.
   lineTotal Decimal @db.Decimal(12, 2)
 
+  /// **Q33.** The rate the till applied, recorded so a receipt can say *why* a line is
+  /// cheap and a report can add up what the salon gave away — the two things legacy's
+  /// unrecorded discount could not answer. `0.00` for a line nobody discounted, so the
+  /// column is never null and `SUM` over it works
+  /// ([ADR 0017](../../docs/decisions/0017-a-discount-is-a-recorded-line-percentage.md)).
+  discountPercent Decimal @default(0) @db.Decimal(5, 2)
+  /// What that rate took off the **whole line**, stored for the same reason `lineTotal`
+  /// is: a later reconsideration of the rate must not rewrite a historical figure. The
+  /// rate rounds to the cent on the *unit* price, so this is `(listPrice - unitPrice) *
+  /// quantity` and the line's own arithmetic stays exact.
+  discountAmount Decimal @default(0) @db.Decimal(12, 2)
+
   /// Who this line is credited to. Null means uncredited — a product sale with no
   /// stylist on it, which is the common case.
   staffId   String?

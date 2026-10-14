@@ -16,7 +16,7 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
 import CartLine, { type StaffOption } from "@/components/sale/CartLine";
-import { lineUnitPrice, type CartLine as CartLineState } from "@/hooks/useSale";
+import { lineUnitPrice, listUnitPrice, type CartLine as CartLineState } from "@/hooks/useSale";
 import { cartTotalCents } from "@/lib/money";
 import { formatPrice } from "@/lib/utils";
 
@@ -32,6 +32,8 @@ export interface CartPanelProps {
   disabled: boolean;
   onQuantity: (key: string, quantity: number) => void;
   onStaff: (key: string, staffId: string | undefined) => void;
+  /** Sets or clears a line's discount rate, in percent (ADR 0017). */
+  onDiscount: (key: string, percent: number | undefined) => void;
   onRemove: (key: string) => void;
   onClear: () => void;
   onCheckout: () => void;
@@ -49,6 +51,7 @@ export default function CartPanel({
   disabled,
   onQuantity,
   onStaff,
+  onDiscount,
   onRemove,
   onClear,
   onCheckout,
@@ -56,13 +59,20 @@ export default function CartPanel({
   holdPending,
 }: CartPanelProps) {
   const units = lines.reduce((sum, line) => sum + line.quantity, 0);
+  // Every line carries both figures: what it costs **after** its discount, and what the
+  // catalogue asked. The difference is what the `Discount` row shows (ADR 0017).
   const priced = lines.map((line) => ({
     line,
     unitPrice: lineUnitPrice(line, isMember),
+    listPrice: listUnitPrice(line, isMember),
   }));
   const totalCents = cartTotalCents(
     priced.map(({ line, unitPrice }) => ({ unitPrice, quantity: line.quantity })),
   );
+  const listTotalCents = cartTotalCents(
+    priced.map(({ line, listPrice }) => ({ unitPrice: listPrice, quantity: line.quantity })),
+  );
+  const discountCents = listTotalCents - totalCents;
 
   return (
     <Card
@@ -82,6 +92,17 @@ export default function CartPanel({
       footer={
         lines.length > 0 ? (
           <div className="flex flex-col gap-2">
+            {discountCents > 0 ? (
+              // The handoff draws one `Discount` row, and it is the sum of what each line
+              // gave away — not a second total the server would have to reconcile
+              // (ADR 0017). Both figures are whole cents, so they cannot disagree.
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm text-ink-muted">Discount</span>
+                <span className="text-sm font-bold text-success-text">
+                  −{formatPrice(discountCents / 100)}
+                </span>
+              </div>
+            ) : null}
             <div className="flex items-baseline justify-between">
               <span className="font-bold text-ink">Total</span>
               <span className="text-lg font-heavy text-ink">{formatPrice(totalCents / 100)}</span>
@@ -126,15 +147,17 @@ export default function CartPanel({
         />
       ) : (
         <ul className="flex flex-col gap-2 px-3 pt-1.5 pb-3">
-          {priced.map(({ line, unitPrice }) => (
+          {priced.map(({ line, unitPrice, listPrice }) => (
             <CartLine
               key={`${line.itemType}:${line.itemId}:${line.staffId ?? ""}`}
               line={line}
               unitPrice={unitPrice}
+              listPrice={listPrice}
               attribution={line.itemType === "SERVICE" ? "service" : "none"}
               staffOptions={line.itemType === "SERVICE" ? staffForService(line.itemId) : []}
               onQuantity={onQuantity}
               onStaff={onStaff}
+              onDiscount={onDiscount}
               onRemove={onRemove}
               disabled={disabled}
             />

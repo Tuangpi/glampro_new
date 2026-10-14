@@ -12,6 +12,7 @@ import {
   MAX_SALE_LINES,
   SALE_ITEM_KINDS,
   customerSummarySchema,
+  discountPercentSchema,
   type CustomerSummary,
 } from "@glampro/shared";
 
@@ -27,6 +28,10 @@ const cartLineSchema = z.object({
   price: z.string(),
   memberPrice: z.string().nullable(),
   staffId: z.string().min(1).optional(),
+  // The **rate**, not the money — the money is the server's to compute (ADR 0017). The
+  // bounds come from the contract, so a draft carrying a rate the API would refuse is
+  // discarded rather than resumed into a cart that cannot be posted.
+  discountPercent: discountPercentSchema.optional(),
 });
 
 const saleDraftSchema = z.object({

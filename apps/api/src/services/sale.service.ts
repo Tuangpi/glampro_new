@@ -606,20 +606,33 @@ const GRANTING_KINDS: ReadonlySet<SaleItemKind> = new Set<SaleItemKind>([
 interface PricedLine {
   input: SaleLineInput;
   item: ResolvedLine;
+  /**
+   * What one unit costs **after** the discount — the figure `SaleLine.unitPrice` holds,
+   * which its own schema comment already describes as "after any discount".
+   */
+  unitPrice: Prisma.Decimal;
   lineTotal: Prisma.Decimal;
+  /** The rate the till asked for, as stored: `0.00` when nobody discounted the line. */
+  discountPercent: Prisma.Decimal;
+  /** The money that rate took off the whole line, for the receipt's `Discount` row. */
+  discountAmount: Prisma.Decimal;
   pointsEarned: number;
 }
 
 /**
  * Resolves every line in the cart against the catalogue and prices it.
  *
- * Two refusals happen here, both before anything is written:
+ * Three things happen here, all before anything is written:
  *
- * 1. **An unentitled kind.** The search omits a kind the salon has not bought; the
- *    write refuses it. Posting a bundle to a salon without the `packages` add-on would
+ * 1. **An unentitled kind is refused.** The search omits a kind the salon has not bought;
+ *    the write refuses it. Posting a bundle to a salon without the `packages` add-on would
  *    otherwise create a holding nothing can ever spend.
- * 2. **A line whose row is gone.** A stale cart naming a deleted id fails the whole
- *    write rather than quietly pricing it at zero.
+ * 2. **A line whose row is gone** fails the whole write rather than quietly pricing at
+ *    zero.
+ * 3. **The discount becomes money**, from the catalogue's price and the rate the client
+ *    asked for (ADR 0017). The rate rounds to the cent on the **unit** price, which is
+ *    what keeps `lineTotal = unitPrice × quantity` true by construction and means two
+ *    tills pricing one cart get the same pennies with no allocation step.
  */
 async function priceCart(lines: SaleLineInput[], isMember: boolean): Promise<PricedLine[]> {
   const { entitled } = await moduleEntitlements();
@@ -659,10 +672,20 @@ async function priceCart(lines: SaleLineInput[], isMember: boolean): Promise<Pri
       ]);
     }
 
+    // `toDecimalPlaces(2)` is banker-free half-up rounding, the same one the money
+    // columns use. Applied to the unit price so the line's arithmetic is exact: the
+    // discount and the stored totals cannot disagree by a cent.
+    const discountPercent = new Prisma.Decimal(line.discountPercent ?? 0);
+    const discountPerUnit = item.unitPrice.mul(discountPercent).div(100).toDecimalPlaces(2);
+    const unitPrice = item.unitPrice.minus(discountPerUnit);
+
     return {
       input: line,
       item,
-      lineTotal: item.unitPrice.mul(line.quantity),
+      unitPrice,
+      lineTotal: unitPrice.mul(line.quantity),
+      discountPercent,
+      discountAmount: discountPerUnit.mul(line.quantity),
       // Points are per unit, so a line of three earns three times one.
       pointsEarned: item.points * line.quantity,
     };
@@ -877,8 +900,12 @@ async function writeLines(
       // Snapshotted at sale time, so archiving a service keeps the receipt readable.
       itemName: line.item.itemName,
       quantity: line.input.quantity,
-      unitPrice: line.item.unitPrice,
+      // After the discount, which is exactly what `SaleLine.unitPrice` documents itself
+      // as holding — and `discountAmount` is the money that got it there (ADR 0017).
+      unitPrice: line.unitPrice,
       lineTotal: line.lineTotal,
+      discountPercent: line.discountPercent,
+      discountAmount: line.discountAmount,
       staffId: line.input.staffId ?? null,
       position: index,
     })),
@@ -979,6 +1006,10 @@ async function fillLedgers(
   // Performance, one row per attributed line. `amount` is the **line total**, which is
   // what legacy's `employee_performances.amount` meant and what a percentage report
   // multiplies; the per-unit amount would under-report a line of three.
+  //
+  // A discounted line therefore credits the **payable** figure rather than the list one.
+  // Legacy did the same thing invisibly — the discount was nowhere on the record; here it
+  // is on the line, so the reduction can be seen and added up (ADR 0017 §6).
   const attributed = priced.filter((line) => line.input.staffId !== undefined);
   if (attributed.length > 0) {
     await tx.employeePerformance.createMany({
@@ -1122,6 +1153,8 @@ const SALE_SELECT = {
       quantity: true,
       unitPrice: true,
       lineTotal: true,
+      discountPercent: true,
+      discountAmount: true,
       staffId: true,
       staff: { select: { name: true } },
     },
@@ -1153,6 +1186,11 @@ function toSaleDetail(row: Prisma.SaleGetPayload<{ select: typeof SALE_SELECT }>
     totalQuantity: row.totalQuantity,
     totalAmount: amount(row.totalAmount),
     paidAmount: amount(row.paidAmount),
+    // Summed from the lines the server wrote, not recomputed from rates: rounding means
+    // the rate is not reversible into the money, and the money is what was charged.
+    discountAmount: amount(
+      row.lines.reduce((sum, line) => sum.plus(line.discountAmount), new Prisma.Decimal(0)),
+    ),
     // Never negative, for the same reason the write clamps it: overpayment is change.
     outstandingAmount: amount(Prisma.Decimal.max(row.totalAmount.minus(row.paidAmount), 0)),
     pointsEarned: row.points.reduce((sum, entry) => sum + entry.point, 0),
@@ -1164,6 +1202,8 @@ function toSaleDetail(row: Prisma.SaleGetPayload<{ select: typeof SALE_SELECT }>
       quantity: line.quantity,
       unitPrice: amount(line.unitPrice),
       lineTotal: amount(line.lineTotal),
+      discountPercent: amount(line.discountPercent),
+      discountAmount: amount(line.discountAmount),
       staffId: line.staffId,
       staffName: line.staff?.name ?? null,
     })),

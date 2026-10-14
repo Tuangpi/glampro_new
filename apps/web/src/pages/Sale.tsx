@@ -494,6 +494,7 @@ export default function Sale() {
               disabled={isReadOnly}
               onQuantity={cart.setQuantity}
               onStaff={cart.setStaff}
+              onDiscount={cart.setDiscount}
               onRemove={cart.removeLine}
               onClear={cart.clearCart}
               onCheckout={openCheckout}

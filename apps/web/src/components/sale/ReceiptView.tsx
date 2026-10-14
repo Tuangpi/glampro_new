@@ -107,6 +107,13 @@ export default function ReceiptView({ sale, onNewSale, canVoid, onVoid }: Receip
                   {line.quantity} × {formatPrice(line.unitPrice)}
                   {line.staffName ? ` · ${line.staffName}` : ""}
                 </p>
+                {/* The disclosure legacy never made: the rate, and the money it took off
+                    this line (ADR 0017). Both come from the server's own row. */}
+                {priceToCents(line.discountAmount) > 0 ? (
+                  <p className="text-xs text-success-text">
+                    {Number(line.discountPercent)}% off · −{formatPrice(line.discountAmount)}
+                  </p>
+                ) : null}
               </div>
               <p className="shrink-0 font-heavy text-ink">{formatPrice(line.lineTotal)}</p>
             </li>
@@ -124,6 +131,14 @@ export default function ReceiptView({ sale, onNewSale, canVoid, onVoid }: Receip
             <dt className="text-sm text-ink-muted">Points earned</dt>
             <dd className="font-bold text-ink">{sale.pointsEarned}</dd>
           </div>
+          {/* One `Discount` row, the figure the server summed over the lines — the
+              handoff's own cart draws the same row (ADR 0017). */}
+          {priceToCents(sale.discountAmount) > 0 ? (
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-sm text-ink-muted">Discount</dt>
+              <dd className="font-bold text-success-text">−{formatPrice(sale.discountAmount)}</dd>
+            </div>
+          ) : null}
           <div className="flex items-baseline justify-between gap-3">
             <dt className="text-sm text-ink-muted">Paid</dt>
             <dd className="font-bold text-ink">{formatPrice(sale.paidAmount)}</dd>

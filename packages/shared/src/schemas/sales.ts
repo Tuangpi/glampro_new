@@ -205,6 +205,23 @@ export const saleStatusSchema = z.enum(SALE_STATUSES);
 export const paymentStatusSchema = z.enum(PAYMENT_STATUSES);
 
 /**
+ * A line discount, as a rate.
+ *
+ * Bounded to 0–100 and to **two decimal places**, because the column is
+ * `Decimal(5,2)`: a rate of `12.345` would be rounded by the database *after* the money
+ * had been computed from it, and the stored rate would no longer explain the stored
+ * amount. Two decimals is what the column can hold, so it is what the contract accepts
+ * ([ADR 0017](../../docs/decisions/0017-a-discount-is-a-recorded-line-percentage.md)).
+ */
+export const discountPercentSchema = z.coerce
+  .number()
+  .min(0)
+  .max(100)
+  .refine((value) => Math.abs(value * 100 - Math.round(value * 100)) < 1e-9, {
+    message: "A discount rate has at most two decimal places.",
+  });
+
+/**
  * One cart line, as the till posts it.
  *
  * **No price.** The request says *what* was sold and *how many*; the server reads
@@ -212,6 +229,10 @@ export const paymentStatusSchema = z.enum(PAYMENT_STATUSES);
  * posted `newPrice` per line and the API stored it unexamined
  * (`SaleController::insert*`), so the price a salon charged was the price a
  * browser chose. `SaleLine.unitPrice` is therefore not a field a client can set.
+ *
+ * `discountPercent` is the one exception, and it is a **rate rather than an amount**:
+ * the client may ask for a reduction of a price the server chose, and cannot name a
+ * price of its own (ADR 0017).
  *
  * `staffId` is the redesign's addition: legacy could attribute at most four
  * stylists to a whole sale (`sold_by_one..four`), while a cart attributes each
@@ -223,6 +244,8 @@ export const saleLineInputSchema = z.object({
   /** A line of zero is not a line; the till removes it instead of posting it. */
   quantity: z.coerce.number().int().min(1).max(10_000),
   staffId: z.string().min(1).max(64).optional(),
+  /** Absent is a line nobody discounted. */
+  discountPercent: discountPercentSchema.optional(),
 });
 
 export type SaleLineInput = z.infer<typeof saleLineInputSchema>;
@@ -387,8 +410,13 @@ export const saleLineSchema = z.object({
   /** The name **snapshotted at sale time**, so archiving a service keeps the receipt. */
   itemName: z.string(),
   quantity: z.number().int(),
+  /** What one unit sold for **after** the discount, which is what the column holds. */
   unitPrice: z.string(),
   lineTotal: z.string(),
+  /** The rate the till applied; `"0.00"` for a line nobody discounted (ADR 0017). */
+  discountPercent: z.string(),
+  /** What that rate took off the whole line, as money. The `Discount` row's parts. */
+  discountAmount: z.string(),
   /** Who this line is credited to; `null` is uncredited, which is the product case. */
   staffId: z.string().nullable(),
   staffName: z.string().nullable(),
@@ -451,6 +479,12 @@ export const saleDetailSchema = z.object({
   totalQuantity: z.number().int(),
   totalAmount: z.string(),
   paidAmount: z.string(),
+  /**
+   * What the discounts on this sale's lines came to, summed by the **server**. The
+   * handoff's cart draws one `Discount` row, so the confirmation prints the same figure
+   * rather than a client adding up rates and money for itself (ADR 0017).
+   */
+  discountAmount: z.string(),
   /** `totalAmount - paidAmount`, never negative. Non-zero means a `CustomerOutstanding`. */
   outstandingAmount: z.string(),
   /** The points this sale earned its customer; `0` for a walk-in. */

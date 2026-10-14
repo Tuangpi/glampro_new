@@ -216,6 +216,7 @@ interface ReceiptBody {
   totalAmount: string;
   paidAmount: string;
   outstandingAmount: string;
+  discountAmount: string;
   pointsEarned: number;
   staffId: string | null;
   staffName: string | null;
@@ -228,6 +229,8 @@ interface ReceiptBody {
     quantity: number;
     unitPrice: string;
     lineTotal: string;
+    discountPercent: string;
+    discountAmount: string;
     staffId: string | null;
   }[];
   payments: { method: string; amount: string; sessionId: string | null }[];
@@ -1224,6 +1227,138 @@ describe(
         );
         assert.equal(missing.status, 404);
         assert.equal((await envelope(missing)).code, "SALE_NOT_FOUND");
+      });
+    });
+
+    /*
+     * ───────────────────────────────────────────────────────────────────────────
+     * Discounts (Phase 5i, ADR 0017)
+     * ───────────────────────────────────────────────────────────────────────────
+     *
+     * The client sends a **rate** and the server sends money. The assertion that matters
+     * is the penny: the rate rounds on the unit price, so `lineTotal = unitPrice ×
+     * quantity` holds and the sale's `Discount` is the sum of the lines rather than a
+     * second total that could disagree with them.
+     */
+    describe("discounting a line", () => {
+      /** Rings up a one-line cart and returns its receipt. */
+      async function ringUpLine(
+        line: Record<string, unknown>,
+        amount: number,
+        customerId?: string,
+      ): Promise<ReceiptBody> {
+        const response = await send(
+          "POST",
+          "/api/sales",
+          {
+            ...(customerId === undefined ? {} : { customerId }),
+            lines: [line],
+            payments: [{ method: "CASH", amount }],
+          },
+          token,
+        );
+        assert.equal(response.status, 201);
+        return dataOf<ReceiptBody>(response);
+      }
+
+      it("rounds the rate on the unit price, so a line's own arithmetic stays exact", async () => {
+        // 50.00 at 33.33% is 16.665, which rounds half-up to 16.67 — the case where
+        // rounding on the unit price and rounding on the line total disagree by a cent.
+        const receipt = await ringUpLine(
+          {
+            itemType: "SERVICE",
+            itemId: await seededIdOf("SERVICE"),
+            quantity: 3,
+            discountPercent: 33.33,
+          },
+          100,
+        );
+
+        // 50.00 − 16.67 = 33.33 a unit; 3 × 33.33 = 99.99, and 3 × 16.67 = 50.01 off.
+        assert.equal(receipt.lines[0]?.unitPrice, "33.33");
+        assert.equal(receipt.lines[0]?.lineTotal, "99.99");
+        assert.equal(receipt.lines[0]?.discountPercent, "33.33");
+        assert.equal(receipt.lines[0]?.discountAmount, "50.01");
+        assert.equal(receipt.totalAmount, "99.99");
+        assert.equal(receipt.discountAmount, "50.01", "the sale totals the lines' discounts");
+      });
+
+      it("leaves a line nobody discounted at zero rather than null", async () => {
+        const receipt = await ringUpLine(
+          { itemType: "SERVICE", itemId: await seededIdOf("SERVICE"), quantity: 1 },
+          50,
+        );
+
+        assert.equal(receipt.lines[0]?.discountPercent, "0.00");
+        assert.equal(receipt.lines[0]?.discountAmount, "0.00");
+        assert.equal(receipt.discountAmount, "0.00");
+      });
+
+      it("credits the stylist and the customer with what was actually paid", async () => {
+        const customerId = await seededCustomerId();
+        const receipt = await ringUpLine(
+          {
+            itemType: "SERVICE",
+            itemId: await seededIdOf("SERVICE"),
+            quantity: 1,
+            staffId: ownerId,
+            discountPercent: 50,
+          },
+          25,
+          customerId,
+        );
+
+        // Half of 50.00. The rule is the same one legacy applied **without recording it**;
+        // the difference is that the rate and the money are on the line now (ADR 0017 §6).
+        const performance = await runAsPlatform(() =>
+          prisma.employeePerformance.findFirstOrThrow({
+            where: { tenantId: TENANT_A, saleId: receipt.id },
+            select: { amount: true },
+          }),
+        );
+        assert.equal(performance.amount.toFixed(2), "25.00");
+        assert.equal(receipt.pointsEarned, 5, "points are per unit and do not scale with money");
+
+        // And a discounted sale still voids, reversing the discounted figures.
+        const voided = await dataOf<ReceiptBody>(
+          await send("POST", `/api/sales/${receipt.id}/void`, { reason: "Wrong rate" }, token),
+        );
+        assert.equal(voided.status, "VOID");
+        assert.equal(voided.pointsEarned, 0, "the offsetting row nets the points to zero");
+        assert.equal(voided.discountAmount, "25.00", "the receipt still says what was given away");
+      });
+
+      it("refuses a rate above the cap, and one the column could not hold", async () => {
+        const line = async (discountPercent: number) => ({
+          itemType: "SERVICE",
+          itemId: await seededIdOf("SERVICE"),
+          quantity: 1,
+          discountPercent,
+        });
+
+        const tooMuch = await send(
+          "POST",
+          "/api/sales",
+          { lines: [await line(120)], payments: [{ method: "CASH", amount: 0 }] },
+          token,
+        );
+        assert.equal(tooMuch.status, 422, "a discount cannot exceed the list price");
+
+        const tooPrecise = await send(
+          "POST",
+          "/api/sales",
+          { lines: [await line(12.345)], payments: [{ method: "CASH", amount: 50 }] },
+          token,
+        );
+        // `Decimal(5,2)` would round this **after** the money had been computed from it,
+        // so the contract refuses it rather than storing a rate that cannot explain the
+        // amount it produced.
+        assert.equal(tooPrecise.status, 422);
+        assert.ok(
+          (await envelope(tooPrecise)).details?.some(
+            (detail) => detail.path === "body.lines.0.discountPercent",
+          ),
+        );
       });
     });
   },

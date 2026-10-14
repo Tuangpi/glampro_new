@@ -30,13 +30,18 @@ export interface StaffOption {
 
 export interface CartLineProps {
   line: CartLineState;
+  /** What one unit costs after the line's discount — what the receipt will charge. */
   unitPrice: string;
+  /** The same unit at the catalogue's price, so a discounted line can show both. */
+  listPrice: string;
   /** The narrowed staff list: department staff for a SERVICE line, empty for the rest. */
   staffOptions: StaffOption[];
   /** The salon cannot offer a choice (line is not a service, or nobody to offer). */
   attribution: "service" | "none";
   onQuantity: (key: string, quantity: number) => void;
   onStaff: (key: string, staffId: string | undefined) => void;
+  /** Sets or clears the line's discount rate, in percent (ADR 0017). */
+  onDiscount: (key: string, percent: number | undefined) => void;
   onRemove: (key: string) => void;
   disabled: boolean;
 }
@@ -44,10 +49,12 @@ export interface CartLineProps {
 export default function CartLine({
   line,
   unitPrice,
+  listPrice,
   staffOptions,
   attribution,
   onQuantity,
   onStaff,
+  onDiscount,
   onRemove,
   disabled,
 }: CartLineProps) {
@@ -56,6 +63,9 @@ export default function CartLine({
   // an intermediate keystroke never rewrites the cart. `null` means "not
   // editing": the box shows the line's own quantity.
   const [draft, setDraft] = useState<string | null>(null);
+  // The same treatment for the discount: typing "1" of "10" must not briefly set a
+  // rate of one percent.
+  const [discountDraft, setDiscountDraft] = useState<string | null>(null);
 
   function commit(raw: string) {
     setDraft(null);
@@ -64,14 +74,33 @@ export default function CartLine({
     onQuantity(key, Math.trunc(parsed));
   }
 
+  function commitDiscount(raw: string) {
+    setDiscountDraft(null);
+    const trimmed = raw.trim();
+    // An emptied box **clears** the discount rather than setting zero: a line nobody
+    // discounted sends no rate at all (ADR 0017).
+    if (trimmed === "") {
+      onDiscount(key, undefined);
+      return;
+    }
+    const parsed = Number(trimmed);
+    if (!Number.isFinite(parsed)) return;
+    onDiscount(key, parsed);
+  }
+
   const totalCents = cartTotalCents([{ unitPrice, quantity: line.quantity }]);
+  const discounted = line.discountPercent !== undefined && line.discountPercent > 0;
 
   return (
     <li className="flex flex-col gap-2 rounded-md border border-line-soft bg-surface px-3 py-2.5">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-ink">{line.name}</p>
-          <p className="text-xs text-ink-muted">{formatPrice(unitPrice)} each</p>
+          <p className="text-xs text-ink-muted">
+            {discounted
+              ? `${formatPrice(unitPrice)} each · ${line.discountPercent}% off ${formatPrice(listPrice)}`
+              : `${formatPrice(unitPrice)} each`}
+          </p>
         </div>
         <p className="shrink-0 text-sm font-heavy text-ink">{formatPrice(totalCents / 100)}</p>
       </div>
@@ -113,6 +142,34 @@ export default function CartLine({
           onClick={() => onQuantity(key, line.quantity + 1)}
         />
         <span className="flex-1" />
+
+        {/* The discount control, always visible rather than behind an overflow menu: a
+            rate the cashier has to hunt for is a rate that gets forgotten mid-sale, and
+            the box shows the rate the line already carries so a discounted line says so.
+            A raw input for the quantity's reason — a visible label per line would double
+            the row's height. */}
+        <label className="flex items-center gap-1 text-xs text-ink-muted">
+          <span aria-hidden>%</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            step={1}
+            placeholder="off"
+            aria-label={`Discount percent for ${line.name}`}
+            value={discountDraft ?? line.discountPercent ?? ""}
+            onChange={(event) => setDiscountDraft(event.target.value)}
+            onBlur={(event) => commitDiscount(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                commitDiscount((event.target as HTMLInputElement).value);
+              }
+            }}
+            disabled={disabled}
+            className={cn(CONTROL_CLASS, "h-control-sm w-16 text-center")}
+          />
+        </label>
+
         <IconButton
           label={`Remove ${line.name} from the cart`}
           icon={<Trash />}
