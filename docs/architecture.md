@@ -374,10 +374,10 @@ Developer-experience details worth knowing:
 | 2     | Full data model: catalogue, customers, staff, appointments, sales  | Models done; ADR 0002 importer remains                                                                                                   |
 | 3     | Auth: login / refresh / logout, roles, protected routes            | Complete — Q26 closed in Phase 4c; Q25 (realm enforcement) still open                                                                    |
 | 4     | Master data screens: customers, products, services, staff          | **Complete** (4a, 4b, 4c) — Q28 (customer archive) still a decision                                                                      |
-| 5     | POS Sale + confirmation (handoff screens 01–02)                    | In progress — 5a (packages and gift cards) and 5b.1 (the POS item search) landed; the cart write, the receipt and screens 01–02 are next |
-| 6     | Appointments and calendar (handoff screens 03, 06)                 | Not started                                                                                                                              |
-| 7     | Dashboard and reports (handoff screens 05, 10)                     | Not started                                                                                                                              |
-| 8     | Settings and integrations (handoff screen 11)                      | Not started                                                                                                                              |
+| 5     | POS Sale + confirmation (handoff screens 01–02)                    | **M1 landed** — screens 01–02 (5c, 5d) plus 5a, 5b.1, 5b.2, 5e and 5f; the write-side remainder (Q31–Q33) is open                        |
+| 6     | Appointments and calendar (handoff screens 03, 06)                 | **Calendar slice closed** — 6b refuses a double-booked window, 6a adds the List \| Calendar grid, 6c adds drag-to-reschedule             |
+| 7     | Dashboard and reports (handoff screens 05, 10)                     | **M3 closed** — the dashboard tiles and `/reports` are in; the wider catalogue, export and charts remain                                 |
+| 8     | Settings and integrations (handoff screen 11)                      | **M4 closed** — salon profile, a read-only modules panel and a staff/roles summary; hours, tax, notifications and user management remain |
 | 9     | Hardening and the live MySQL → PostgreSQL data migration           | Not started                                                                                                                              |
 
 `GET /api/auth/me` exists so the session plumbing (token verification, database

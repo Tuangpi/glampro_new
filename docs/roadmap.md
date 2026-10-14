@@ -61,7 +61,6 @@ a component.
 | Money and dates    | Money wider than the legacy `decimal(8,2)`; legacy date strings normalised once, in the importer                                | **Partly** — all money is `Decimal(12,2)`; the normalising importer is Phase 9                           |
 | Legacy gaps closed | The gaps in [`legacy/LEGACY-MAP.md`](legacy/LEGACY-MAP.md) §5 that change the schema are decided and reflected in the migration | Partly — Q1/Q4/Q7/Q8/Q9 settled; Q2/Q5/Q6 need production MySQL                                          |
 | ID strategy        | [`decisions/0002`](decisions/0002-tenant-id-equals-owner-id.md) implemented, with its import test passing                       | **Not started** — this is the only row left, and it is why the phase is not called closed                |
-| ID strategy        | [`decisions/0002`](decisions/0002-tenant-id-equals-owner-id.md) implemented, with its import test passing                       | Not started                                                                                              |
 
 The phase splits into two commits. The tenant plane is the first, because the scoping
 extension is load-bearing and reviews better on its own; the domain models follow, and
@@ -119,7 +118,7 @@ landed — Phase 5a built the catalogue behind them.)
 | Screen 09's **Rating** column                          | No reviews or ratings table exists in the schema or in the legacy database, so there is no number and no "unrated" state to distinguish                                                                       | **Unscheduled** — no phase owns customer feedback yet. It needs a model before it can have a screen                                                                                                                              |
 | Screen 07's **archive** (create, edit _and archive_)   | `Service` and `Product` have `CatalogStatus { ACTIVE, INACTIVE }` to archive against; `Customer` has no equivalent column, so screen 07's third verb has nothing to write (staff solved this with `disabled`) | **A decision before a slice** — [Q28](STATE.md): either `Customer.archivedAt`, or a `deletedAt` on all three master-data models at once. A product call, not a unilateral one                                                    |
 
-## Phase 5 — POS sale and confirmation
+## Phase 5 — POS sale and confirmation · **Screens 01–02 landed (M1); the write-side remainder is open**
 
 Handoff screens 01–02. Criterion: a sale containing services, products, packages and
 a gift card can be taken end to end — item search, cart, per-line staff attribution,
@@ -185,7 +184,7 @@ Two of the five kinds are add-ons inside a core feature, so an unentitled kind i
 **omitted** from the result and listed in `searchableKinds` — refusing the whole request
 would leave the cashier unable to take the sale at all.
 
-## Phase 6 — Appointments and calendar
+## Phase 6 — Appointments and calendar · **Calendar slice closed (6a–6c); week/month and shifts parked**
 
 **MVP (M2):** list by date range, read one, create, update and complete, with the
 staff offered filtered to the service's department ([`mvp.md`](mvp.md)) and the
@@ -237,7 +236,7 @@ staff assignment come from the service rather than from free text.
 | The **skill matrix**                   | Performer eligibility is department-wide (ADR 0013); the legacy `employee_services` mapping was not modelled, so a stylist cannot yet be filtered by the services they can actually perform                                                                                         | A staff↔service capability model                                                                  |
 | **Reminders**                          | No notification channel or scheduled-job surface exists                                                                                                                                                                                                                             | A notification model and a job runner                                                             |
 
-## Phase 7 — Dashboard and reports
+## Phase 7 — Dashboard and reports · **M3 closed; the wider catalogue, export and charts remain**
 
 **MVP (M3):** a real dashboard (today's income, today's appointments, new
 customers, low stock) and `/reports` with a date range and two to three tables.
@@ -271,7 +270,7 @@ Handoff screens 05 and 10, backed by the report and export routes catalogued in
 [`legacy/API-INVENTORY.md`](legacy/API-INVENTORY.md). Criterion: every tile and
 report has a tenant-scoped query behind it and an entry in `queryKeys.ts`.
 
-## Phase 8 — Settings and integrations
+## Phase 8 — Settings and integrations · **M4 closed; hours, tax, notifications and user management remain**
 
 **MVP (M4):** the salon profile (read/edit), a read-only modules panel, and a
 staff/roles summary. Hours editing, tax and receipt configuration, notifications,
@@ -282,7 +281,7 @@ and the integrations that exist today. Criterion: a tenant can see what it owns 
 change what it is allowed to change, and nothing that belongs to the platform console
 is editable here.
 
-## Phase 9 — Hardening and the live cutover
+## Phase 9 — Hardening and the live cutover · **Not started**
 
 Load and error-path work, then the MySQL → PostgreSQL migration of the production
 data per [`decisions/0002`](decisions/0002-tenant-id-equals-owner-id.md). Criterion:
