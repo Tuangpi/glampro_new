@@ -1,5 +1,5 @@
 /**
- * The day calendar — handoff screen 06's grid.
+ * The day calendar — handoff screen 06's grid, one day wide.
  *
  * One column per member of staff plus an **Unassigned** column, a time gutter
  * down the left, and every booking drawn as a block placed by its real
@@ -8,11 +8,17 @@
  * rows the day list shows, so the two views are one fact asked twice.
  *
  * Three things the handoff drew that this does not, because the model has
- * nothing behind them: a Week and Month view (the query is a day window), a
- * shift or break block on the track (there is no rota table — `EmployeeLeave`
- * is the only half modelled, and it is not read here yet), and a click-to-book
- * empty slot. The grid is a **view** of the book, and the writes still go
- * through the drawer and, in slice 6c, a drag that posts a real PATCH.
+ * nothing behind them: a shift or break block on the track (there is no rota
+ * table — `EmployeeLeave` is the only half modelled, and it is not read here
+ * yet), an availability hint on an empty slot, and click-to-book on one. The
+ * grid is a **view** of the book, and the writes still go through the drawer
+ * and, in slice 6c, a drag that posts a real PATCH.
+ *
+ * The colour, the frame and the block itself are shared with the other two
+ * views: the palette is in `constants/appointments.ts`, the gutter and the hour
+ * lines are in `calendar-geometry.ts`, and the block is `AppointmentBlock`.
+ * Those views are `WeekView.tsx` (seven day columns, read-only) and
+ * `MonthView.tsx` (a chip grid) — see ADR 0018 for why each is what it is.
  *
  * The colours are the handoff's own (a purple block, an amber in-progress
  * block, a green done block) mapped onto the project's tokens rather than the
@@ -25,20 +31,18 @@ import type { AppointmentSummary } from "@glampro/shared";
 import { Calendar } from "@/components/icons";
 import EmptyState from "@/components/ui/EmptyState";
 import Skeleton from "@/components/ui/Skeleton";
+import { cn, getInitials } from "@/lib/utils";
+import AppointmentBlock from "./AppointmentBlock";
 import {
-  APPOINTMENT_BLOCK_TONE,
-  APPOINTMENT_STATUS_LABELS,
-  type CalendarBlockTone,
-} from "@/constants/appointments";
-import { cn, formatTime, getInitials } from "@/lib/utils";
-import {
-  DAY_END_HOUR,
-  DAY_MINUTES,
+  DAY_HOURS,
   DAY_START_HOUR,
   HOUR_HEIGHT,
+  HOUR_LINES,
   PX_PER_MINUTE,
+  TRACK_HEIGHT,
   blockBox,
   type CalendarColumn,
+  gridTemplate,
   nowLineTop,
   rescheduleFields,
 } from "./calendar-geometry";
@@ -63,12 +67,6 @@ export interface CalendarViewProps {
   onReschedule?: (id: string, input: RescheduleInput) => void;
   onRetry?: () => void;
 }
-
-/** The gutter's width, matching the handoff's 68px time column. */
-const GUTTER_WIDTH = 68;
-/** A staff column never narrower than this, so a name still fits. */
-const MIN_COLUMN_WIDTH = 140;
-const TRACK_HEIGHT = DAY_MINUTES * PX_PER_MINUTE;
 
 /** Which column a booking belongs in: its performer, or Unassigned. */
 function columnOf(booking: AppointmentSummary): string | null {
@@ -187,7 +185,7 @@ export default function CalendarView({
         >
           {/* Time gutter: hour labels, each centred on its own hour line. */}
           <div className="relative border-r border-line-soft" style={{ height: TRACK_HEIGHT }}>
-            {HOURS.map((hour) => (
+            {DAY_HOURS.map((hour) => (
               <span
                 key={hour}
                 className="absolute inset-x-0 pr-2 text-right text-2xs font-bold text-ink-faint"
@@ -217,118 +215,6 @@ export default function CalendarView({
         </div>
       </div>
     </div>
-  );
-}
-
-/** A block's tint, kept as three maps so each is one class per tone. */
-const TONE_BORDER: Record<CalendarBlockTone, string> = {
-  brand: "border-l-purple",
-  success: "border-l-success",
-  warning: "border-l-warning",
-  neutral: "border-l-line",
-  danger: "border-l-danger",
-};
-
-const TONE_BACKGROUND: Record<CalendarBlockTone, string> = {
-  brand: "bg-purple-soft",
-  success: "bg-success-soft",
-  warning: "bg-warning-soft",
-  neutral: "bg-surface-2",
-  danger: "bg-danger/10",
-};
-
-const TONE_TEXT: Record<CalendarBlockTone, string> = {
-  brand: "text-purple",
-  success: "text-success-text",
-  warning: "text-warning",
-  neutral: "text-ink-muted",
-  danger: "text-danger",
-};
-
-/** Hour lines, drawn as one repeating gradient instead of N absolutely placed divs. */
-const HOUR_LINES = `repeating-linear-gradient(to bottom, transparent 0, transparent ${
-  HOUR_HEIGHT - 1
-}px, var(--color-line-soft) ${HOUR_HEIGHT - 1}px, var(--color-line-soft) ${HOUR_HEIGHT}px)`;
-
-/**
- * The header and the body are two separate grids that must agree, so both take
- * their template from here — the gutter plus one equal column per track.
- */
-function gridTemplate(columnCount: number): string {
-  return `${GUTTER_WIDTH}px repeat(${columnCount}, minmax(${MIN_COLUMN_WIDTH}px, 1fr))`;
-}
-
-/** The hour labels down the gutter — one per hour, from 08:00 to 19:00. */
-const HOURS = Array.from(
-  { length: DAY_END_HOUR - DAY_START_HOUR },
-  (_, index) => DAY_START_HOUR + index,
-);
-
-/**
- * One booking, drawn on its track.
- *
- * A block is a button rather than a div with a handler: the desk reaches the
- * editor by keyboard as well as by mouse, and a clickable div that is not a
- * button is how a screen reader ends up with a silent grid. `isReadOnly` keeps
- * it inert — a suspended salon sees the day but cannot open the write path.
- */
-function AppointmentBlock({
-  booking,
-  top,
-  height,
-  isReadOnly,
-  onEdit,
-}: {
-  booking: AppointmentSummary;
-  top: number;
-  height: number;
-  isReadOnly: boolean;
-  onEdit: (appointment: AppointmentSummary) => void;
-}) {
-  const tone = APPOINTMENT_BLOCK_TONE[booking.status];
-  const customer = booking.customerName ?? "Walk-in";
-  const label = `${customer}, ${APPOINTMENT_STATUS_LABELS[booking.status]}`;
-  // Below ~34px there is room for the name and nothing else, so the service
-  // line and the time range are dropped rather than overflowing the block.
-  const compact = height < 34;
-
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      disabled={isReadOnly}
-      onClick={() => onEdit(booking)}
-      // A drag moves the block; a click (no drag) opens the editor. `draggable`
-      // is off for a read-only salon so a suspended desk cannot grab anything.
-      draggable={!isReadOnly}
-      onDragStart={(event) => {
-        // The id rides in the dataTransfer; the drop reads it back and the server
-        // re-validates the move (clash + department), so nothing is trusted here.
-        event.dataTransfer.setData("text/plain", booking.id);
-        event.dataTransfer.effectAllowed = "move";
-      }}
-      style={{ top, height }}
-      className={cn(
-        "absolute right-1.5 left-1.5 overflow-hidden rounded-sm border-l-[3px] px-2 py-1 text-left shadow-[0_2px_6px_rgba(27,35,80,0.08)] transition",
-        "hover:brightness-[0.97] disabled:hover:brightness-100",
-        isReadOnly ? "" : "cursor-grab active:cursor-grabbing",
-        TONE_BORDER[tone],
-        TONE_BACKGROUND[tone],
-      )}
-    >
-      <p className="truncate text-xs leading-tight font-extrabold text-ink">{customer}</p>
-      {compact ? null : (
-        <p className={cn("mt-0.5 truncate text-2xs", TONE_TEXT[tone])}>
-          {booking.serviceName ?? "—"}
-        </p>
-      )}
-      {compact ? null : (
-        <p className="truncate text-2xs text-ink-muted">
-          {formatTime(booking.startsAt)} – {formatTime(booking.endsAt)}
-        </p>
-      )}
-    </button>
   );
 }
 
@@ -364,8 +250,10 @@ function StaffTrack({
   onReschedule?: (id: string, input: RescheduleInput) => void;
 }) {
   const nowTop = showingToday ? nowLineTop(new Date()) : null;
+  // `day` is what makes the placement truthful across views: a booking only gets a box
+  // on a day it actually occupies (ADR 0018, decision 2).
   const placed = appointments
-    .map((booking) => ({ booking, box: blockBox(booking) }))
+    .map((booking) => ({ booking, box: blockBox(booking, day) }))
     .filter(
       (entry): entry is { booking: AppointmentSummary; box: { top: number; height: number } } =>
         entry.box !== null,
@@ -404,6 +292,7 @@ function StaffTrack({
           top={box.top}
           height={box.height}
           isReadOnly={isReadOnly}
+          draggable
           onEdit={onEdit}
         />
       ))}

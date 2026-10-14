@@ -1,15 +1,22 @@
 /**
  * Calendar grid geometry — pure maths, no DOM.
  *
- * The day view places every booking by its real `startsAt`/`endsAt` rather than
- * by a fixed row height, so a 30-minute fill and a 90-minute colour occupy
- * honestly different amounts of the track. The handoff (screen 06) drew a
- * 9:00–19:00 grid at a placeholder 1.2px/minute; the same *idea* is kept — one
- * scale for the whole day, minutes → pixels — with a wider window and a clean
- * hour height so the maths stays obvious and testable.
+ * The calendar places every booking by its real `startsAt`/`endsAt` rather than by a
+ * fixed row height, so a 30-minute fill and a 90-minute colour occupy honestly
+ * different amounts of the track. The handoff (screen 06) drew a 9:00–19:00 grid at a
+ * placeholder 1.2px/minute; the same *idea* is kept — one scale for the whole day,
+ * minutes → pixels — with a wider window and a clean hour height so the maths stays
+ * obvious and testable.
  *
- * Everything here is a pure function of a `Date`, which is what lets the grid
- * be unit-tested in jsdom without rendering a single block.
+ * Since Phase 6d one definition draws three views (ADR 0018): the day grid, the week's
+ * seven day columns and the month's padded weeks. That is why the **frame**
+ * (`GUTTER_WIDTH`, `HOUR_HEIGHT`, `TRACK_HEIGHT`, `DAY_HOURS`, `gridTemplate`), the
+ * **windows** (`dayWindow`/`weekWindow`/`monthWindow`) and the **lane packing**
+ * (`packLanes`) live here rather than inside one of the views: a booking must sit at the
+ * same time, and on the same day, in all of them.
+ *
+ * Everything here is a pure function of a `Date`, which is what lets the grids be
+ * unit-tested in jsdom without rendering a single block.
  */
 
 import type { AppointmentSummary } from "@glampro/shared";
@@ -29,6 +36,37 @@ export const MIN_BLOCK_PX = 22;
 /** Drop targets snap to this many minutes (the handoff's quarter-hour slots). */
 export const SNAP_MINUTES = 15;
 
+/** The track's height: every column is exactly this tall, whatever it holds. */
+export const TRACK_HEIGHT = DAY_MINUTES * PX_PER_MINUTE;
+
+/** The gutter's width, matching the handoff's 68px time column. */
+export const GUTTER_WIDTH = 68;
+/** A column is never narrower than this, so a name still fits. */
+export const MIN_COLUMN_WIDTH = 140;
+
+/** The hours the gutter labels, from `DAY_START_HOUR` to `DAY_END_HOUR - 1`. */
+export const DAY_HOURS: number[] = Array.from(
+  { length: DAY_END_HOUR - DAY_START_HOUR },
+  (_, index) => DAY_START_HOUR + index,
+);
+
+/**
+ * Hour lines, drawn as one repeating gradient instead of N absolutely placed divs.
+ * Presentation, but it is built from `HOUR_HEIGHT`, so it lives beside it rather than
+ * being re-derived — and re-derived wrongly — in each grid.
+ */
+export const HOUR_LINES = `repeating-linear-gradient(to bottom, transparent 0, transparent ${
+  HOUR_HEIGHT - 1
+}px, var(--color-line-soft) ${HOUR_HEIGHT - 1}px, var(--color-line-soft) ${HOUR_HEIGHT}px)`;
+
+/**
+ * The header and the body of a grid are two separate grids that must agree, so both take
+ * their template from here — the gutter plus one equal column per day or performer.
+ */
+export function gridTemplate(columnCount: number): string {
+  return `${GUTTER_WIDTH}px repeat(${columnCount}, minmax(${MIN_COLUMN_WIDTH}px, 1fr))`;
+}
+
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
@@ -37,38 +75,292 @@ export function minutesIntoDay(instant: Date): number {
   return instant.getHours() * 60 + instant.getMinutes();
 }
 
+/** Local midnight of the day an instant falls on. */
+export function startOfDay(day: Date): Date {
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate());
+}
+
+/** The day's last millisecond — the *inclusive* edge the API's `to` wants. */
+export function endOfDay(day: Date): Date {
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), 23, 59, 59, 999);
+}
+
 /**
- * A block's box on the track, or `null` when the booking does not overlap the
- * visible window at all.
+ * `days` later than `day` (negative walks back), holding the wall clock at midnight.
  *
- * `top`/`height` are in pixels and already clamped to the day, so a booking
- * that starts before 08:00 is drawn from the top edge rather than off-grid, and
- * one that runs past 20:00 is clipped at the bottom. `durationMinutes` is the
- * fallback span when `endsAt` is somehow absent (it is not, but the contract
- * allows it), so the block never collapses to zero height.
+ * Built from the calendar fields rather than by adding 86,400,000ms so a DST night does
+ * not drag the grid's day boundary to 23:00 or 01:00. The same caution applies to every
+ * day in this file.
  */
-export function blockBox(booking: {
-  startsAt: string;
-  endsAt?: string | null;
-  durationMinutes?: number | null;
-}): { top: number; height: number } | null {
+export function addDays(day: Date, days: number): Date {
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate() + days);
+}
+
+/**
+ * The first day of the week, as JS numbers `getDay()` returns: **1 = Monday**.
+ *
+ * The handoff and the legacy rota both draw Monday-first. Stated once, here, so a
+ * Sunday-first salon is a one-line change.
+ */
+export const WEEK_STARTS_ON = 1;
+
+/** The Monday of the week that holds `day`, at midnight. */
+export function startOfWeek(day: Date): Date {
+  const start = startOfDay(day);
+  return addDays(start, -((start.getDay() - WEEK_STARTS_ON + 7) % 7));
+}
+
+/** The seven days of `day`'s week, Monday first. */
+export function weekDays(day: Date): Date[] {
+  const first = startOfWeek(day);
+  return Array.from({ length: 7 }, (_, index) => addDays(first, index));
+}
+
+/** The 1st of `day`'s month. */
+export function startOfMonth(day: Date): Date {
+  return new Date(day.getFullYear(), day.getMonth(), 1);
+}
+
+/** The last day of `day`'s month. */
+export function endOfMonth(day: Date): Date {
+  return new Date(day.getFullYear(), day.getMonth() + 1, 0);
+}
+
+/**
+ * `months` later (negative walks back), keeping the day of the month where it exists:
+ * 31 January + one month is 28 February, not 3 March. Stepping a month arrow should
+ * never skip a month.
+ */
+export function shiftMonth(day: Date, months: number): Date {
+  const first = new Date(day.getFullYear(), day.getMonth() + months, 1);
+  const lastDay = endOfMonth(first).getDate();
+  return new Date(first.getFullYear(), first.getMonth(), Math.min(day.getDate(), lastDay));
+}
+
+/**
+ * The days a month grid draws: whole Monday-first weeks from the Monday of the week
+ * holding the 1st to the Sunday of the week holding the last day. 28, 35 or 42 entries.
+ */
+export function monthGridDays(day: Date): Date[] {
+  const first = startOfWeek(startOfMonth(day));
+  const last = addDays(startOfWeek(endOfMonth(day)), 6);
+  const days: Date[] = [];
+  for (let cursor = first; cursor.getTime() <= last.getTime(); cursor = addDays(cursor, 1)) {
+    days.push(cursor);
+  }
+  return days;
+}
+
+/** A stable key for a local day — `2026-10-14`. Not `toISOString()`, which is UTC. */
+export function dayKey(day: Date): string {
+  const month = String(day.getMonth() + 1).padStart(2, "0");
+  const date = String(day.getDate()).padStart(2, "0");
+  return `${day.getFullYear()}-${month}-${date}`;
+}
+
+/** Whether two instants fall on the same local day. */
+export function isSameDay(left: Date, right: Date): boolean {
+  return (
+    left.getFullYear() === right.getFullYear() &&
+    left.getMonth() === right.getMonth() &&
+    left.getDate() === right.getDate()
+  );
+}
+
+/**
+ * One booking belongs to the day it **starts** on (ADR 0018, decision 2), in every view.
+ *
+ * No straddle flag and no second query: a booking that crosses midnight is a thing the
+ * 08:00–20:00 gutter cannot draw on either day anyway, and a rule that applies in the
+ * grid, the chips and the day label can only be the same rule in all three.
+ */
+export function bookingsByDay<T extends { startsAt: string }>(
+  bookings: readonly T[],
+): Map<string, T[]> {
+  const byDay = new Map<string, T[]>();
+  for (const booking of bookings) {
+    const start = new Date(booking.startsAt);
+    if (Number.isNaN(start.getTime())) continue;
+    const key = dayKey(start);
+    const bucket = byDay.get(key);
+    if (bucket) bucket.push(booking);
+    else byDay.set(key, [booking]);
+  }
+  return byDay;
+}
+
+/** The `from`/`to` pair a calendar read sends. Both are instants, both inclusive. */
+export interface CalendarWindow {
+  from: string;
+  to: string;
+}
+
+/** One local day, midnight to its last millisecond. */
+export function dayWindow(day: Date): CalendarWindow {
+  return { from: startOfDay(day).toISOString(), to: endOfDay(day).toISOString() };
+}
+
+/** The whole Monday-first week that holds `day`. */
+export function weekWindow(day: Date): CalendarWindow {
+  const first = startOfWeek(day);
+  return { from: startOfDay(first).toISOString(), to: endOfDay(addDays(first, 6)).toISOString() };
+}
+
+/**
+ * The calendar month, **not** the drawn grid: a padded cell from September is paper, and
+ * fetching it would put a chip in a day the desk cannot see the edges of.
+ */
+export function monthWindow(day: Date): CalendarWindow {
+  return { from: startOfMonth(day).toISOString(), to: endOfDay(endOfMonth(day)).toISOString() };
+}
+
+/**
+ * Minutes from `day`'s own local midnight to `instant` — negative before that day and
+ * past 1440 after it.
+ *
+ * Wall-clock minutes, not elapsed ones: a booking at 09:00 is nine hours into its day
+ * whether or not the clock moved that night, so the day a salon loses an hour must not
+ * draw 09:00 an hour early. The day difference is taken from the calendar fields, which
+ * also keeps a DST jump from turning "tomorrow" into 0.96 of a day.
+ */
+export function minutesFromDayStart(instant: Date, day: Date): number {
+  if (Number.isNaN(instant.getTime())) return Number.NaN;
+  const wholeDays = Math.round(
+    (startOfDay(instant).getTime() - startOfDay(day).getTime()) / 86_400_000,
+  );
+  return wholeDays * 1_440 + minutesIntoDay(instant);
+}
+
+/** A booking's span on one day, in grid minutes clamped to the visible window. */
+export interface BlockSpan {
+  start: number;
+  end: number;
+}
+
+/**
+ * A booking's span on `day`, in **grid minutes** — minutes from the top of the visible
+ * window (08:00), clamped to it — or `null` when the booking is not on that day at all.
+ *
+ * This is the date-aware definition the whole calendar rests on (ADR 0018, decision 2):
+ * `blockBox` scales it into pixels and `packLanes` compares it for overlaps. A booking is
+ * drawn on a day only where it really is — so a 10:00 booking is not a block on tomorrow,
+ * and a booking that crosses midnight is on **neither** of its days, because 23:00 and
+ * 01:00 both fall outside the 08:00–20:00 gutter.
+ */
+export function blockMinutes(
+  booking: {
+    startsAt: string;
+    endsAt?: string | null;
+    durationMinutes?: number | null;
+  },
+  day: Date,
+): BlockSpan | null {
   const start = new Date(booking.startsAt);
   if (Number.isNaN(start.getTime())) return null;
 
+  // `durationMinutes` is the fallback span when `endsAt` is absent *or* unparseable (the
+  // contract allows the former), so the block never collapses to nothing or to `NaN`.
+  const ended = booking.endsAt != null ? new Date(booking.endsAt) : null;
   const end =
-    booking.endsAt != null
-      ? new Date(booking.endsAt)
+    ended !== null && !Number.isNaN(ended.getTime())
+      ? ended
       : new Date(start.getTime() + (booking.durationMinutes ?? 30) * 60_000);
 
-  const startMin = clamp(minutesIntoDay(start) - DAY_START_HOUR * 60, 0, DAY_MINUTES);
-  const endMin = clamp(minutesIntoDay(end) - DAY_START_HOUR * 60, 0, DAY_MINUTES);
+  const offset = DAY_START_HOUR * 60;
+  const startMin = clamp(minutesFromDayStart(start, day) - offset, 0, DAY_MINUTES);
+  const endMin = clamp(minutesFromDayStart(end, day) - offset, 0, DAY_MINUTES);
 
   if (endMin <= startMin) return null;
+  return { start: startMin, end: endMin };
+}
+
+/**
+ * A block's box on `day`'s track, or `null` when the booking is not drawn on that day.
+ *
+ * `top`/`height` are in pixels and already clamped, so a booking that starts before 08:00
+ * is drawn from the top edge rather than off-grid, and one that runs past 20:00 is clipped
+ * at the bottom. `MIN_BLOCK_PX` keeps a very short booking clickable.
+ */
+export function blockBox(
+  booking: {
+    startsAt: string;
+    endsAt?: string | null;
+    durationMinutes?: number | null;
+  },
+  day: Date,
+): { top: number; height: number } | null {
+  const span = blockMinutes(booking, day);
+  if (span === null) return null;
 
   return {
-    top: startMin * PX_PER_MINUTE,
-    height: Math.max(MIN_BLOCK_PX, (endMin - startMin) * PX_PER_MINUTE),
+    top: span.start * PX_PER_MINUTE,
+    height: Math.max(MIN_BLOCK_PX, (span.end - span.start) * PX_PER_MINUTE),
   };
+}
+
+/** Where one range sits in its day: lane `n` of `lanes`, both counting from zero. */
+export interface LanePlacement {
+  lane: number;
+  lanes: number;
+}
+
+/**
+ * Side-by-side lanes for the ranges that overlap inside one day column.
+ *
+ * The 6b rule (ADR 0014) refuses a *new* double-booking for one performer, but nothing
+ * stops two unassigned bookings starting at 09:00, and a legacy row may already overlap.
+ * Those are two blocks that must both stay readable, so a column divides its width into
+ * lanes instead of stacking one block on the other.
+ *
+ * Overlap is **half-open** — `start >= previousEnd` is a free lane — the same comparison
+ * ADR 0014 uses to refuse a clash, so what the week draws and what the server refuses
+ * agree about "at the same time".
+ *
+ * `lanes` is the width of the **cluster** a range belongs to (the run of ranges that
+ * overlap transitively), not of the whole day: a morning with two overlaps must not
+ * squeeze an afternoon booking into a third of its column. Within a cluster a lane is
+ * reused as soon as it is free, which is what keeps a chain of short bookings two lanes
+ * wide instead of four.
+ *
+ * Ids are the keys, so they must be unique — they are appointment ids, which are.
+ */
+export function packLanes(
+  ranges: ReadonlyArray<{ id: string; start: number; end: number }>,
+): Map<string, LanePlacement> {
+  const sorted = [...ranges].sort(
+    (left, right) =>
+      left.start - right.start || left.end - right.end || left.id.localeCompare(right.id),
+  );
+
+  const placements = new Map<string, LanePlacement>();
+  const laneEnds: number[] = [];
+  let cluster: { id: string; lane: number }[] = [];
+  let clusterEnd = Number.NEGATIVE_INFINITY;
+
+  const closeCluster = () => {
+    const lanes = cluster.reduce((widest, entry) => Math.max(widest, entry.lane + 1), 0);
+    for (const entry of cluster) placements.set(entry.id, { lane: entry.lane, lanes });
+    cluster = [];
+  };
+
+  for (const range of sorted) {
+    // A range starting at or after everything already placed begins a new cluster: the
+    // lanes of the previous one are free again and its width is finally known.
+    if (range.start >= clusterEnd) {
+      closeCluster();
+      clusterEnd = range.end;
+    } else {
+      clusterEnd = Math.max(clusterEnd, range.end);
+    }
+
+    let lane = laneEnds.findIndex((end) => end <= range.start);
+    if (lane === -1) lane = laneEnds.length;
+    laneEnds[lane] = range.end;
+    cluster.push({ id: range.id, lane });
+  }
+  closeCluster();
+
+  return placements;
 }
 
 /** Where the "now" indicator sits, or `null` outside the visible window. */

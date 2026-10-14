@@ -28,8 +28,12 @@ import { get, getPaginated, patch, post } from "@/lib/api";
  * contract, so this is the server's own ceiling rather than a magic number —
  * a salon would need 200 bookings in a day before it spills, and paging a
  * calendar is a grid that silently hides blocks.
+ *
+ * Exported because the page names the ceiling when it has to disclose one: a
+ * month that holds more than a page says "at most 200 at a time" rather than
+ * describing its own truncation in numbers nobody can check.
  */
-const CALENDAR_PAGE_SIZE = 200;
+export const CALENDAR_PAGE_SIZE = 200;
 
 export interface AppointmentListFilters {
   page: number;

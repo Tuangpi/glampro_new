@@ -187,13 +187,15 @@ Two of the five kinds are add-ons inside a core feature, so an unentitled kind i
 **omitted** from the result and listed in `searchableKinds` — refusing the whole request
 would leave the cashier unable to take the sale at all.
 
-## Phase 6 — Appointments and calendar · **Calendar slice closed (6a–6c); week/month and shifts parked**
+## Phase 6 — Appointments and calendar · **Calendar slice closed (6a–6d); shifts, the skill matrix and reminders parked**
 
 **MVP (M2):** list by date range, read one, create, update and complete, with the
 staff offered filtered to the service's department ([`mvp.md`](mvp.md)) and the
 deviation recorded as an ADR. The calendar grid, drag-to-reschedule, availability
 and clash detection, shifts/leave in the booking path, the skill matrix and
-reminders stay full-phase work.
+reminders stay full-phase work — the grid, the drag and the clash rule landed as
+6a–6d below; shifts/leave, availability beyond the clash rule, the skill matrix
+and reminders did not.
 
 **M2 landed 2026-10-08** (`pages/Appointments.tsx` + `components/appointments/…`
 
@@ -223,8 +225,19 @@ every move.
 **The calendar slice is closed** (2026-10-13): the criterion below is met — a
 booking can be created through the guided flow or dragged in the grid, rescheduled
 and completed, with duration and staff assignment coming from the service. What
-the slice did not take is the deferral table below, and nothing was ever specified
-beyond 6c, so there is no "6d".
+the slice did not take is the deferral table below.
+
+**Phase 6d landed** (2026-10-14) — the handoff's other two views, so screen 06's
+`List · Day · Week · Month` toggle is the control it drew
+([ADR 0018](decisions/0018-the-calendar-draws-more-than-one-day.md)). `WeekView.tsx`
+draws seven day columns on the day grid's own scale (the same imported gutter,
+hour lines and `blockBox`), with `packLanes` splitting a column between overlapping
+bookings; `MonthView.tsx` draws whole Monday-first weeks of chips (`+N more` past
+three). A booking belongs to the day it **starts** on, and the padded month cells
+are dates without chips, because the read is the calendar month. Both new views are
+read-only — the day grid keeps 6c's drag — and the page discloses the window's
+page-size ceiling rather than drawing a month with a hole in it. **No API change,
+no migration, no new dependency**: the endpoint already accepted any `from`/`to`.
 
 Handoff screens 03 and 06. Criterion: an appointment can be created through the
 guided flow or dragged in the calendar, rescheduled and completed, and duration and
@@ -232,12 +245,18 @@ staff assignment come from the service rather than from free text.
 
 ### Deferred from Phase 6 — the drawn things the model could not back
 
-| Deferred                               | Why it is not here                                                                                                                                                                                                                                                                  | Returns with                                                                                      |
-| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Week and Month views                   | The handoff drew a Day/Week/Month toggle, but the grid's geometry (`buildCalendarColumns`, the 08:00–20:00 gutter) is one day and the list filters `startsAt` **inside** the window — the endpoint itself already takes any `from`/`to`, and the 6b clash rule is already cross-day | Multi-day grid geometry and a straddle-aware read                                                 |
-| A **shift / break** block on the track | There is no shift or rota table — only the leave half was modelled (`EmployeeLeave`), and it is not read here yet                                                                                                                                                                   | A shift model, so availability can be read to book someone (carried from _Deferred from Phase 4_) |
-| The **skill matrix**                   | Performer eligibility is department-wide (ADR 0013); the legacy `employee_services` mapping was not modelled, so a stylist cannot yet be filtered by the services they can actually perform                                                                                         | A staff↔service capability model                                                                  |
-| **Reminders**                          | No notification channel or scheduled-job surface exists                                                                                                                                                                                                                             | A notification model and a job runner                                                             |
+| Deferred                               | Why it is not here                                                                                                                                                                          | Returns with                                                                                      |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| A **shift / break** block on the track | There is no shift or rota table — only the leave half was modelled (`EmployeeLeave`), and it is not read here yet                                                                           | A shift model, so availability can be read to book someone (carried from _Deferred from Phase 4_) |
+| The **skill matrix**                   | Performer eligibility is department-wide (ADR 0013); the legacy `employee_services` mapping was not modelled, so a stylist cannot yet be filtered by the services they can actually perform | A staff↔service capability model                                                                  |
+| **Reminders**                          | No notification channel or scheduled-job surface exists                                                                                                                                     | A notification model and a job runner                                                             |
+
+**Left this table on 2026-10-14: Week and Month views.** 6d above drew them. The
+geometry turned out to be `calendar-geometry.ts`'s already (the day grid's frame,
+reused), and no straddle-aware read was needed: a booking is bucketed by the day it
+starts on, and the 08:00–20:00 gutter makes a midnight-crossing booking undrawable on
+both of its days anyway ([ADR 0018](decisions/0018-the-calendar-draws-more-than-one-day.md)
+decisions 2–3).
 
 ## Phase 7 — Dashboard and reports · **M3 closed; the wider catalogue, export and charts remain**
 

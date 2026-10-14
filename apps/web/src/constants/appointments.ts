@@ -1,5 +1,5 @@
 /**
- * Appointments vocabulary — the words the day view and the form share.
+ * Appointments vocabulary — the words the calendar and the form share.
  *
  * One place for both, for the same reason `constants/staff.ts` holds the role
  * labels: the table's status cell, the filter and the drawer must not each
@@ -67,3 +67,40 @@ export const APPOINTMENT_BLOCK_TONE: Record<AppointmentStatusValue, CalendarBloc
   CANCELLED: "neutral",
   NO_SHOW: "danger",
 };
+
+/**
+ * A block's tint as three maps, so each tone is one class rather than a
+ * conditional. They live here beside `APPOINTMENT_BLOCK_TONE` because the day
+ * grid, the week grid and the month's chips all draw the same status the same
+ * colour — one block component, one palette.
+ */
+export const APPOINTMENT_BLOCK_BORDER: Record<CalendarBlockTone, string> = {
+  brand: "border-l-purple",
+  success: "border-l-success",
+  warning: "border-l-warning",
+  neutral: "border-l-line",
+  danger: "border-l-danger",
+};
+
+export const APPOINTMENT_BLOCK_BACKGROUND: Record<CalendarBlockTone, string> = {
+  brand: "bg-purple-soft",
+  success: "bg-success-soft",
+  warning: "bg-warning-soft",
+  neutral: "bg-surface-2",
+  danger: "bg-danger/10",
+};
+
+export const APPOINTMENT_BLOCK_TEXT: Record<CalendarBlockTone, string> = {
+  brand: "text-purple",
+  success: "text-success-text",
+  warning: "text-warning",
+  neutral: "text-ink-muted",
+  danger: "text-danger",
+};
+
+/**
+ * The week's day heads, Monday first — the same first day `WEEK_STARTS_ON` states
+ * in `calendar-geometry.ts`. Written out rather than derived from `Intl`, so the
+ * suite asserts on a fixed label instead of on the test machine's locale.
+ */
+export const CALENDAR_WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
