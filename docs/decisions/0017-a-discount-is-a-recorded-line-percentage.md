@@ -6,6 +6,72 @@
 - **Related:** [`../STATE.md`](../STATE.md) §4.3 (Q33), [`../legacy/POS-BEHAVIOR.md`](../legacy/POS-BEHAVIOR.md),
   [ADR 0016](0016-a-void-is-a-recorded-whole-sale-reversal.md)
 
+## Evidence review — 2026-10-15
+
+The accepted line-percentage policy below is preserved. This review records current
+implementation and discrepancies, not a new loyalty or commission policy. Missing
+historical sources remain historical; see the
+[ADR index](README.md#historical-references-and-current-scope).
+
+- **The request carries a bounded rate, not an authoritative price.**
+  [`discountPercentSchema`](../../packages/shared/src/schemas/sales.ts) coerces
+  numbers, permits 0–100 and requires at most two decimal places. The rate is
+  optional on each input line. Unknown price keys are stripped by the object
+  contract, not rejected as an attempted price override; catalogue lookup remains
+  authoritative. Decision item 2's integer-or-decimal wording is subject to this
+  precision limit.
+- **Pricing and storage follow the per-unit rule.**
+  [`priceCart`](../../apps/api/src/services/sale.service.ts) uses `Prisma.Decimal`
+  to round the unit discount to two places, subtract it from the selected catalogue
+  price, then multiply both discount and net unit price by quantity. The line write
+  stores both rate and amount; receipt mapping sums stored line discounts. The
+  [migration](../../apps/api/prisma/migrations/20261014044809_sale_line_discount/migration.sql)
+  adds non-null decimal columns with zero defaults, but no rate-range or arithmetic
+  CHECK constraints. Validation is therefore an application-path guarantee, not
+  protection against arbitrary database writes. Migration application was not
+  checked against PostgreSQL.
+- **Loyalty points conflict with decision item 6 and its consequences.**
+  `priceCart` computes `item.points * quantity`, without scaling by discount or
+  money received. The ledger sums those points for a named customer; a walk-in has
+  no points row. The existing
+  [route test](../../apps/api/src/routes/sales.routes.test.ts), despite its title
+  about crediting what was paid, explicitly expects five points on the half-price
+  service and says points do not scale with money. Do not silently change either
+  behavior or accepted policy: resolve the intended loyalty basis explicitly.
+- **Performance is the discounted payable amount, not proof of commission or cash
+  received.** The ledger writes each attributed line's `lineTotal` to
+  `employeePerformance`, including sales with an outstanding balance. This path
+  does not create an `employeeCommission` row. Historical references to stylist
+  pay and what the customer "actually paid" must not be read as evidence of a
+  commission calculation or tender-based performance allocation.
+- **No discount-specific approver guard is present.**
+  [`sales.routes.ts`](../../apps/api/src/routes/sales.routes.ts) protects create
+  and complete with authentication, the sales-module and writable-tenant guards,
+  without a discount cap/role guard. This supports the any-till-user policy within
+  those existing access boundaries, not anonymous or suspended-tenant access.
+- **The web normalizes the rate and conditionally discloses money off.**
+  [`useSale.ts`](../../apps/web/src/hooks/useSale.ts) rounds committed rates to two
+  places, caps them at 100 and clears nonpositive/nonfinite values.
+  [`CartLine.tsx`](../../apps/web/src/components/sale/CartLine.tsx) commits on blur
+  or Enter; its numeric input uses `step={1}` although the contract accepts decimal
+  rates. [`money.ts`](../../apps/web/src/lib/money.ts) estimates discounts with
+  JavaScript numbers and `Math.round`, not server Decimal arithmetic. Existing
+  rounding examples are not exhaustive equivalence proof.
+  [`ReceiptView.tsx`](../../apps/web/src/components/sale/ReceiptView.tsx) displays
+  the stored rate and line amount only when `discountAmount` is positive, and the
+  aggregate row only when the total discount is positive. A positive rate rounded
+  to zero money remains in the API record but has no receipt discount disclosure.
+- **Coverage is narrower than the historical summary implies.**
+  [Shared tests](../../packages/shared/src/schemas/sales.test.ts) cover bounds,
+  precision and response shapes, not persistence or arithmetic invariants.
+  [Money tests](../../apps/web/src/lib/money.test.ts) cover five preview examples;
+  [Sale tests](../../apps/web/src/pages/__tests__/Sale.test.tsx) cover discount
+  editing, clearing, preview and posted rate using mocked requests. Those discount
+  cases do not prove the server-returned receipt's disclosure. The inspected API
+  route cases cover rounding, zero defaults, performance, unchanged per-unit
+  points, voiding and invalid rates; they were not run because database access
+  remains prohibited. No live ledger, migration or thermal-print claim is made.
+
 ## Context
 
 A salon discounts. Cashiers do it at the counter, and the till has to be able to record

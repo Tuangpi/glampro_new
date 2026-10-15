@@ -7,6 +7,52 @@
   [`../roadmap.md`](../roadmap.md) Phase 6, [`../design/HANDOFF.md`](../design/HANDOFF.md) §5,
   [`../STATE.md`](../STATE.md) §4.2
 
+## Evidence review — 2026-10-15
+
+The accepted start-day bucketing and view-interaction policy below is preserved.
+Historical roadmap/handoff references are context, not current acceptance evidence;
+see the [ADR index](README.md#historical-references-and-current-scope).
+
+- **Windows and reads match the stated local-browser policy.**
+  [`calendar-geometry.ts`](../../apps/web/src/components/appointments/calendar-geometry.ts)
+  constructs day, Monday-first week and calendar-month edges using local calendar
+  fields. [`useCalendarAppointments`](../../apps/web/src/hooks/useAppointments.ts)
+  reads the existing endpoint at a fixed page size of 200, enabled for the visible
+  calendar view. [`Appointments.tsx`](../../apps/web/src/pages/Appointments.tsx)
+  still also invokes the list read outside list view; “one read per view” must not
+  be interpreted as no concurrent list request. The hook retains previous data
+  during a range change. No salon timezone preference is applied by this path.
+- **The API selects starts within the inclusive window.**
+  [`listAppointments`](../../apps/api/src/services/appointment.service.ts) filters
+  `startsAt` with `gte`/`lte` and orders by start then ID. This is not an overlap
+  query. Start-day bucketing is consistent with that policy, but excludes a booking
+  that starts before the requested window even when it occupies visible time in it.
+- **The midnight argument is only an example, not a general proof.**
+  `blockMinutes` clamps the actual start/end span to 08:00–20:00 on the supplied
+  day; it does not reject all midnight crossings. A 23:00–01:00 booking is invisible
+  on both days, as tested, but a 19:00–09:00 crossing intersects visible time on
+  both days. Start-day bucketing and the starts-within-window read still limit
+  which day receives it. The Context and rejected-overlap-query rationale below
+  overgeneralize from the short overnight example; changing query semantics needs
+  explicit policy review, not a silent documentation-led implementation change.
+- **Read-only means no dragging, not no editing.**
+  [`WeekView.tsx`](../../apps/web/src/components/appointments/WeekView.tsx) uses
+  shared geometry and overlap lanes without drag targets;
+  [`MonthView.tsx`](../../apps/web/src/components/appointments/MonthView.tsx) draws
+  up to three chips per start day and a remaining count. Both open the editor on
+  click for writable tenants. Suspended-tenant controls are disabled. This does
+  not resolve ADR 0013/0014's server write-validation defects.
+- **Truncation is disclosed, not eliminated.** The page compares returned rows
+  with `total` and names the ceiling. It does not automatically fetch later pages;
+  a sparse calendar is not proof of availability. P1-01's full acceptance still
+  needs assessment beyond this historical decision.
+- **Verification is frontend-only.** The geometry, day, week, month and appointment
+  page suites passed: five files / 88 tests. They cover local windows, lane packing,
+  representative overnight behavior, chips, click/drag affordances and the
+  truncation notice. Page hooks are mocked; these tests do not establish deployed
+  reads, server clash refusal, mutation rollback, salon-timezone behavior or live
+  multi-page completeness. PostgreSQL was not accessed.
+
 ## Context
 
 Handoff screen 06 draws a **Day / Week / Month** toggle. Phase 6a–6c built only the day
