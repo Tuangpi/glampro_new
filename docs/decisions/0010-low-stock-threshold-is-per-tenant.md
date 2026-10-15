@@ -8,6 +8,45 @@
   [`../../packages/shared/src/schemas/catalogue.ts`](../../packages/shared/src/schemas/catalogue.ts),
   [0002](0002-tenant-id-equals-owner-id.md)
 
+## Evidence review — 2026-10-15
+
+The decision below preserves its original phase context. Current code confirms
+the per-tenant storage, but the Settings deferral is fulfilled and the query
+override has an unresolved implementation conflict:
+
+- [`schema.prisma`](../../apps/api/prisma/schema.prisma) and the
+  [threshold migration](../../apps/api/prisma/migrations/20261005030037_tenant_low_stock_threshold/migration.sql)
+  define the non-null integer with default `5`. This review inspected the files;
+  it did not verify migration application against a database.
+- [`catalogue.service.ts`](../../apps/api/src/services/catalogue.service.ts)
+  resolves the stored threshold using `currentScope().tenantId` when no override
+  is supplied, with a fallback of `5` if the tenant row is absent. An explicit
+  `query.threshold` bypasses that read. `listProducts` uses the resolved value
+  for both the quantity filter and each returned row's `lowStock` flag. This
+  conflicts with decision items 2–3, which reserve the override for filtering
+  and require row flags to use the stored threshold. Neither behavior nor the
+  accepted decision is changed by this review; resolve the conflict explicitly
+  before implementation and add an override-versus-row-flag regression assertion.
+- [`settings.ts`](../../packages/shared/src/schemas/settings.ts) now accepts an
+  integer threshold from `0` to `10_000` in the profile update contract.
+  [`settings.routes.ts`](../../apps/api/src/routes/settings.routes.ts) restricts
+  writes to `SUPER_ADMIN` or `MANAGER` in a writable tenant, and
+  [`settings.service.ts`](../../apps/api/src/services/settings.service.ts) updates
+  the tenant identified by the ambient scope. The
+  [`Settings` screen](../../apps/web/src/pages/Settings.tsx) exposes the field.
+  Thus item 4's historical deferral and the unreachable-setting consequence no
+  longer describe the current product; there is no need for manual SQL to edit it.
+- [`catalogue.service.test.ts`](../../apps/api/src/services/catalogue.service.test.ts)
+  contains tenant-specific flag, low-stock count and override-filter assertions,
+  but the override case checks the count, not the returned flags.
+  [`settings.routes.test.ts`](../../apps/api/src/routes/settings.routes.test.ts)
+  covers profile reads, editable fields and refused staff/suspended-tenant writes.
+  These database-backed suites were inspected, not run, pending confirmation of a
+  disposable test database. The mocked browser
+  [`Settings.test.tsx`](../../apps/web/src/pages/__tests__/Settings.test.tsx)
+  covers saving the threshold and hiding the save action for staff; it does not
+  establish database persistence or API authorization.
+
 ## Context
 
 Handoff screen 08 draws a **Low stock** stat tile and a rail badge on the Products

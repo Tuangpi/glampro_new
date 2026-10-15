@@ -7,6 +7,38 @@
   [`architecture.md`](../architecture.md) §6, [`roadmap.md`](../roadmap.md) Phase 3,
   [`saas/TENANCY.md`](../saas/TENANCY.md) §6, [`STATE.md`](../STATE.md) §3
 
+## Evidence review — 2026-10-15
+
+The missing architecture, roadmap and tenancy documents and old STATE section are
+historical references; see the [ADR index](README.md#historical-references-and-current-scope).
+Current evidence and limits are:
+
+- [`auth.service.ts`](../../apps/api/src/services/auth.service.ts) implements logout
+  by revoking the presented token hash without changing `tokenVersion`. Password
+  change increments that version and then revokes the user's active refresh rows.
+  [`auth.ts`](../../apps/api/src/middleware/auth.ts) checks the version on requests;
+  [`constants.ts`](../../packages/shared/src/constants.ts) sets the access TTL to
+  15 minutes. The password update and refresh-row revocation are separate writes,
+  not one transaction; this review does not establish failure/race safety.
+- The same service's refresh-replay handling revokes all active refresh rows for
+  a user when any already-revoked token is presented. It does not distinguish a
+  rotated token from one revoked by logout. Thus logout itself leaves other rows
+  alone, but a subsequent refresh attempt with the logged-out token can revoke
+  other sessions' refresh rows. This qualifies the broad other-session guarantee
+  below and needs security-policy review, not a silent documentation-driven fix.
+- [`AuthContext.tsx`](../../apps/web/src/contexts/AuthContext.tsx) clears browser
+  credentials and cached queries before a best-effort logout request. Local
+  sign-out therefore does not prove server revocation if that request fails; the
+  15-minute bound below assumes successful server revocation of the refresh token.
+- Platform-console forced sign-out remains an architectural requirement, not an
+  implemented endpoint in the inspected API. Password change is implemented;
+  this review does not claim full security-hardening acceptance.
+- [`auth.routes.test.ts`](../../apps/api/src/routes/auth.routes.test.ts) contains
+  database-backed logout/password-change assertions, inspected but not executed
+  pending confirmation of a disposable test database. The mocked browser suite
+  [`AuthContext.test.tsx`](../../apps/web/src/contexts/__tests__/AuthContext.test.tsx)
+  checks the logout request and local session clearing, not database revocation.
+
 ## Context
 
 Two mechanisms can end a Glampro session, and they are not the same size:
@@ -78,5 +110,5 @@ SESSION_INVALIDATED`), is idempotent, and **leaves the access token working** �
 - The same file pins the other side of the line: change-password answers `200`, then the
   access token that called it is dead (`401 SESSION_INVALIDATED`) and its refresh row
   cannot be exchanged.
-- [`architecture.md`](../architecture.md) §6 and [`roadmap.md`](../roadmap.md) Phase 3
-  state the split rather than the old conflation.
+- The historical architecture/roadmap updates referenced when this ADR was written
+  are no longer available in this checkout and are not current enforcement evidence.

@@ -6,6 +6,90 @@
 - **Related:** [`../STATE.md`](../STATE.md) §4.3 (Q32), [`../legacy/POS-BEHAVIOR.md`](../legacy/POS-BEHAVIOR.md),
   [ADR 0011](0011-receipt-number-is-a-per-tenant-sequence.md), [ADR 0015](0015-a-held-sale-is-a-tenant-visible-draft.md)
 
+## Evidence review — 2026-10-15
+
+The accepted whole-sale reversal policy below is preserved. These qualifications
+describe current code, not a new refund policy. Historical sources remain
+historical; see the [ADR index](README.md#historical-references-and-current-scope).
+
+- **Authorization and audit inputs match the route policy.**
+  [`sales.routes.ts`](../../apps/api/src/routes/sales.routes.ts) applies auth,
+  the sales-module and writable-tenant guards, and
+  `requireRole("SUPER_ADMIN", "MANAGER")`. It passes `req.user.id` separately
+  from the validated reason to `voidSale`.
+  [`voidSaleSchema`](../../packages/shared/src/schemas/sales.ts) trims and bounds
+  the reason to 3–500 characters; unknown body keys, including a supplied actor,
+  are stripped rather than treated as authority. The
+  [void migration](../../apps/api/prisma/migrations/20261014043155_sale_void_reason_and_actor/migration.sql)
+  adds nullable reason/actor columns and an actor foreign key with `SET NULL`.
+  Migration application was not verified against a database.
+- **The reversal is implemented as a guarded transaction, not a refund.**
+  [`sale.service.ts`](../../apps/api/src/services/sale.service.ts) retains the sale,
+  lines, receipt number, paid amount and tenders; checks spent holdings and later
+  outstanding payments; conditionally changes `COMPLETED` to `VOID`; then restores
+  product stock, offsets the sale's net points and deletes linked holdings,
+  outstanding, performance and commission rows in that transaction. No payment
+  provider or cash-refund operation runs. Decision item 5's "refunded with the
+  sale" must not be read as money actually being returned. The
+  [`void dialog`](../../apps/web/src/components/sale/VoidSaleDialog.tsx) explicitly
+  tells the manager to give money back outside the till. An initial partial tender
+  does not by itself prohibit voiding: the outstanding refusal tests for later
+  payment rows, not merely `paidAmount > 0`.
+- **Idempotent receipt replay is sequential, not an unconditional concurrent
+  response guarantee.** An already-void sale returns its existing receipt without
+  changing the first audit fields. Two requests that both read `COMPLETED` can
+  instead reach the count-guarded update, where the loser receives
+  `409 SALE_ALREADY_VOID`. The guard prevents two successful reversal branches,
+  but decision item 8's harmless-double-tap wording overstates the response
+  guarantee. The sale/lines/points snapshot is read before the transaction;
+  spent-holding and outstanding-payment checks inside it are reads, not a shared
+  claim/lock protocol with future redemption/payment writers. Transactional
+  rollback must not be equated with proven isolation from those concurrent writes.
+- **Open integrity issue — stock restoration does not check the matched count.**
+  Product restoration uses `updateMany` by the line's item ID without asserting
+  that a row exists. A deleted catalogue product can therefore be silently skipped
+  while the sale becomes void. Decide whether that case should refuse or record an
+  explicit exception; atomicity alone does not ensure every intended row existed.
+- **Open retention issue — audit relations are not immutable snapshots.**
+  [`schema.prisma`](../../apps/api/prisma/schema.prisma) uses `SET NULL` for the
+  void actor, but `Sale.customer` and `Sale.staff` still use `onDelete: Cascade`.
+  Deleting a referenced customer or cashier can delete the receipt; a manager who
+  is also its cashier is not protected by the separate void-actor link. This is
+  schema behavior, not a claim that the inspected staff/customer UI exposes a hard
+  delete. Actor display is the current related name, not a snapshotted audit name;
+  renaming/deleting that user changes or removes the displayed attribution.
+- **Open receipt/cache issue — cancelled debt can still look outstanding.**
+  `toSaleDetail` computes outstanding from original total minus original paid,
+  regardless of void status. [`ReceiptView.tsx`](../../apps/web/src/components/sale/ReceiptView.tsx)
+  renders that difference as "Outstanding" even after the outstanding row was
+  deleted. The void banner does not distinguish cancelled debt from a live amount
+  due. [`useVoidSale`](../../apps/web/src/hooks/useSale.ts) invalidates item/product
+  queries only, not dashboard/report/customer aggregates; cached business totals
+  can remain stale until their own refresh. These are code-inspection findings,
+  not browser/database reproductions.
+- **Report exclusion is implemented, but UI discovery is limited.** Current reads
+  in [`report.service.ts`](../../apps/api/src/services/report.service.ts) filter
+  completed sales and related lines/performance. The API supports a capped
+  `status=VOID` list, but [`Sale.tsx`](../../apps/web/src/pages/Sale.tsx) offers void
+  from its currently displayed receipt, not a dedicated historical-void browser.
+  No report runtime or printed receipt was exercised during this review.
+- **Historical coverage claims need narrowing.**
+  [`sales.routes.test.ts`](../../apps/api/src/routes/sales.routes.test.ts) contains
+  stock/points/performance assertions, preserved receipt/tenders, sequential replay,
+  spent-package refusal, later-outstanding-payment refusal, cancellation of an
+  unpaid balance, cashier/held-sale refusal and reason validation. It does not
+  establish every holding type's reversal, seeded commission deletion, concurrent
+  void/refund/redemption behavior, missing-product restoration or retention under
+  parent deletion. Its replay uses the same actor twice rather than proving that
+  a different actor cannot replace the first. This database-backed suite was
+  inspected, not run, pending confirmation of a disposable database.
+  Database-free [`sales.test.ts`](../../packages/shared/src/schemas/sales.test.ts)
+  passed **35 tests**; mocked browser
+  [`Sale.test.tsx`](../../apps/web/src/pages/__tests__/Sale.test.tsx) passed
+  **1 file / 23 tests**, including reason-only posting, void banner, refusal display
+  and hiding the cashier action. Those results do not establish ledger rollback,
+  authorization at the API or actual repayment.
+
 ## Context
 
 A sale that should not have happened has to stop counting, and the legacy answer is a

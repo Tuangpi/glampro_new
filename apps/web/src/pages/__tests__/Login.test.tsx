@@ -59,6 +59,7 @@ describe("the form", () => {
   it("offers a labelled email and password and one submit", () => {
     renderLogin();
 
+    expect(screen.getByRole("heading", { name: "Sign in to Glampro Suite" })).toBeInTheDocument();
     expect(screen.getByLabelText("Email")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();

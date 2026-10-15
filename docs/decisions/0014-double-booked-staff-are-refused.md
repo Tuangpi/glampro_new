@@ -8,6 +8,84 @@
   [`../STATE.md`](../STATE.md) §3 and §4.2 (Q34),
   [`../mvp.md`](../mvp.md) → M2
 
+## Evidence review — 2026-10-15
+
+The accepted refusal policy below is preserved. These qualifications describe the
+current code, not newly approved policy. Historical references remain historical,
+as explained in the [ADR index](README.md#historical-references-and-current-scope).
+
+- **The overlap predicate, blocker statuses and self-exclusion are implemented.**
+  `assertNoClash` in
+  [`appointment.service.ts`](../../apps/api/src/services/appointment.service.ts)
+  queries the same performer using strict start/end inequalities, excludes the
+  updated row's ID, and returns immediately for a null performer. Its occupying
+  statuses are the shared status list minus `CANCELLED`. This filters **existing
+  blockers**, not the target booking's status. Unassignment skips only this clash
+  check; other validation and write failures can still prevent a drag succeeding.
+- **Open correctness issue — reactivation skips validation.**
+  [`appointment.ts`](../../packages/shared/src/schemas/appointment.ts) permits a
+  status-only patch. `updateAppointment` checks clashes only when `startsAt` or
+  `staffId` is supplied, so changing `CANCELLED` to any occupying status can reclaim
+  a slot already taken by another booking without checking it. This is distinct
+  from the documented concurrent-write race: sequential requests can reach it.
+- **Cancelled targets are checked as though they occupy time.** Create always
+  calls `assertNoClash`; update calls it for a supplied start or performer without
+  considering the merged status. Thus creating a cancelled booking, moving an
+  already cancelled booking, or cancelling while changing time/staff can be
+  refused against an occupying blocker. Under decision item 3's cancelled-is-free
+  rule, target status must be considered too. Regression tests should cover both
+  cancellation and reactivation, not only a cancelled existing blocker.
+- **Open correctness issue — not every window change triggers the check.** As
+  recorded in [ADR 0013's evidence review](0013-appointment-performers-come-from-the-service.md#evidence-review--2026-10-15),
+  service-only patches and catalogue-driven resizing during unrelated edits can
+  change the end time without supplying either trigger. Decision item 6 therefore
+  does not currently ensure that every changed window is validated. These resize
+  and status findings are control-flow evidence, not live database reproductions.
+- **The error shape differs from the historical description.** The service uses
+  [`conflict`](../../apps/api/src/lib/http-error.ts) with `409` and code
+  `APPOINTMENT_CLASH`, not `CONFLICT`, and supplies no field-level details. The
+  message contains the first matching blocker's customer name (or the walk-in
+  fallback) and times, formatted in the server runtime's timezone, not an explicit
+  salon timezone. The drawer shows this as a form-level error, not a highlighted
+  time/staff field. Decide on field details and timezone display explicitly rather
+  than relying on the staff-form analogy below.
+- **The current drag path has a dedicated optimistic mutation.**
+  [`CalendarView.tsx`](../../apps/web/src/components/appointments/CalendarView.tsx)
+  emits `onReschedule` to
+  [`Appointments.tsx`](../../apps/web/src/pages/Appointments.tsx), which calls
+  `useRescheduleAppointment` from
+  [`useAppointments.ts`](../../apps/web/src/hooks/useAppointments.ts), not
+  `useUpdateAppointment`. That hook snapshots calendar queries, optimistically
+  patches start/staff, restores snapshots on error and invalidates appointment
+  queries on settlement. The page supplies the error-toast callback. The hook
+  also throws from `onError`; error/toast delivery and rollback need a focused
+  mutation test rather than being inferred from component drag tests.
+- **The concurrency caveat remains, without a measured timing bound.** The clash
+  query and write are separate operations. The
+  [`Appointment` model](../../apps/api/prisma/schema.prisma) has ordinary indexes;
+  inspected migration SQL contains no `EXCLUDE`/`btree_gist` overlap constraint.
+  No deployed schema was inspected. The historical "few milliseconds" claim is
+  not a measured guarantee: the race window depends on execution timing. Review
+  database range types and existing conflicting rows before any constraint work;
+  this review neither adds a migration nor approves a locking strategy.
+- **Coverage is useful but incomplete.**
+  [`appointment.service.test.ts`](../../apps/api/src/services/appointment.service.test.ts)
+  contains database-backed cases for refused create/moves, touching edges,
+  cancelled blockers, no-shows, unassigned creates, self-exclusion and tenant
+  separation. It does not cover reactivation, cancelled targets, service-only or
+  catalogue-driven resizing, or concurrent writes. It was inspected, not run,
+  pending confirmation of a disposable database. Database-free contract checks
+  confirmed cancelled create, status-only reactivation, cancellation with a time
+  patch, explicit unassignment and the occupying-status complement (5 assertions);
+  they do not establish service behavior. Focused web tests passed (3 files / 64
+  tests):
+  [`CalendarView.test.tsx`](../../apps/web/src/components/appointments/__tests__/CalendarView.test.tsx),
+  [`calendar-geometry.test.ts`](../../apps/web/src/components/appointments/__tests__/calendar-geometry.test.ts)
+  and [`Appointments.test.tsx`](../../apps/web/src/pages/__tests__/Appointments.test.tsx).
+  The page mocks appointment hooks, and the grid tests assert drag callbacks;
+  neither establishes real mutation rollback, conflict-toast delivery or database
+  refusal. Those need dedicated regression coverage.
+
 ## Context
 
 The calendar grid (handoff screen 06) draws one column per member of staff, which

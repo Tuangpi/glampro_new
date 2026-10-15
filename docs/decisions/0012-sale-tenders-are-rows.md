@@ -6,6 +6,49 @@
 - **Related:** [`../STATE.md`](../STATE.md) §3 (Phase 5b.2), [`../legacy/reference/legacy-schema.md`](../legacy/reference/legacy-schema.md),
   [`../legacy/API-INVENTORY.md`](../legacy/API-INVENTORY.md), [ADR 0011](0011-receipt-number-is-a-per-tenant-sequence.md)
 
+## Evidence review — 2026-10-15
+
+The accepted row-per-tender policy below remains in place. The original phase
+description needs these qualifications against the current implementation:
+
+- [`schema.prisma`](../../apps/api/prisma/schema.prisma) and the
+  [tender migration](../../apps/api/prisma/migrations/20261005201500_sale_tenders_receipt_number_and_idempotency/migration.sql)
+  define `sale_payments` with an enum method, `Decimal(12,2)` amount, nullable
+  `sessionId`, tenant/sale foreign keys and indexes. Migration application was not
+  verified. Historical legacy links below remain historical sources, as explained
+  in the [ADR index](README.md#historical-references-and-current-scope).
+- [`sale.service.ts`](../../apps/api/src/services/sale.service.ts) has two callers
+  of `writePayments`: ordinary checkout in `writeSale` and held-cart completion in
+  `completeSale`. Both persist tenders inside the transaction that completes the
+  sale and fills its ledgers, using the shared Decimal-based `totalsOf` calculation
+  for `paidAmount` and `paymentStatus`. Thus decision item 2 means one transactional
+  write per operation, not that `POST /api/sales` is the only tender-writing route.
+  Creating a hold returns before tender insertion; completion guards the `HELD`
+  status before writing, consistent with [ADR 0015](0015-a-held-sale-is-a-tenant-visible-draft.md).
+- [`sales.ts`](../../packages/shared/src/schemas/sales.ts) shares the cart body
+  between create and complete contracts, defaults `payments` to `[]`, bounds it by
+  `MAX_SALE_PAYMENTS` and refuses a hold carrying tenders. An empty array does not
+  itself imply `UNPAID`: `totalsOf` marks a zero-total completed sale `PAID` because
+  the paid amount covers the total. This qualifies the no-tender consequence below.
+- `sessionId` remains optional input metadata, trimmed and limited to 255 characters;
+  it is not restricted to `CARD`, required for that method or checked against a
+  gateway by the inspected write paths. Those paths store the supplied method and
+  amount and derive payment status from the sum; they do not verify settlement.
+  [`PaymentDialog.tsx`](../../apps/web/src/components/sale/PaymentDialog.tsx) posts
+  method/amount rows, not a gateway session. A recorded card tender must not be
+  treated as proof of acquiring or settlement integration.
+- [`sale.service.test.ts`](../../apps/api/src/services/sale.service.test.ts)
+  contains a split-payment assertion for two persisted rows and the card row's
+  session ID; [`sale-ledgers.test.ts`](../../apps/api/src/lib/sale-ledgers.test.ts)
+  seeds a separate tender row. These database-backed suites were inspected, not
+  run, pending confirmation of a disposable database. No runtime persistence,
+  rollback or concurrency guarantee is claimed from this review.
+- Database-free [`sales.test.ts`](../../packages/shared/src/schemas/sales.test.ts)
+  covers default empty tenders, rejection of tender-bearing holds and a split in
+  the completion contract. Mocked browser [`Sale.test.tsx`](../../apps/web/src/pages/__tests__/Sale.test.tsx)
+  covers tender payloads for checkout and held-cart completion. Neither suite
+  establishes database behavior or payment-provider processing.
+
 ## Context
 
 Legacy took money through **three endpoints** — `pay-by-cash`, `pay-by-card` and

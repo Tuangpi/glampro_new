@@ -404,6 +404,21 @@ describe("the tabs", () => {
     expect(screen.queryByRole("columnheader", { name: "Status" })).not.toBeInTheDocument();
   });
 
+  it("names the gift-card QR field the way a salon reads it, not the schema's way", async () => {
+    const user = userEvent.setup();
+
+    render(<Products />);
+    await user.click(screen.getByRole("tab", { name: "Gift cards" }));
+    await user.click(screen.getAllByRole("button", { name: "Add gift card" })[0]!);
+
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).getByLabelText("QR code value")).toBeInTheDocument();
+    // "payload" and "renderer" name the column and the code that reads it. A salon
+    // opening this drawer is configuring a card, so neither word belongs on it —
+    // the field keeps the contract's name and loses the contract's vocabulary.
+    expect(within(dialog).queryByText(/payload|renderer/i)).not.toBeInTheDocument();
+  });
+
   it("swaps the row for a service row: a duration, and no stock at all", async () => {
     const user = userEvent.setup();
     useServiceList.mockReturnValue(listOf([service()]));

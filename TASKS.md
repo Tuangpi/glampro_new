@@ -45,11 +45,23 @@ grant submission and provider onboarding require external evidence, not only cod
 | ID | Scope | Status | Next action / evidence |
 | --- | --- | --- | --- |
 | SETUP-01 | Tracker and session handoff | Testing | Verify task coverage and documentation references. |
-| SETUP-02 | Missing root tooling / baseline health | Blocked | Ask whether deleted root package.json, lockfile, tsconfig and formatting configuration were intentional before restoring/replacing. App scripts use npm workspaces, not evidence of pnpm. |
-| SETUP-03 | Glampro Suite web branding | Testing | Five web source/test files updated; focused test/typecheck required. Does not complete P2-06 trademark/domain checks. |
+| SETUP-02 | Missing root tooling / baseline health | Testing | User approved recovery 2026-10-15. Restored npm workspaces/configuration, installed dependencies; build, lint, typecheck, web/shared tests and dev smoke checks pass. API integration tests blocked by missing database tables; confirm a dedicated test database before migrations or rerunning. |
+| SETUP-03 | Glampro Suite web branding | Done | User accepted desktop/mobile appearance after manual browser checking on 2026-10-15. Prior login/dashboard tests (2 files / 19 tests), web typecheck/lint and edited-test Prettier passed. Does not complete P2-06 trademark/domain checks. |
 | SETUP-04 | GitHub rename and local origin | Done | User confirmed rename 2026-10-15; API verified Tuangpi/glampro_suite with unchanged ID 1396845545. Updated this clone's origin; SSH ls-remote origin HEAD passed (exit 0). Other clones/integrations remain separate if present. |
 | SETUP-05 | Reported database rename | Not assessed | Confirm environment, backup/data preservation, actual DB name and secret-safe connection configuration. No reset/reseed. |
-| SETUP-06 | Documentation audit | In progress | Remove deleted agent-configuration dependencies; review remaining broken legacy links and Docker instructions incrementally. Preserve historical ADR meaning. |
+| SETUP-06 | Documentation audit | In progress | ADR index explains absent historical sources; ADR 0004 qualifies obsolete Docker/CI assumptions. ADR 0005 reviewed against navigation/routes/catalogue: corrected role-visible count and obsolete test-gap wording; focused web tests passed (2 files / 31 tests). ADR 0010 review confirms Settings now edits the threshold and flags an unresolved conflict: query overrides affect row flags as well as filtering. Preserve the decision pending explicit review. Remaining historical links and ADR/code conflicts need incremental review; do not restore deleted sources just to resolve links. |
+
+SETUP-06 latest evidence: ADR 0017 now records the loyalty-policy conflict (points
+remain per unit), discounted performance versus commission/cash distinctions,
+two-decimal rate validation, conditional receipt disclosure and coverage limits.
+ADR 0018 review records browser-local windows, concurrent list reads, limited
+overnight rationale, editable read-only views and disclosed—not resolved—truncation;
+five focused web files / 88 tests passed. ADR 0016 qualifies reversal versus refund, sequential
+versus concurrent replay, missing-product restoration, cascading receipt retention,
+voided-debt display/cache refresh and overstated ledger coverage. ADR 0015 hold
+issues and ADR 0013/0014 appointment questions/defects remain open.
+ADR 0010 override semantics and ADR 0011's legacy-numbering promise remain open.
+Accepted policies are unchanged; database-backed validation remains blocked.
 
 ## PDF task mapping — one row per task
 
@@ -61,9 +73,9 @@ Phase 1: October 16–20; Phase 2: October 19–22; Phase 3: October 19–23, 20
 | PDF task | Roadmap item / scope | Phase | Priority | Status | Evidence |
 | --- | --- | --- | --- | --- | --- |
 | TK2610-0001 | Phase 1 – P0 Launch blockers | Phase 1 | Program | Not assessed | Audit current implementation against DOCX scope. |
-| TK2610-0004 | P0-07 Remove developer copy & system-status panel | Phase 1 | P0 – Launch blocker | In progress | Dashboard diagnostics/polling and developer copy removed; regression tests updated but blocked by missing tools. Settings, Sale, internal module labels and other screens still need audit. |
-| TK2610-0005 | P0-09 Security hardening | Phase 1 | P0 – Launch blocker | Not assessed | Audit current implementation against DOCX scope. |
-| TK2610-0006 | P0-08 Localisation: S$, DD/MM/YYYY, timezone/locale | Phase 1 | P0 – Launch blocker | Not assessed | Audit current implementation against DOCX scope. |
+| TK2610-0004 | P0-07 Remove developer copy & system-status panel | Phase 1 | P0 – Launch blocker | Ready for UAT | Developer copy removed from Dashboard diagnostics, Settings, Sale and the gift-card form; add-on refusals use display names and unknown-module messages omit internal keys. User accepted desktop/mobile review on 2026-10-15. Remaining middleware gate now passed: 7 integration tests, none skipped, on explicitly approved isolated disposable PostgreSQL; no existing database accessed. Current checks: web 40 files / 354 tests, shared 83 tests, API/web typechecks, scoped ESLint, Prettier and whitespace passed. Request final acceptance before Done/external completion. |
+| TK2610-0005 | P0-09 Security hardening | Phase 1 | P0 – Launch blocker | Not assessed | Full DOCX scope audit pending. ADR 0007 review found refresh of a logged-out token can revoke other sessions' refresh rows; password update/revocation are separate writes; platform forced sign-out is not implemented. Clarify replay policy, owner 2FA/recovery and account-removal scope before changes. See STATE.md; API tests remain database-blocked. |
+| TK2610-0006 | P0-08 Localisation: S$, DD/MM/YYYY, timezone/locale | Phase 1 | P0 – Launch blocker | In progress | Initial audit: money defaults to USD, dates use month names, salon profile has no saved timezone/locale. Calendar and reporting use browser timezone. User chose salon-wide persisted settings and authorized dedicated disposable local database validation only on 2026-10-15. Implement shared settings, migration, API/profile/UI propagation and consistent calendar/report/input time semantics; a display-only patch does not complete scope. Paused at P0-07 acceptance gate. |
 | TK2610-0007 | P0-03 Business hours / outlet operating hours | Phase 1 | P0 – Launch blocker | Not assessed | Audit current implementation against DOCX scope. |
 | TK2610-0008 | P0-05 Enable Packages & Gift cards in demo | Phase 1 | P0 – Launch blocker | Not assessed | Audit current implementation against DOCX scope. |
 | TK2610-0009 | P0-01 GST settings, tax line on sales & tax reports | Phase 1 | P0 – Launch blocker | Not assessed | Audit current implementation against DOCX scope. |
@@ -106,6 +118,6 @@ Phase 1: October 16–20; Phase 2: October 19–22; Phase 3: October 19–23, 20
   P1-08 includes POS PIN without email; P2-01 includes consent, photos,
   treatment records, session tracking and package expiry.
 - Run available formatter/lint/typecheck/tests; record exact results and blockers.
-  Root npm run verify is unavailable while the root manifest is missing.
+  Root npm run verify is restored; full baseline acceptance remains blocked by API integration database setup.
 - End every session by updating /home/tuangpi/Documents/Aridient/Glampros/glampro_suite/docs/STATE.md
   with changed files, verification, remaining scope, blockers and next action.

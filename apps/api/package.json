@@ -40,8 +40,7 @@
     "multer": "^2.2.0",
     "pg": "^8.22.0",
     "qrcode": "^1.5.4",
-    "zod": "^4.4.3",
-    "@glampro_suite/shared": "*"
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

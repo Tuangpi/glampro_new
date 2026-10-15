@@ -8,6 +8,15 @@
   [`legacy/reference/legacy-schema.md`](../legacy/reference/legacy-schema.md) §system_admins,
   [`roadmap.md`](../roadmap.md) "Not scheduled yet", [`STATE.md`](../STATE.md) §4.2 Q14
 
+## Current-scope note — 2026-10-15
+
+This ADR retains the separate-app decision and its original phase context. The
+missing source documents and old `STATE.md` section are historical references;
+see the [ADR index](README.md#historical-references-and-current-scope).
+[`TASKS.md`](../../TASKS.md) excludes Docker and GitHub Actions work. The deployment
+assumptions recorded below are historical, not prerequisites for current work.
+This note neither schedules the console nor claims that it is implemented.
+
 ## Context
 
 The legacy product ships a second, privileged surface: **13 endpoints** under
@@ -63,10 +72,12 @@ migration rather than a constant edit.
   link sibling apps — so the realm boundary is physical as well as logical. The frozen
   mobile contract and `apps/web` are untouched. The console's dependency surface can grow
   without growing the salon bundle.
-- **Negative / accepted.** A third workspace to configure, build, containerise, test and
-  deploy. Concretely: a `tsconfig`, an ESLint entry, a Vite config, a Dockerfile, a
-  `compose.yaml` service and a **new explicit step in the CI `docker` job**, which builds
-  api and web by name ([`../../.github/workflows/ci.yml`](../../.github/workflows/ci.yml)).
+- **Negative / accepted.** A third workspace to configure, build, test and deploy,
+  including a `tsconfig`, an ESLint entry and a Vite config. The original deployment
+  assumption also included containerisation: a Dockerfile, a `compose.yaml` service
+  and an explicit step in the CI `docker` job that built api and web by name
+  (`.github/workflows/ci.yml`, no longer present). Those container/CI additions are
+  outside the current scope, not requirements for this documentation slice.
   Today's UI primitives live in
   [`../../apps/web/src/components/ui`](../../apps/web/src/components/ui), so the console
   either duplicates the handful it needs or those primitives later move into a shared

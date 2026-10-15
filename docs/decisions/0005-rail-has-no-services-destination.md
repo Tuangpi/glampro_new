@@ -8,6 +8,22 @@
   [`STATE.md`](../STATE.md) §4.2 Q21,
   [`design/handoff/README.md`](../../design/handoff/README.md)
 
+## Evidence review — 2026-10-15
+
+The no-separate-Services-destination decision still matches the current web code.
+The roadmap, CONTEXT and old STATE section references below are historical sources;
+see the [ADR index](README.md#historical-references-and-current-scope). This review
+does not reopen sidebar placement or label decisions, or claim visual acceptance.
+
+- [`navigation.ts`](../../apps/web/src/constants/navigation.ts) defines eight entries.
+  Reports and Settings are restricted to managers/super admins, leaving six entries
+  before entitlement filtering for other roles; module entitlements can hide more.
+- [`routes.tsx`](../../apps/web/src/routes.tsx) registers the Products destination,
+  not a separate Services route.
+- [`Products.tsx`](../../apps/web/src/pages/Products.tsx) implements the Services tab.
+  Its current regression tests cover tab presence and service-row rendering, replacing
+  the original future-phase enforcement gap described when this ADR was written.
+
 ## Context
 
 `apps/web/src/constants/navigation.ts` shipped a `Services` entry (`/services`, the
@@ -70,8 +86,8 @@ the nav "has nine entries", which matched `navigation.ts` rather than the handof
 
 ## Consequences
 
-- **Positive.** The rail matches the handoff exactly: eight entries, seven of them visible
-  to every signed-in user. Nav and roadmap stop contradicting each other.
+- **Positive.** The rail has eight entries, six of them available to every signed-in
+  role before entitlement filtering. Nav and roadmap stop contradicting each other.
   `design/HANDOFF.md` §5's "nine" becomes eight.
 - **Negative / accepted.** Services becomes reachable only from inside other surfaces, so it
   needs a real tab row on the Products screen and a place in the sale and appointment flows
@@ -91,6 +107,7 @@ the nav "has nine entries", which matched `navigation.ts` rather than the handof
   it by hand fails the suite.
 - [`design/HANDOFF.md`](../design/HANDOFF.md) §5's entry count is corrected in the same
   commit that changes the nav, which is the rule this ADR's own context broke.
-- The Phase 4 screen is not enforced by anything yet: no test can assert that a screen built
-  in a later phase keeps the Services tab. Phase 4's acceptance criteria are where that is
-  checked.
+- [`Products.test.tsx`](../../apps/web/src/pages/__tests__/Products.test.tsx) now asserts
+  that the Services tab exists and that selecting it displays a service row with a
+  Duration column and no Stock column. This closes the original future-phase test
+  gap; it does not establish full catalogue acceptance or visual fidelity.

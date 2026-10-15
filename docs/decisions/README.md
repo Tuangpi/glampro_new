@@ -29,11 +29,29 @@ and /home/tuangpi/Documents/Aridient/Glampros/glampro_suite/docs/STATE.md.
 | 0017 | [A discount is a recorded line percentage](0017-a-discount-is-a-recorded-line-percentage.md)                             | Accepted |
 | 0018 | [The calendar draws more than one day](0018-the-calendar-draws-more-than-one-day.md)                                     | Accepted |
 
-`0001` is unallocated: `0002` is referenced by name from
-[`../saas/TENANCY.md`](../saas/TENANCY.md) and
-[`../legacy/LEGACY-MAP.md`](../legacy/LEGACY-MAP.md), and renumbering a referenced
+`0001` is unallocated: `0002` was referenced by name from the historical
+`docs/saas/TENANCY.md` and `docs/legacy/LEGACY-MAP.md` (both absent from this
+checkout), and renumbering a referenced
 decision is worse than leaving the first slot empty. The next new decision is
 `0019`.
+
+## Historical references and current scope
+
+The ADRs preserve decisions and context from earlier development phases. Some
+source documents and tooling referenced in them are no longer in this checkout:
+`docs/CONTEXT.md`, `docs/architecture.md`, `docs/roadmap.md`, `docs/mvp.md`,
+`docs/saas/`, `docs/legacy/` and `.github/workflows/ci.yml`. Links to those sources
+in individual ADRs are historical citations, not available setup instructions or
+evidence that a feature is implemented. Old phase numbers and section references
+to `STATE.md` likewise refer to the handoff at the time, not its current contents.
+
+Do not restore deleted material or invent replacement links solely to make the
+references resolve. Review the decision against current code and tests when its
+missing source matters; record unresolved conflicts in the current handoff.
+Current task scope and constraints live in
+[`TASKS.md`](../../TASKS.md) and [`STATE.md`](../STATE.md). In particular, historical
+Docker/Compose and GitHub Actions assumptions do not authorize work on those
+systems; they are outside the current scope.
 
 ## Rules
 

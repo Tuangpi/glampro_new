@@ -6,6 +6,94 @@
 - **Related:** [`../STATE.md`](../STATE.md) §4.3 (Q31), [`../legacy/POS-BEHAVIOR.md`](../legacy/POS-BEHAVIOR.md),
   [ADR 0011](0011-receipt-number-is-a-per-tenant-sequence.md), [ADR 0012](0012-sale-tenders-are-rows.md)
 
+## Evidence review — 2026-10-15
+
+The accepted draft policy below is preserved. These qualifications describe current
+code and open issues, not newly approved policy. Historical sources remain
+historical, as explained in the [ADR index](README.md#historical-references-and-current-scope).
+
+- **The draft write skips receipts and ledgers, but stores a timestamp.**
+  `writeSale` in [`sale.service.ts`](../../apps/api/src/services/sale.service.ts)
+  writes a `HELD` sale and its lines, explicitly sets zero paid/`UNPAID`, and returns
+  before receipt allocation, tender insertion or `fillLedgers`. The nullable
+  receipt number in [`schema.prisma`](../../apps/api/prisma/schema.prisma) is left
+  unset. Contrary to a literal reading of decision item 2, `soldAt` is populated
+  at hold creation, then overwritten on completion; the held list uses it as the
+  parked-at timestamp. Completion is not proof of money changing hands: empty or
+  partial tenders can complete an eligible customer sale with an outstanding
+  balance, as qualified in [ADR 0012](0012-sale-tenders-are-rows.md).
+- **A hold reserves no stock, but is still stock-validated when parked.** Both
+  create and completion call `resolveCart`/`priceCart`, including current stock,
+  entitlement, customer, performer and catalogue checks. A sold-out cart can fail
+  before parking even though a successful hold does not decrement inventory.
+  Completion may fail with a `400 BAD_REQUEST` quantity detail from the initial
+  stock read; `409 INSUFFICIENT_STOCK` is the guarded-decrement failure if stock
+  disappears after that read. The consequence below names only the latter case.
+- **Completion and discard have guarded transitions, not a pickup lock.**
+  `completeSale` returns an existing completed receipt on sequential replay, rejects
+  a voided sale, and conditionally updates `HELD` inside the transaction before
+  allocating its receipt, rewriting lines, inserting tenders and filling ledgers.
+  A concurrent loser can receive `409 HOLD_ALREADY_COMPLETED`, not the same receipt.
+  `discardHold` deletes only rows still `HELD`; completed/void rows yield
+  `409 SALE_NOT_HELD`, absent rows `404`. Pickup only reads sale/customer data; it
+  does not claim the hold, lock it to a till or persist edits. "Leave it held"
+  clears the local cart and loses those edits, leaving the stored draft unchanged.
+- **Tenant-wide does not mean every hold is returned.**
+  [`sales.ts`](../../packages/shared/src/schemas/sales.ts) defaults the list to
+  `HELD` and a maximum limit of **50**; `listSales` returns the newest rows ordered
+  by `soldAt` and ID. The contract has only `items`, with no cursor or total.
+  [`useHeldSales`](../../apps/web/src/hooks/useSale.ts) requests that default list,
+  and [`HeldCartsPanel.tsx`](../../apps/web/src/components/sale/HeldCartsPanel.tsx)
+  renders its length as the waiting count without a truncation notice. Older holds
+  can therefore remain stored indefinitely but inaccessible through this picker.
+  Decision item 8's "every hold" is not implemented beyond the cap. The inspected
+  [`sales.routes.ts`](../../apps/api/src/routes/sales.routes.ts) applies tenant auth,
+  the sales module guard and writable-tenant guards on writes, without a per-holder
+  ownership condition. Existing sales-report queries in
+  [`report.service.ts`](../../apps/api/src/services/report.service.ts) filter
+  completed sales/related lines and performance; no report runtime was exercised.
+- **Open pricing issue — the cashier does not necessarily see the new price
+  before payment.** `cartLinesFrom` in
+  [`useSale.ts`](../../apps/web/src/hooks/useSale.ts) reconstructs a resumed cart
+  from stored line prices, not current catalogue prices. The
+  [`payment dialog`](../../apps/web/src/components/sale/PaymentDialog.tsx) pre-fills
+  tenders from the browser total. Completion re-prices on the server but does not
+  first obtain confirmation of a changed quote. A catalogue price or customer
+  membership change can therefore produce a different receipt total, overpayment
+  or an outstanding/refused underpayment instead of the assurance in Consequences.
+- **Open pricing issue — resumed discounted lines apply the discount twice in
+  the preview.** Stored `SaleLine.unitPrice` is already discounted. `cartLinesFrom`
+  copies it to `price` and also restores `discountPercent`; `lineUnitPrice` applies
+  that rate again. For example, a 100.00 item held at 10% off stores 90.00 but the
+  resumed preview computes 81.00. The server still applies the posted rate once
+  to its catalogue price. Add a focused discounted-resume regression test.
+- **Open lifecycle issue — reload loses the resumed hold identity.**
+  [`Sale.tsx`](../../apps/web/src/pages/Sale.tsx) keeps `heldSaleId` only in component
+  state, while pickup writes lines through the persistent cart. The
+  [`draft storage`](../../apps/web/src/lib/sale-draft-storage.ts) schema stores
+  lines/customer but no hold ID. After reload, checkout can use the ordinary
+  create-sale path with restored lines, leaving the original hold available for
+  another checkout. Pickup also replaces the current local cart without a merge
+  or confirmation. Decide on hold identity persistence and draft replacement
+  explicitly; these are static findings, not a live end-to-end reproduction.
+- **Hold creation is unkeyed in the browser.** The create contract supports an
+  optional idempotency key, but `useHoldSale` deliberately omits it. A retry after
+  an uncertain response can create another draft; completion's guarded status
+  does not deduplicate separate holds. This differs from sequential completion
+  replay and should not be described as a blanket retry guarantee.
+- **Validation and coverage limits.** Database-free
+  [`sales.test.ts`](../../packages/shared/src/schemas/sales.test.ts) passed all
+  **35 tests**. Mocked browser
+  [`Sale.test.tsx`](../../apps/web/src/pages/__tests__/Sale.test.tsx) and
+  [`sale-draft-storage.test.ts`](../../apps/web/src/lib/__tests__/sale-draft-storage.test.ts)
+  reported **2 files / 26 tests passed**. They cover hold posting, pickup completion,
+  discard, leaving held and ordinary draft persistence, but do not establish
+  discounted/current-price resume, resumed-hold reload identity, list overflow,
+  concurrency, persistence or ledger rollback. The database-backed
+  [`sales.routes.test.ts`](../../apps/api/src/routes/sales.routes.test.ts) contains
+  hold receipt/ledger/stock assertions, sequential completion replay and discard
+  cases; it was inspected, not executed, pending a confirmed disposable database.
+
 ## Context
 
 A cashier needs to park a half-built cart — the customer has gone to find a purse,

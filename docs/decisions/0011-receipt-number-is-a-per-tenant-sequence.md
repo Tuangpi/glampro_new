@@ -10,6 +10,44 @@
   [`../../packages/shared/src/constants.ts`](../../packages/shared/src/constants.ts)
   (`MAX_RECEIPT_NUMBER`)
 
+## Evidence review — 2026-10-15
+
+The accepted sequencing policy below remains in place. Some implementation and
+UI descriptions predate held-sale completion and need the following qualifications:
+
+- [`schema.prisma`](../../apps/api/prisma/schema.prisma) and the
+  [receipt migration](../../apps/api/prisma/migrations/20261005201500_sale_tenders_receipt_number_and_idempotency/migration.sql)
+  define the nullable receipt number, per-tenant unique index and counter with
+  default `0`. These files were inspected; database migration application was not
+  verified.
+- [`sale.service.ts`](../../apps/api/src/services/sale.service.ts) now has two
+  allocation paths, not only `writeSale`: ordinary checkout and `completeSale`.
+  Both increment the tenant counter and check `MAX_RECEIPT_NUMBER` inside the
+  transaction that persists the numbered sale. Held-sale completion first guards
+  the `HELD` status with a count-checked update. Creating a hold returns before
+  counter allocation, consistent with [ADR 0015](0015-a-held-sale-is-a-tenant-visible-draft.md).
+  Thus nullable numbers are not limited to migrated rows: current held carts also
+  have no number until completion. This qualifies decision item 4 and the
+  legacy-only consequence without changing the sequencing policy.
+- [`sales.ts`](../../packages/shared/src/schemas/sales.ts) bounds nullable receipt
+  numbers in both detail and summary contracts. The database-free
+  [`sales.test.ts`](../../packages/shared/src/schemas/sales.test.ts) includes held
+  null-number, numbered-summary and below-first-value rejection assertions.
+- [`sale.service.test.ts`](../../apps/api/src/services/sale.service.test.ts)
+  contains sequential per-tenant numbering and idempotency assertions. Those
+  checks do not by themselves establish concurrent allocation, counter rollback
+  or ceiling refusal. The database-backed suite was inspected, not run, pending
+  confirmation of a disposable test database; this review does not claim those
+  runtime guarantees have been validated.
+- [`ReceiptView.tsx`](../../apps/web/src/components/sale/ReceiptView.tsx) renders
+  a null number as `Receipt (number pending)`, not "not assigned". Its success
+  message promises a number "shortly", but the inspected allocation paths do not
+  backfill an already-completed unnumbered sale. That promise needs copy/policy
+  review for legacy receipts, not an assumption that a background allocator exists.
+  The mocked browser [`Sale.test.tsx`](../../apps/web/src/pages/__tests__/Sale.test.tsx)
+  covers receipt rendering after checkout and held-sale completion; it does not
+  prove database allocation or concurrent-write behavior.
+
 ## Context
 
 Handoff screen 02 draws `Receipt #24418` — a short number a customer reads out over
