@@ -13,7 +13,7 @@
  * exactly when the answer would change.
  */
 import { useQuery } from "@tanstack/react-query";
-import type { DashboardSummary } from "@glampro/shared";
+import type { DashboardSummary } from "@glampro_suite/shared";
 
 import { queryKeys } from "@/constants/queryKeys";
 import { get } from "@/lib/api";

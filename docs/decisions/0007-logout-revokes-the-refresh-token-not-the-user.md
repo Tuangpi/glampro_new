@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-02
 - **Deciders:** Engineering (session semantics)
-- **Related:** [`AGENTS.md`](../../AGENTS.md) rule 1,
+- **Related:** the tenant-isolation rule,
   [`architecture.md`](../architecture.md) §6, [`roadmap.md`](../roadmap.md) Phase 3,
   [`saas/TENANCY.md`](../saas/TENANCY.md) §6, [`STATE.md`](../STATE.md) §3
 

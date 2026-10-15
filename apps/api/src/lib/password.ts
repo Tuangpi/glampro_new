@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import { PASSWORD_MIN_LENGTH } from "@glampro/shared";
+import { PASSWORD_MIN_LENGTH } from "@glampro_suite/shared";
 
 import { badRequest } from "./http-error.js";
 
@@ -17,7 +17,7 @@ export function verifyPassword(plain: string, hash: string): Promise<boolean> {
   return bcrypt.compare(plain, hash);
 }
 
-/** Mirrors the rule enforced by `changePasswordSchema` in `@glampro/shared`. */
+/** Mirrors the rule enforced by `changePasswordSchema` in `@glampro_suite/shared`. */
 export function assertPasswordStrength(password: string): void {
   if (password.length < PASSWORD_MIN_LENGTH) {
     throw badRequest(`Password must be at least ${PASSWORD_MIN_LENGTH} characters.`);

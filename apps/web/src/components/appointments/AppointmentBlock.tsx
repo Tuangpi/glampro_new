@@ -11,7 +11,7 @@
  * reader ends up with a silent grid. `isReadOnly` keeps it inert — a suspended salon sees
  * the day but cannot open the write path.
  */
-import type { AppointmentSummary } from "@glampro/shared";
+import type { AppointmentSummary } from "@glampro_suite/shared";
 
 import {
   APPOINTMENT_BLOCK_BACKGROUND,

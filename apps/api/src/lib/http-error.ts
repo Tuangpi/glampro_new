@@ -26,8 +26,17 @@ export class HttpError extends Error {
   }
 }
 
-export const badRequest = (message: string, details?: unknown): HttpError =>
-  new HttpError(400, message, { code: "BAD_REQUEST", details });
+/**
+ * 400 with an optional machine-readable `code`.
+ *
+ * `code` sits **third** because the sale flow passes field-level `details` as
+ * the second argument in several places, and reordering those callers is not
+ * this file's business. Both matter: `details` tells the browser which control
+ * to highlight, `code` tells it what happened without matching prose
+ * (`appointment.service.ts` and `shift.service.ts` both pass a code).
+ */
+export const badRequest = (message: string, details?: unknown, code = "BAD_REQUEST"): HttpError =>
+  new HttpError(400, message, { code, details });
 
 export const validationFailed = (details: unknown): HttpError =>
   new HttpError(422, "Validation failed", { code: "VALIDATION_FAILED", details });

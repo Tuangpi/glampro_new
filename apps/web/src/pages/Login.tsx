@@ -124,7 +124,7 @@ export default function Login() {
                 the screen says whose it is at every width. */}
             <BrandMark className="size-12 text-lg lg:hidden" />
             <div>
-              <h1 className="text-xl">Sign in to Glampro Salon</h1>
+              <h1 className="text-xl">Sign in to Glampro Suite</h1>
               <p className="mt-1 text-sm text-ink-muted">
                 Point of sale, appointments, customers, stock and reporting.
               </p>

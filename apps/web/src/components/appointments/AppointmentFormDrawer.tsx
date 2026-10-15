@@ -20,7 +20,7 @@
  */
 import { useMemo, useState } from "react";
 
-import type { AppointmentDetail, StaffSummary } from "@glampro/shared";
+import type { AppointmentDetail, StaffSummary } from "@glampro_suite/shared";
 
 import Button from "@/components/ui/Button";
 import Drawer from "@/components/ui/Drawer";

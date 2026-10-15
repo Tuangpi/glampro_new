@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from "express";
-import { APP_NAME } from "@glampro/shared";
+import { APP_NAME } from "@glampro_suite/shared";
 
 import { env } from "../lib/env.js";
 import { prisma } from "../lib/prisma.js";

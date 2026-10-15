@@ -26,7 +26,7 @@
  */
 import type { DragEvent } from "react";
 
-import type { AppointmentSummary } from "@glampro/shared";
+import type { AppointmentSummary } from "@glampro_suite/shared";
 
 import { Calendar } from "@/components/icons";
 import EmptyState from "@/components/ui/EmptyState";

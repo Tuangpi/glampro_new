@@ -1,4 +1,4 @@
-import type { TenantStatus } from "@glampro/shared";
+import type { TenantStatus } from "@glampro_suite/shared";
 
 /**
  * The status a tenant is *effectively* in, which is not always the one stored.

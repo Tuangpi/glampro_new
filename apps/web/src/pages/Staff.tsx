@@ -25,7 +25,7 @@
  */
 import { useEffect, useState } from "react";
 
-import type { StaffDetail, StaffSummary } from "@glampro/shared";
+import type { StaffDetail, StaffSummary } from "@glampro_suite/shared";
 
 import { Briefcase, CheckCircle, Search, Users } from "@/components/icons";
 import StaffCard from "@/components/staff/StaffCard";

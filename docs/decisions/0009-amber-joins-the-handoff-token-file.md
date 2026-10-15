@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-04
 - **Deciders:** Engineering (product confirmed the source-file route)
-- **Related:** [`AGENTS.md`](../../AGENTS.md) rule 2,
+- **Related:** the design-token source/copy rule,
   [`roadmap.md`](../roadmap.md) Phase 4,
   [`STATE.md`](../STATE.md) §4.1 (closes **Q23**),
   [`design/HANDOFF.md`](../design/HANDOFF.md) §4,
@@ -43,7 +43,7 @@ recording that the choice "does not answer" Q23 and is reversible when it lands.
 already uses, and the copy in `apps/web/src/styles/tokens.css` is re-taken.**
 `Badge` gains a `warning` variant built from them.
 
-- The source of truth is the handoff file, per `AGENTS.md` rule 2 — the change is
+- The source of truth is the handoff file, under the design-token source/copy rule — the change is
   made **to the source and re-copied**, never made to the copy in place.
 - The values are `#FFF4DE` and `#B9740A`, which are the designer's, not a
   nearest-token approximation of them.

@@ -5,7 +5,7 @@ import type {
   StaffDetail,
   StaffSummary,
   UpdateStaffInput,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { queryKeys } from "@/constants/queryKeys";
 import type { StaffStatusFilter } from "@/constants/staff";

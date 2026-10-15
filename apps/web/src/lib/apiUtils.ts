@@ -1,4 +1,4 @@
-import type { PaginatedResponse } from "@glampro/shared";
+import type { PaginatedResponse } from "@glampro_suite/shared";
 
 /**
  * Accepts the several list shapes the API has historically returned and

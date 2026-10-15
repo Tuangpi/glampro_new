@@ -24,7 +24,7 @@
  */
 import { useState } from "react";
 
-import type { AppointmentDetail, AppointmentSummary } from "@glampro/shared";
+import type { AppointmentDetail, AppointmentSummary } from "@glampro_suite/shared";
 
 import AppointmentFormDrawer from "@/components/appointments/AppointmentFormDrawer";
 import CalendarView, { type RescheduleInput } from "@/components/appointments/CalendarView";

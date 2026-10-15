@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import type { DepartmentSummary } from "@glampro/shared";
+import type { DepartmentSummary } from "@glampro_suite/shared";
 
 import { queryKeys } from "@/constants/queryKeys";
 import { get } from "@/lib/api";

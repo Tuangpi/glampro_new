@@ -14,7 +14,7 @@ import {
   SALE_ITEM_KINDS,
   type SaleItemKind,
   type SalePaymentMethod,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 export const SALE_KIND_LABELS: Record<SaleItemKind, string> = {
   SERVICE: "Services",

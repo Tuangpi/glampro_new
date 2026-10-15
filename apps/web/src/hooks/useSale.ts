@@ -2,7 +2,7 @@
  * Sale data — handoff screens 01–02 (`GET /api/sales/items`, `POST /api/sales`).
  *
  * No new contract: the search query and the write reuse `saleItemSearchQuerySchema`
- * and `createSaleSchema` from `@glampro/shared`, so everything below is shaped by
+ * and `createSaleSchema` from `@glampro_suite/shared`, so everything below is shaped by
  * what those two schemas already say. The hold flow at the bottom reuses
  * `createSaleSchema`'s `hold` flag, `completeSaleSchema` and `saleListSchema`, so a
  * parked cart is described in exactly the words the API accepts (ADR 0015).
@@ -36,7 +36,7 @@ import {
   type SaleItemSearchResult,
   type SaleLineInput,
   type SaleList,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { queryKeys } from "@/constants/queryKeys";
 import { useAuth } from "@/contexts/AuthContext";

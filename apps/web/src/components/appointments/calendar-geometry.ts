@@ -19,7 +19,7 @@
  * unit-tested in jsdom without rendering a single block.
  */
 
-import type { AppointmentSummary } from "@glampro/shared";
+import type { AppointmentSummary } from "@glampro_suite/shared";
 
 /** First hour shown in the gutter (local time). */
 export const DAY_START_HOUR = 8;

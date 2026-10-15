@@ -40,7 +40,7 @@ const { createApp } = await import("../app.js");
 const { prisma } = await import("../lib/prisma.js");
 const { runAsPlatform } = await import("../lib/tenant-context.js");
 const { hashPassword } = await import("../lib/password.js");
-const { CORE_MODULE_CODES, DEFAULT_PAGE_SIZE, MODULE_CODES } = await import("@glampro/shared");
+const { CORE_MODULE_CODES, DEFAULT_PAGE_SIZE, MODULE_CODES } = await import("@glampro_suite/shared");
 
 const PASSWORD = "correct-horse-1";
 const DOMAIN = "catalogue-reads-rt.test";

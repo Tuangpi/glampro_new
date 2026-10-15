@@ -11,7 +11,7 @@
  */
 import { useState } from "react";
 
-import type { CustomerSummary } from "@glampro/shared";
+import type { CustomerSummary } from "@glampro_suite/shared";
 
 import { Search, User, Users, X } from "@/components/icons";
 import Chip from "@/components/ui/Chip";

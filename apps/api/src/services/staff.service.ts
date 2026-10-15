@@ -24,8 +24,8 @@ import type {
   StaffListQuery,
   StaffSummary,
   UpdateStaffInput,
-} from "@glampro/shared";
-import { staffSummarySchema } from "@glampro/shared";
+} from "@glampro_suite/shared";
+import { staffSummarySchema } from "@glampro_suite/shared";
 
 import { conflict, notFound } from "../lib/http-error.js";
 import { hashPassword } from "../lib/password.js";

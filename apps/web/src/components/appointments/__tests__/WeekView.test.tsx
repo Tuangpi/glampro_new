@@ -12,7 +12,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { AppointmentSummary } from "@glampro/shared";
+import type { AppointmentSummary } from "@glampro_suite/shared";
 
 import WeekView from "../WeekView";
 import { HOUR_HEIGHT } from "../calendar-geometry";

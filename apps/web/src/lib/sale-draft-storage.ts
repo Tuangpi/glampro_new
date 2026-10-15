@@ -14,7 +14,7 @@ import {
   customerSummarySchema,
   discountPercentSchema,
   type CustomerSummary,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import type { CartLine } from "@/hooks/useSale";
 

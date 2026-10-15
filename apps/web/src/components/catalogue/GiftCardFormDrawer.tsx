@@ -14,7 +14,7 @@
  */
 import { useState } from "react";
 
-import type { CreateGiftCardInput, GiftCardDetail, UpdateGiftCardInput } from "@glampro/shared";
+import type { CreateGiftCardInput, GiftCardDetail, UpdateGiftCardInput } from "@glampro_suite/shared";
 
 import Button from "@/components/ui/Button";
 import Drawer from "@/components/ui/Drawer";

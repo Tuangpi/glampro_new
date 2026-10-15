@@ -108,6 +108,103 @@ export const DEMO_STAFF: SeedStaffUser[] = [
   },
 ];
 
+/**
+ * One performer's weekly template — the compact form the seed expands.
+ *
+ * A rota is **weekly and wall-clock**: "Rita works 08:00–17:00 every day, with
+ * lunch at noon" is true every week the salon is open, which is exactly what a
+ * `dayOfWeek` + minutes row stores. `days` uses the same numbering the column
+ * stores (0 = Sunday), so expansion is arithmetic rather than a translation.
+ */
+export interface SeedShiftTemplate {
+  staffEmail: string;
+  /** Days of week the template applies to, 0 = Sunday (same as `StaffShift.dayOfWeek`). */
+  days: readonly number[];
+  work: { startsAtMinute: number; endsAtMinute: number };
+  breaks: readonly { startsAtMinute: number; endsAtMinute: number }[];
+}
+
+/** One expanded rota row — maps straight onto a `StaffShift` insert. */
+export interface SeedShiftRow {
+  /** Fixed id, so re-seeding upserts instead of duplicating (same rule as bookings). */
+  id: string;
+  staffEmail: string;
+  dayOfWeek: number;
+  kind: "WORK" | "BREAK";
+  startsAtMinute: number;
+  endsAtMinute: number;
+  note: string | null;
+}
+
+/**
+ * The demo salon's rota.
+ *
+ * Every performer is on every day of the week on purpose: `dayOffset` in
+ * `DEMO_APPOINTMENTS` is relative to whenever the seed runs, so a roster with a
+ * day off would put some seeded booking outside its performer's shift — a
+ * contradiction the availability gate (Phase 6e-iii) would refuse to re-check
+ * into a PATCH. Wide hours are a **deliberate demo choice**, not the model's
+ * limit: the rota editor exists precisely to narrow them.
+ *
+ * Breaks are placed away from the seeded appointment times of that performer
+ * (stylist 09:30/10:00/13:00, nail tech 14:00/15:00, therapist 11:00/11:30/16:30)
+ * so that when the gate lands, every demo booking still fits inside a work
+ * interval and outside its break.
+ */
+const DEMO_SHIFT_TEMPLATES: readonly SeedShiftTemplate[] = [
+  {
+    staffEmail: "stylist@glampro.test",
+    days: [0, 1, 2, 3, 4, 5, 6],
+    work: { startsAtMinute: 8 * 60, endsAtMinute: 17 * 60 },
+    breaks: [{ startsAtMinute: 12 * 60, endsAtMinute: 12 * 60 + 45 }],
+  },
+  {
+    staffEmail: "nailtech@glampro.test",
+    days: [0, 1, 2, 3, 4, 5, 6],
+    work: { startsAtMinute: 10 * 60, endsAtMinute: 19 * 60 },
+    breaks: [{ startsAtMinute: 12 * 60 + 30, endsAtMinute: 13 * 60 + 30 }],
+  },
+  {
+    staffEmail: "therapist@glampro.test",
+    days: [0, 1, 2, 3, 4, 5, 6],
+    work: { startsAtMinute: 11 * 60, endsAtMinute: 20 * 60 },
+    breaks: [{ startsAtMinute: 15 * 60 + 30, endsAtMinute: 16 * 60 + 15 }],
+  },
+];
+
+function expandDemoShifts(): SeedShiftRow[] {
+  const rows: SeedShiftRow[] = [];
+  for (const template of DEMO_SHIFT_TEMPLATES) {
+    const who = template.staffEmail.split("@")[0] ?? template.staffEmail;
+    for (const dayOfWeek of template.days) {
+      rows.push({
+        id: `seed-shift-${who}-${dayOfWeek}-work`,
+        staffEmail: template.staffEmail,
+        dayOfWeek,
+        kind: "WORK",
+        startsAtMinute: template.work.startsAtMinute,
+        endsAtMinute: template.work.endsAtMinute,
+        note: "Standing hours",
+      });
+      for (const [index, breaks] of template.breaks.entries()) {
+        rows.push({
+          id: `seed-shift-${who}-${dayOfWeek}-break${index > 0 ? index : ""}`,
+          staffEmail: template.staffEmail,
+          dayOfWeek,
+          kind: "BREAK",
+          startsAtMinute: breaks.startsAtMinute,
+          endsAtMinute: breaks.endsAtMinute,
+          note: index === 0 ? "Lunch" : null,
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+/** The rota, expanded to one row per (performer, weekday, interval). */
+export const DEMO_SHIFTS: readonly SeedShiftRow[] = expandDemoShifts();
+
 /** One bookable service. `department` is a name — resolved to an id by the seed. */
 export interface SeedService {
   name: string;

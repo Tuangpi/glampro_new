@@ -42,7 +42,7 @@ import {
   SALE_ITEM_KINDS,
   type SaleItem,
   type SaleItemKind,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { SaleLineItemType } from "../../generated/prisma/enums.js";
 import { prisma } from "../lib/prisma.js";

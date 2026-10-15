@@ -10,8 +10,8 @@
  * about a lapsed grant — it is a read of the boundary, not a second
  * implementation of it.
  */
-import { moduleSummarySchema, salonProfileSchema } from "@glampro/shared";
-import type { ModuleSummary, SalonProfile, UpdateSalonProfileInput } from "@glampro/shared";
+import { moduleSummarySchema, salonProfileSchema } from "@glampro_suite/shared";
+import type { ModuleSummary, SalonProfile, UpdateSalonProfileInput } from "@glampro_suite/shared";
 
 import { notFound } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";

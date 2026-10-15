@@ -14,7 +14,7 @@
  */
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { PASSWORD_MIN_LENGTH } from "@glampro/shared";
+import { PASSWORD_MIN_LENGTH } from "@glampro_suite/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {

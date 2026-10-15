@@ -38,7 +38,7 @@ import {
   type SaleItem,
   type SaleItemKind,
   type SalePaymentInput,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { Search } from "@/components/icons";
 import CartPanel from "@/components/sale/CartPanel";

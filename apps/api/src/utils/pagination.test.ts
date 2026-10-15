@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@glampro/shared";
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from "@glampro_suite/shared";
 
 import { paginated, parsePagination } from "./pagination.js";
 

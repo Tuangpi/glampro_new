@@ -1,7 +1,7 @@
 import cors from "cors";
 import express, { type Express } from "express";
 import helmet from "helmet";
-import { API_PREFIX } from "@glampro/shared";
+import { API_PREFIX } from "@glampro_suite/shared";
 
 import { env } from "./lib/env.js";
 import { appointmentsRouter } from "./routes/appointments.routes.js";
@@ -16,6 +16,7 @@ import { reportsRouter } from "./routes/reports.routes.js";
 import { salesRouter } from "./routes/sales.routes.js";
 import { servicesRouter } from "./routes/services.routes.js";
 import { settingsRouter } from "./routes/settings.routes.js";
+import { shiftsRouter } from "./routes/shifts.routes.js";
 import { staffRouter } from "./routes/staff.routes.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import { apiLimiter } from "./middleware/rateLimit.js";
@@ -96,6 +97,11 @@ export function createApp(): Express {
   // the service (M2), so this mount is the boundary that refuses them rather
   // than trusting the list the form sent (ADR 0013).
   app.use(`${API_PREFIX}/appointments`, appointmentsRouter);
+  // The rota screens 06 and 09 draw. Mounted beside appointments because the
+  // calendar is its main reader, but guarded by `staff`: a shift is a fact about
+  // who works when, and a stylist may read their own hours while only a manager
+  // publishes them.
+  app.use(`${API_PREFIX}/shifts`, shiftsRouter);
   // Screen 05's tiles. Guarded by the core `dashboard` module, not the `reports`
   // add-on: every salon has a dashboard, and the add-on gates screen 10's tables.
   app.use(`${API_PREFIX}/reports`, reportsRouter);

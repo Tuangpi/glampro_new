@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { MODULE_CODES } from "@glampro/shared";
+import { MODULE_CODES } from "@glampro_suite/shared";
 
 import { runAsPlatform, runAsTenant, currentScope, requireScope } from "./tenant-context.js";
 

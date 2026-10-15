@@ -18,7 +18,7 @@ import type {
   AuthTenant,
   AuthUser,
   ModuleEntitlement,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { get, post } from "@/lib/api";
 import { clearSession, getRefreshToken, setSession } from "@/lib/auth-storage";

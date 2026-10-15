@@ -3,7 +3,7 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
 
-import { CORE_MODULE_CODES } from "@glampro/shared";
+import { CORE_MODULE_CODES } from "@glampro_suite/shared";
 import express, { type Express } from "express";
 
 import { HttpError } from "../lib/http-error.js";

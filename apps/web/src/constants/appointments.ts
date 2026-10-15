@@ -8,7 +8,7 @@
  * added there is a compile error here instead of a row nobody can name.
  */
 import type { BadgeVariant } from "@/components/ui/Badge";
-import { APPOINTMENT_STATUSES, type AppointmentStatusValue } from "@glampro/shared";
+import { APPOINTMENT_STATUSES, type AppointmentStatusValue } from "@glampro_suite/shared";
 
 export const APPOINTMENT_STATUS_LABELS: Record<AppointmentStatusValue, string> = {
   SCHEDULED: "Scheduled",

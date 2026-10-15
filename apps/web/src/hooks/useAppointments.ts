@@ -2,7 +2,7 @@
  * Appointment data — handoff screens 03 and 06 (`/api/appointments`).
  *
  * No new contract: the list query, the detail, the write and its PATCH all
- * come from `@glampro/shared`, so everything below is shaped by what
+ * come from `@glampro_suite/shared`, so everything below is shaped by what
  * `schemas/appointment.ts` already says.
  *
  * The day view passes its window as instants (see `todayWindow` in
@@ -17,7 +17,7 @@ import type {
   CreateAppointmentInput,
   PaginatedResponse,
   UpdateAppointmentInput,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import type { RescheduleInput } from "@/components/appointments/CalendarView";
 import { queryKeys } from "@/constants/queryKeys";

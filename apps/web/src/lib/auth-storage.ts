@@ -5,7 +5,7 @@
  * keys. The token pair is written by the auth flow and read by the axios
  * interceptor.
  */
-import type { AuthSession, AuthUser } from "@glampro/shared";
+import type { AuthSession, AuthUser } from "@glampro_suite/shared";
 
 const ACCESS_TOKEN_KEY = "glampro.accessToken";
 const REFRESH_TOKEN_KEY = "glampro.refreshToken";

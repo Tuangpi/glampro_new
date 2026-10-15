@@ -14,7 +14,7 @@ import { Clock, Trash } from "@/components/icons";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import EmptyState from "@/components/ui/EmptyState";
-import type { SaleSummary } from "@glampro/shared";
+import type { SaleSummary } from "@glampro_suite/shared";
 
 import { priceToCents } from "@/lib/money";
 import { formatDateTime, formatPrice } from "@/lib/utils";

@@ -12,7 +12,7 @@
  * browser receiving a shape its contract does not describe — the two sides cannot
  * drift silently (AGENTS.md rule 6).
  */
-import type { PaginatedResponse } from "@glampro/shared";
+import type { PaginatedResponse } from "@glampro_suite/shared";
 import {
   customerDetailSchema,
   customerSummarySchema,
@@ -21,7 +21,7 @@ import {
   type CustomerListQuery,
   type CustomerSummary,
   type UpdateCustomerInput,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { notFound } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";

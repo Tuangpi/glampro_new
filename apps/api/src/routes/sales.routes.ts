@@ -11,7 +11,7 @@ import {
   type SaleItemSearchQuery,
   type SaleListQuery,
   type VoidSaleInput,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { auth, requireRole, requireWritableTenant } from "../middleware/auth.js";
 import { requireModule } from "../middleware/requireModule.js";

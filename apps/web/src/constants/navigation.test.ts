@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { MODULE_CODES, type ModuleEntitlement } from "@glampro/shared";
+import { MODULE_CODES, type ModuleEntitlement } from "@glampro_suite/shared";
 
 import { activeNavItem, navItems, visibleNavItems } from "./navigation";
 

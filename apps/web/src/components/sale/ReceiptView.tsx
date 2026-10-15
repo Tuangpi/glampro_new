@@ -19,7 +19,7 @@
  * the point of a void being a state change rather than a delete: the receipt is still a
  * receipt, and it has to say what it now is (ADR 0016).
  */
-import type { SaleDetail } from "@glampro/shared";
+import type { SaleDetail } from "@glampro_suite/shared";
 
 import { Banknote, CheckCircle, Printer } from "@/components/icons";
 import Badge from "@/components/ui/Badge";

@@ -11,7 +11,7 @@
  */
 import { useState } from "react";
 
-import type { CustomerDetail, GenderValue } from "@glampro/shared";
+import type { CustomerDetail, GenderValue } from "@glampro_suite/shared";
 
 import CustomerAvatar from "@/components/customers/CustomerAvatar";
 import Button from "@/components/ui/Button";

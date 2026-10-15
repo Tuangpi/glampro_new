@@ -21,6 +21,7 @@ import {
   DEMO_PRODUCTS,
   DEMO_SALES,
   DEMO_SERVICES,
+  DEMO_SHIFTS,
   DEMO_STAFF,
   DEMO_VALUE_PACKAGES,
   STAFF_DEPARTMENTS,
@@ -31,6 +32,7 @@ import {
   assertNoAppointmentClash,
   demoSaleTotalCents,
   demoUnitPriceCents,
+  parseTimeOfDay,
   saleMoment,
   tenderAmountsCents,
   type ClashWindow,
@@ -151,6 +153,87 @@ describe("demo dataset bookings", () => {
         if (appointment.status === "SCHEDULED" && appointment.dayOffset > 0) {
           assert.ok(startsAt > now, `${appointment.id} is a future booking starting in the past`);
         }
+      }
+    }
+  });
+});
+
+describe("demo dataset rota", () => {
+  it("gives every shift a performer the roster knows, and rows that fit one day", () => {
+    const ids = new Set<string>();
+    for (const shift of DEMO_SHIFTS) {
+      assert.ok(!ids.has(shift.id), `duplicate shift id ${shift.id}`);
+      ids.add(shift.id);
+      assert.ok(staffEmails.has(shift.staffEmail), `shift names unknown user ${shift.staffEmail}`);
+      assert.ok(shift.dayOfWeek >= 0 && shift.dayOfWeek <= 6, `${shift.id}: bad dayOfWeek`);
+      assert.ok(
+        shift.startsAtMinute >= 0 && shift.endsAtMinute <= 24 * 60,
+        `${shift.id}: minute outside the day`,
+      );
+      assert.ok(
+        shift.endsAtMinute > shift.startsAtMinute,
+        `${shift.id}: a shift has to end after it starts`,
+      );
+    }
+  });
+
+  it("sits every break inside that performer's same-day work shift", () => {
+    for (const shift of DEMO_SHIFTS) {
+      if (shift.kind !== "BREAK") continue;
+
+      const covered = DEMO_SHIFTS.some(
+        (work) =>
+          work.kind === "WORK" &&
+          work.staffEmail === shift.staffEmail &&
+          work.dayOfWeek === shift.dayOfWeek &&
+          work.startsAtMinute <= shift.startsAtMinute &&
+          work.endsAtMinute >= shift.endsAtMinute,
+      );
+      assert.ok(
+        covered,
+        `break ${shift.id} does not sit inside ${shift.staffEmail}'s day-${shift.dayOfWeek} shift`,
+      );
+    }
+  });
+
+  it("keeps every fixed-time booking inside its performer's shift and off the break", () => {
+    // `offsetHours` bookings move with the seeding moment, so no weekly rota can
+    // promise them a slot — only the wall-clock ones (`dayOffset` + `time`) are
+    // decidable here, and they must all fit or the gate would refuse to re-check.
+    const now = INSTANTS[0] as Date;
+    const workByStaffDay = DEMO_SHIFTS.filter((row) => row.kind === "WORK");
+
+    for (const appointment of DEMO_APPOINTMENTS) {
+      if (appointment.time === undefined) continue;
+      const service = serviceByName.get(appointment.service);
+      assert.ok(service, `${appointment.id} names unknown service`);
+
+      const day = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + appointment.dayOffset,
+      );
+      const dayOfWeek = day.getDay();
+      const startsAtMinute = parseTimeOfDay(appointment.time);
+      const endsAtMinute = startsAtMinute + service.durationMinutes;
+
+      const work = workByStaffDay.find(
+        (row) => row.staffEmail === appointment.staffEmail && row.dayOfWeek === dayOfWeek,
+      );
+      assert.ok(
+        work,
+        `${appointment.id}: no shift for ${appointment.staffEmail} on day ${dayOfWeek}`,
+      );
+      assert.ok(
+        startsAtMinute >= work.startsAtMinute && endsAtMinute <= work.endsAtMinute,
+        `${appointment.id} (${appointment.time} +${service.durationMinutes}m) falls outside ${work.id}`,
+      );
+
+      for (const shift of DEMO_SHIFTS) {
+        if (shift.kind !== "BREAK") continue;
+        if (shift.staffEmail !== appointment.staffEmail || shift.dayOfWeek !== dayOfWeek) continue;
+        const overlaps = startsAtMinute < shift.endsAtMinute && endsAtMinute > shift.startsAtMinute;
+        assert.ok(!overlaps, `${appointment.id} sits inside the break ${shift.id}`);
       }
     }
   });

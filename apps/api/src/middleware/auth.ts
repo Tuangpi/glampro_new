@@ -1,6 +1,6 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 
-import type { GlobalRole } from "@glampro/shared";
+import type { GlobalRole } from "@glampro_suite/shared";
 
 import { forbidden, unauthorized } from "../lib/http-error.js";
 import { verifyAccessToken } from "../lib/tokens.js";

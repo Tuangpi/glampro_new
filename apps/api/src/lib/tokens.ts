@@ -7,7 +7,7 @@ import {
   type AccessTokenClaims,
   type AuthRealm,
   type GlobalRole,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { env } from "./env.js";
 import { unauthorized } from "./http-error.js";

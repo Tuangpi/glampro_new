@@ -1,4 +1,4 @@
-import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, type PaginatedResponse } from "@glampro/shared";
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, type PaginatedResponse } from "@glampro_suite/shared";
 
 export interface Pagination {
   page: number;

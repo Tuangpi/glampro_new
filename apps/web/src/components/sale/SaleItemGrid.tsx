@@ -14,7 +14,7 @@
  * same meaning would give the two a chance to disagree (the schema's union
  * rule, drawn rather than re-declared).
  */
-import type { SaleItem, SaleItemKind } from "@glampro/shared";
+import type { SaleItem, SaleItemKind } from "@glampro_suite/shared";
 
 import { Cart, Plus, Search } from "@/components/icons";
 import Badge from "@/components/ui/Badge";

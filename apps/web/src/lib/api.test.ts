@@ -18,7 +18,7 @@
 import { AxiosError, type AxiosResponse, type InternalAxiosRequestConfig } from "axios";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AuthUser } from "@glampro/shared";
+import type { AuthUser } from "@glampro_suite/shared";
 
 import api, { getPaginated } from "@/lib/api";
 import { clearSession, getRefreshToken, setSession } from "@/lib/auth-storage";

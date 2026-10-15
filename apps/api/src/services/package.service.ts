@@ -22,7 +22,7 @@ import {
   type PackageSummary,
   type PaginatedResponse,
   type UpdatePackageInput,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { notFound } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";

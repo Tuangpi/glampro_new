@@ -39,7 +39,7 @@ import type {
   ProductSummary,
   ServiceDetail,
   ServiceSummary,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import GiftCardFormDrawer from "@/components/catalogue/GiftCardFormDrawer";
 import PackageFormDrawer from "@/components/catalogue/PackageFormDrawer";

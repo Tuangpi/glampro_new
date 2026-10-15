@@ -6,7 +6,7 @@
  * totals, and three tables the current schema can answer without invented data.
  */
 import { useMemo, useState } from "react";
-import type { ReportItem, ReportSalesByDay, ReportStaff } from "@glampro/shared";
+import type { ReportItem, ReportSalesByDay, ReportStaff } from "@glampro_suite/shared";
 
 import { BarChart, Calendar, Package, Users } from "@/components/icons";
 import Card from "@/components/ui/Card";

@@ -1,9 +1,10 @@
 # Decisions (ADRs)
 
 Every decision that is expensive to reverse, or that a future reader is likely to
-question, gets one numbered file here. [`../../AGENTS.md`](../../AGENTS.md) points
-at this directory; [`.clinerules/02-workflow.md`](../../.clinerules/02-workflow.md)
-defines when a file has to be written.
+question, gets one numbered file here. Record confirmed architecture/product
+decisions here, and unresolved questions in the session handoff. Current task
+and session guidance lives in /home/tuangpi/Documents/Aridient/Glampros/glampro_suite/TASKS.md
+and /home/tuangpi/Documents/Aridient/Glampros/glampro_suite/docs/STATE.md.
 
 ## Index
 

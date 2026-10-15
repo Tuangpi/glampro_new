@@ -6,7 +6,7 @@ import {
   type ChangePasswordInput,
   type LoginInput,
   type ModuleEntitlement,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { forbidden, unauthorized } from "../lib/http-error.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";

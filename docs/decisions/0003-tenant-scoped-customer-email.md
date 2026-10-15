@@ -83,8 +83,8 @@ string exactly as it does to any other value) had not been settled.
 - The `@@unique([tenantId, email])` constraint itself, added by Phase 2's migration. Until
   that migration lands, **nothing enforces this** — there is no `Customer` model in
   [`../../apps/api/prisma/schema.prisma`](../../apps/api/prisma/schema.prisma) today.
-- The email validator in `@glampro/shared` rejects `''` and whitespace-only before the
+- The email validator in `@glampro_suite/shared` rejects `''` and whitespace-only before the
   value reaches the column, so rule 3 fails as a validation error rather than as a
   constraint violation.
 - The Phase 2 migration must be a committed SQL migration like every other
-  ([`../../AGENTS.md`](../../AGENTS.md), rule 5).
+  (committed SQL migration discipline).

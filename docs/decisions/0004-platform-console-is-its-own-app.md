@@ -32,11 +32,11 @@ migration rather than a constant edit.
 
 1. The platform console is a **separate workspace app**, `apps/platform` — not a surface
    inside `apps/web`, and not a second build of it.
-2. It consumes `@glampro/shared` and calls the **same API** on the same origin policy as
+2. It consumes `@glampro_suite/shared` and calls the **same API** on the same origin policy as
    the salon app. It gets no API and no database of its own.
 3. Dev port **5174** is reserved for it. `apps/web` keeps 5173; 9000 and 8080 belong to
-   other stacks on this host ([`.clinerules/02-workflow.md`](../../.clinerules/02-workflow.md),
-   Docker).
+   other stacks on this host (historical port allocation; confirm native-development
+   ports before starting the console).
 4. The `platform` realm is added to `AUTH_REALMS`, to the Prisma `AuthRealm` enum and to a
    login surface **by the phase that builds the console — not by Phase 3**. Phase 3 stays
    `web`-only and its acceptance criterion is unchanged: a `pos` or `mobile` token is
@@ -87,7 +87,7 @@ migration rather than a constant edit.
 - Rule 4's sequencing is enforced by the **absence** of `platform` in
   [`../../packages/shared/src/constants.ts`](../../packages/shared/src/constants.ts): the
   console phase must add it to the constant _and_ ship a committed migration for the
-  Prisma enum ([`../../AGENTS.md`](../../AGENTS.md), rule 5), and it must update
+  Prisma enum (committed SQL migration discipline), and it must update
   [`TENANCY.md`](../saas/TENANCY.md) §3 in the same commit (ADR rule: the ADR wins, the
   document is fixed).
 - Nothing enforces the _placement_ itself — no code exists yet. This file is the record

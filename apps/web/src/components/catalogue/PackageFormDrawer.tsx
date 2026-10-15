@@ -23,7 +23,7 @@ import type {
   CreatePackageInput,
   PackageDetail,
   UpdatePackageInput,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import Button from "@/components/ui/Button";
 import Checkbox from "@/components/ui/Checkbox";
@@ -35,7 +35,7 @@ import { useCreatePackage, useUpdatePackage } from "@/hooks/usePackages";
 import { useServiceList } from "@/hooks/useServices";
 import { getErrorMessage, getValidationDetails } from "@/lib/api";
 
-/** `MAX_PAGE_SIZE` in `@glampro/shared`, so the picker asks for the largest page. */
+/** `MAX_PAGE_SIZE` in `@glampro_suite/shared`, so the picker asks for the largest page. */
 const SERVICE_PICKER_PAGE_SIZE = 200;
 
 const STATUS_OPTIONS = [

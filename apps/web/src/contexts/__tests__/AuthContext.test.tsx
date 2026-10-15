@@ -11,7 +11,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { AuthProfile, AuthSession } from "@glampro/shared";
+import type { AuthProfile, AuthSession } from "@glampro_suite/shared";
 
 const { get, post } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 

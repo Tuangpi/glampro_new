@@ -25,7 +25,7 @@
  */
 import { useState } from "react";
 
-import { PASSWORD_MIN_LENGTH, type GlobalRole, type StaffDetail } from "@glampro/shared";
+import { PASSWORD_MIN_LENGTH, type GlobalRole, type StaffDetail } from "@glampro_suite/shared";
 
 import Button from "@/components/ui/Button";
 import Checkbox from "@/components/ui/Checkbox";

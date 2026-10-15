@@ -7,7 +7,7 @@
  * the team page, and one answer per question is the rule (ADR 0010's shape).
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ModuleSummary, SalonProfile, UpdateSalonProfileInput } from "@glampro/shared";
+import type { ModuleSummary, SalonProfile, UpdateSalonProfileInput } from "@glampro_suite/shared";
 
 import { queryKeys } from "@/constants/queryKeys";
 import { get, patch } from "@/lib/api";

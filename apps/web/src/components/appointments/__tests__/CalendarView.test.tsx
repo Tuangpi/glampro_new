@@ -11,7 +11,7 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { AppointmentSummary } from "@glampro/shared";
+import type { AppointmentSummary } from "@glampro_suite/shared";
 
 import CalendarView, { type CalendarColumn } from "../CalendarView";
 import { HOUR_HEIGHT } from "../calendar-geometry";

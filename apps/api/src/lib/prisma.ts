@@ -46,6 +46,7 @@ export const TENANT_SCOPED_MODELS = [
   "EmployeeCommission",
   "EmployeePerformance",
   "EmployeeLeave",
+  "StaffShift",
   // POS. `SaleLine` is here rather than reaching the sale's tenant indirectly,
   // because a line is queried on its own (the cart) as well as through its sale.
   "Sale",

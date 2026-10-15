@@ -6,7 +6,7 @@ import {
   type ChangePasswordInput,
   type LoginInput,
   type RefreshInput,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { auth, requireWritableTenant } from "../middleware/auth.js";
 import { validate, validated } from "../middleware/validate.js";

@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-03
 - **Deciders:** Engineering (with product sign-off to proceed without a new design)
-- **Related:** [`AGENTS.md`](../../AGENTS.md) rule 2,
+- **Related:** the design-token source/copy rule,
   [`roadmap.md`](../roadmap.md) Phase 3,
   [`STATE.md`](../STATE.md) §3 (closes **Q24**),
   [`design/HANDOFF.md`](../design/HANDOFF.md) §4,
@@ -130,7 +130,7 @@ same way.
 | Alternative                                        | Why it was rejected                                                                                                                                                       |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Do not build the screen until a design arrives     | Blocks Phase 3 outright, and Phases 4–9 all sit behind an authenticated shell — the whole product waits on one missing drawing                                            |
-| Copy the legacy Laravel login page                 | A different product on a different framework; `design/HANDOFF.md` is the visual source of truth, and the legacy app is reference material, never a donor, per `AGENTS.md` |
+| Copy the legacy Laravel login page                 | A different product on a different framework; `design/HANDOFF.md` is the visual source of truth, and the legacy app is reference material, never a donor |
 | Hand-roll a bespoke form instead of the primitives | Duplicates label, error and focus behaviour Phase 1 already tested, and would drift from every other screen                                                               |
 | Add a token for anything the composition lacks     | Nothing was missing except the amber tone, which was avoided rather than invented                                                                                         |
 

@@ -148,7 +148,7 @@ component earns a utility; a value used once may stay a `var()`.
 `apps/web/src/styles/tokens.css` is now a byte-for-byte copy of
 `design/handoff/tokens/tokens.css` (verified with `cmp`). The previous deviation — a
 rewritten header, re-formatted declarations, lower-cased colours, `0.10` instead of
-`.10` — is gone, and the copy rule in [`../../AGENTS.md`](../../AGENTS.md) now holds
+`.10` — is gone, and the documented source/copy rule now holds
 literally.
 
 The two values the handoff token file does not define, `--sp-rail-w: 84px` and

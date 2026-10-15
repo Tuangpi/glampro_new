@@ -4,7 +4,7 @@ import type {
   GiftCardDetail,
   GiftCardSummary,
   UpdateGiftCardInput,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { queryKeys } from "@/constants/queryKeys";
 import { get, getPaginated, patch, post } from "@/lib/api";

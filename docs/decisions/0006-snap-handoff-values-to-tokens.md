@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-01
 - **Deciders:** Engineering (values) · Design (fidelity)
-- **Related:** [`AGENTS.md`](../../AGENTS.md) rule 2,
+- **Related:** the design-token source/copy rule,
   [`design/HANDOFF.md`](../design/HANDOFF.md) §3, §5,
   [`roadmap.md`](../roadmap.md) Phase 1, [`STATE.md`](../STATE.md) §3.1
 

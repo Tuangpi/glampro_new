@@ -4,7 +4,7 @@ import {
   reportRangeQuerySchema,
   type DashboardQuery,
   type ReportRangeQuery,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { auth } from "../middleware/auth.js";
 import { requireModule } from "../middleware/requireModule.js";

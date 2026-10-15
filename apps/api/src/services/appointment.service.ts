@@ -24,7 +24,7 @@
  *    (ADR 0014). The calendar grid is the surface that makes the gap visible,
  *    so the rule lives here rather than in the browser that drew it.
  */
-import type { PaginatedResponse } from "@glampro/shared";
+import type { PaginatedResponse } from "@glampro_suite/shared";
 import {
   appointmentDetailSchema,
   appointmentSummarySchema,
@@ -34,7 +34,7 @@ import {
   type AppointmentSummary,
   type CreateAppointmentInput,
   type UpdateAppointmentInput,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { badRequest, conflict, notFound } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";
@@ -150,6 +150,7 @@ async function assertPerformerEligible(staffId: string, service: ResolvedService
   if (!inDepartment) {
     throw badRequest(
       "That staff member is not in the service's department.",
+      undefined,
       "STAFF_NOT_IN_DEPARTMENT",
     );
   }

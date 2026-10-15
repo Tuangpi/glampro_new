@@ -15,7 +15,7 @@
  * Like the week, this view is read-only (ADR 0018, decision 5) — a chip has nowhere to be
  * dropped — and clicking one still opens the same drawer.
  */
-import type { AppointmentSummary } from "@glampro/shared";
+import type { AppointmentSummary } from "@glampro_suite/shared";
 
 import { Calendar } from "@/components/icons";
 import Button from "@/components/ui/Button";

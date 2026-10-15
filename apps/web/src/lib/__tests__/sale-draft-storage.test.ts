@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { CustomerSummary } from "@glampro/shared";
+import type { CustomerSummary } from "@glampro_suite/shared";
 
 import type { CartLine } from "@/hooks/useSale";
 import {

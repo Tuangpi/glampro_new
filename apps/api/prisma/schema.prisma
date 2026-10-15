@@ -191,6 +191,7 @@ model User {
   saleLines    SaleLine[]
   performances EmployeePerformance[]
   leaves       EmployeeLeave[]
+  shifts       StaffShift[]
 
   @@index([globalRole])
   @@index([tenantId])
@@ -316,6 +317,7 @@ model Tenant {
   customerRedemptions CustomerRedemption[]
   employeePerformances EmployeePerformance[]
   employeeLeaves      EmployeeLeave[]
+  staffShifts         StaffShift[]
 
   @@index([status])
   @@map("tenants")
@@ -1215,4 +1217,68 @@ model EmployeeLeave {
   @@index([tenantId, userId])
   @@index([tenantId, fromDate])
   @@map("employee_leaves")
+}
+
+/// What one row of the rota is. A break is a **negative** interval inside a work
+/// shift, kept as a row of the same table rather than as an array on the shift,
+/// so "does this booking fit inside the person's day" is one rule over one set of
+/// intervals instead of two rules over two shapes.
+enum ShiftKind {
+  WORK
+  BREAK
+}
+
+/// A published shift — legacy had **no rota table at all** (`employee_leaves` was
+/// the whole absence surface, and no route in the 154-route inventory reads a
+/// schedule), so this is a deliberate model rather than a transcription of one.
+///
+/// **Wall clock, not an instant.** "9:00 AM – 6:00 PM" is true every Tuesday the
+/// salon is open and means a different UTC instant in every month and every
+/// timezone, so the row holds minutes since local midnight and a day of the week.
+/// A `DateTime` here would pin a recurring rota to one specific Tuesday forever.
+/// See ADR 0019.
+///
+/// `dayOfWeek` is **0 = Sunday**, matching JavaScript's `Date#getDay()`, which is
+/// the only thing that reads this column. The calendar grid is Monday-first, but
+/// that is a presentation order the client applies; numbering the stored value
+/// ISO-style for one view's convenience would make every other reader off by one.
+///
+/// No row may cross midnight (`startsAtMinute < endsAtMinute`, enforced in the
+/// contract): the calendar's 08:00–20:00 gutter would draw an overnight shift as
+/// nothing on both of its days, and a row the API accepts but no screen can show
+/// is the silent hole ADR 0018 §5 refused.
+model StaffShift {
+  id       String @id @default(cuid())
+  tenantId String
+  userId   String
+
+  /// 0 = Sunday … 6 = Saturday.
+  dayOfWeek Int
+  /// Minutes since local midnight. 0…1440, so 1440 is how "ends at midnight" is
+  /// written rather than as an instant on the next day.
+  startsAtMinute Int
+  endsAtMinute   Int
+  kind           ShiftKind @default(WORK)
+
+  /// When this published rota starts applying. Null = it always has.
+  ///
+  /// A window rather than a bare row is what lets a salon publish next month's
+  /// rota without overwriting this month's, and it is what a dated-override
+  /// layer would hang off without rewriting existing rows.
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+
+  note String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The read the availability gate makes: one performer, one weekday. Ordered so
+  /// a day's intervals come back already sorted for the containment walk.
+  @@index([tenantId, userId, dayOfWeek, startsAtMinute])
+  @@index([tenantId, dayOfWeek])
+  @@map("staff_shifts")
 }

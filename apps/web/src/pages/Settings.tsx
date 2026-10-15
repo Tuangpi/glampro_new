@@ -22,7 +22,7 @@ import { useState } from "react";
 
 import { Link } from "react-router";
 
-import type { ModuleSummary, StaffSummary } from "@glampro/shared";
+import type { ModuleSummary, StaffSummary } from "@glampro_suite/shared";
 
 import { Briefcase, Settings as SettingsIcon } from "@/components/icons";
 import Badge from "@/components/ui/Badge";

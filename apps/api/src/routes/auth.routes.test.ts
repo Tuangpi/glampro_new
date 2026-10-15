@@ -10,7 +10,7 @@ import {
   MODULE_CODES,
   type AuthProfile,
   type AuthSession,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 /**
  * Integration tests for the web session endpoints.

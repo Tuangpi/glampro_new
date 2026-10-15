@@ -7,7 +7,7 @@ import {
   type CatalogueListQuery,
   type CreateProductInput,
   type UpdateProductInput,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { auth, requireWritableTenant } from "../middleware/auth.js";
 import { requireModule } from "../middleware/requireModule.js";

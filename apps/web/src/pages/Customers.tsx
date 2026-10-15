@@ -12,7 +12,7 @@
  */
 import { useEffect, useState } from "react";
 
-import type { CustomerDetail, CustomerSummary } from "@glampro/shared";
+import type { CustomerDetail, CustomerSummary } from "@glampro_suite/shared";
 
 import CustomerAvatar from "@/components/customers/CustomerAvatar";
 import CustomerFormDrawer from "@/components/customers/CustomerFormDrawer";

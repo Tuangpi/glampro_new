@@ -1,4 +1,4 @@
-import type { GlobalRole, ModuleCode, ModuleEntitlement } from "@glampro/shared";
+import type { GlobalRole, ModuleCode, ModuleEntitlement } from "@glampro_suite/shared";
 import type { ComponentType, SVGProps } from "react";
 
 import {

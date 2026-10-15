@@ -5,7 +5,7 @@
  * workspace (Node API, Vite browser bundle, or a future mobile client).
  */
 
-export const APP_NAME = "Glampro Salon";
+export const APP_NAME = "Glampro Suite";
 
 /** Every API route lives under this prefix (nginx proxies it verbatim). */
 export const API_PREFIX = "/api";

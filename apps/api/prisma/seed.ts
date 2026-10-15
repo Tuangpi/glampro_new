@@ -11,7 +11,7 @@
 import "dotenv/config";
 
 import bcrypt from "bcrypt";
-import { CORE_MODULE_CODES, MODULE_CODES } from "@glampro/shared";
+import { CORE_MODULE_CODES, MODULE_CODES } from "@glampro_suite/shared";
 
 import {
   DEMO_APPOINTMENTS,
@@ -22,6 +22,7 @@ import {
   DEMO_PRODUCTS,
   DEMO_SALES,
   DEMO_SERVICES,
+  DEMO_SHIFTS,
   DEMO_STAFF,
   DEMO_VALUE_PACKAGES,
   STAFF_DEPARTMENTS,
@@ -249,6 +250,50 @@ async function seedStaffDepartments(tenantId: string): Promise<void> {
   }
 
   console.log(`  ✔ staff departments linked (${linked} new)`);
+}
+
+/**
+ * Publishes the demo rota — Phase 6e's data, one row per (performer, weekday,
+ * interval), upserted by the fixed ids `seed-data.ts` gives them so a re-seed
+ * refreshes the hours rather than appending a second rota.
+ *
+ * Runs inside `runAsTenant`, so the Prisma extension scopes every query the way
+ * a request would; the `tenantId` passed here matches what other seed writers do
+ * and what the extension would inject.
+ */
+async function seedShifts(tenantId: string): Promise<void> {
+  const users = await prisma.user.findMany({
+    where: { tenantId },
+    select: { id: true, email: true },
+  });
+  const userByEmail = new Map(users.map((row) => [row.email, row.id]));
+
+  let written = 0;
+  for (const shift of DEMO_SHIFTS) {
+    const userId = userByEmail.get(shift.staffEmail);
+    // The roster and `DEMO_STAFF` are one dataset, but a production-mode crew
+    // has no performers — skipping quietly keeps this function mode-agnostic.
+    if (!userId) continue;
+
+    const data = {
+      tenantId,
+      userId,
+      dayOfWeek: shift.dayOfWeek,
+      kind: shift.kind,
+      startsAtMinute: shift.startsAtMinute,
+      endsAtMinute: shift.endsAtMinute,
+      note: shift.note,
+    };
+
+    await prisma.staffShift.upsert({
+      where: { id: shift.id },
+      update: data,
+      create: { id: shift.id, ...data },
+    });
+    written += 1;
+  }
+
+  console.log(`  ✔ ${written} shift row(s)`);
 }
 
 async function seedServices(
@@ -874,6 +919,7 @@ async function main(): Promise<void> {
       await seedEntitlements(tenantId);
       const departments = await seedDepartments(tenantId);
       await seedStaffDepartments(tenantId);
+      await seedShifts(tenantId);
       const services = await seedServices(tenantId, departments);
       await seedProducts(tenantId, departments);
       await seedPackages(tenantId, services);

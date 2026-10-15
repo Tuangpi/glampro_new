@@ -24,7 +24,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { SaleDetail, SaleItemKind, SaleSummary } from "@glampro/shared";
+import type { SaleDetail, SaleItemKind, SaleSummary } from "@glampro_suite/shared";
 
 const { useSaleItems, useSaleCustomers } = vi.hoisted(() => ({
   useSaleItems: vi.fn(),

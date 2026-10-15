@@ -11,7 +11,7 @@
  * Reads run in the tenant scope `middleware/auth.ts` opened, so `Department` being
  * tenant-scoped means a foreign branch id simply is not found.
  */
-import { departmentSchema, type DepartmentSummary } from "@glampro/shared";
+import { departmentSchema, type DepartmentSummary } from "@glampro_suite/shared";
 
 import { validationFailed } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";

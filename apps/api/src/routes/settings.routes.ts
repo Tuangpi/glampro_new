@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { updateSalonProfileSchema, type UpdateSalonProfileInput } from "@glampro/shared";
+import { updateSalonProfileSchema, type UpdateSalonProfileInput } from "@glampro_suite/shared";
 
 import { auth, requireRole, requireWritableTenant } from "../middleware/auth.js";
 import { validate, validated } from "../middleware/validate.js";

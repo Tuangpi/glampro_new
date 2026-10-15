@@ -118,7 +118,7 @@ export default function AppShell() {
           <div className="min-w-0">
             <h1 className="truncate text-lg leading-tight">{current?.label ?? "Glampro"}</h1>
             <p className="text-xs text-ink-muted">
-              {tenant?.name ?? "Glampro Salon"} — {weekdayToday()}
+              {tenant?.name ?? "Glampro Suite"} — {weekdayToday()}
             </p>
           </div>
 

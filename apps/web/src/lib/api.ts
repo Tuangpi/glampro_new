@@ -10,7 +10,7 @@ import type {
   AuthSession,
   PaginatedResponse,
   QueryParams,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { showToast } from "@/components/ui/toast-store";
 import {

@@ -21,7 +21,7 @@
  * stacking, so a pair the 6b rule could not prevent — two unassigned bookings at 09:00, or
  * a legacy row — is drawn twice over rather than hidden once.
  */
-import type { AppointmentSummary } from "@glampro/shared";
+import type { AppointmentSummary } from "@glampro_suite/shared";
 
 import { Calendar } from "@/components/icons";
 import Button from "@/components/ui/Button";

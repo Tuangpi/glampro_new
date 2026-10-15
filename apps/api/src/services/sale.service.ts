@@ -43,7 +43,7 @@ import {
   type SaleListQuery,
   type SalePaymentInput,
   type VoidSaleInput,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { moduleEntitlements } from "../lib/entitlements.js";
 import { badRequest, conflict, forbidden, notFound } from "../lib/http-error.js";

@@ -1,6 +1,6 @@
 /** Screen 10's range report — one request so every table shares one period. */
 import { useQuery } from "@tanstack/react-query";
-import type { ReportOverview } from "@glampro/shared";
+import type { ReportOverview } from "@glampro_suite/shared";
 
 import { queryKeys } from "@/constants/queryKeys";
 import { get } from "@/lib/api";

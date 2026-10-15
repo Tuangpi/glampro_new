@@ -10,7 +10,7 @@
  * person who cannot be labelled.
  */
 import type { BadgeVariant } from "@/components/ui/Badge";
-import { GLOBAL_ROLES, type GlobalRole } from "@glampro/shared";
+import { GLOBAL_ROLES, type GlobalRole } from "@glampro_suite/shared";
 
 export const ROLE_LABELS: Record<GlobalRole, string> = {
   SUPER_ADMIN: "Super admin",

@@ -18,7 +18,7 @@ import {
   type DashboardSummary,
   type ReportOverview,
   type ReportRangeQuery,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { prisma } from "../lib/prisma.js";
 import { resolveLowStockThreshold } from "./catalogue.service.js";

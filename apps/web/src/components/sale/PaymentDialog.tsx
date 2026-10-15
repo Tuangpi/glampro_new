@@ -28,7 +28,7 @@
  */
 import { useState } from "react";
 
-import { MAX_SALE_PAYMENTS, type SalePaymentInput, type SalePaymentMethod } from "@glampro/shared";
+import { MAX_SALE_PAYMENTS, type SalePaymentInput, type SalePaymentMethod } from "@glampro_suite/shared";
 
 import { Plus, Trash } from "@/components/icons";
 import Button from "@/components/ui/Button";

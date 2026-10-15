@@ -1,4 +1,4 @@
-import type { AuthRealm, AuthUser, TenantStatus } from "@glampro/shared";
+import type { AuthRealm, AuthUser, TenantStatus } from "@glampro_suite/shared";
 
 /**
  * The authenticated principal attached to every request by

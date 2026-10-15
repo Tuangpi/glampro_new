@@ -16,7 +16,7 @@
  */
 import { useState } from "react";
 
-import type { CatalogStatusValue, ProductDetail } from "@glampro/shared";
+import type { CatalogStatusValue, ProductDetail } from "@glampro_suite/shared";
 
 import Button from "@/components/ui/Button";
 import Drawer from "@/components/ui/Drawer";

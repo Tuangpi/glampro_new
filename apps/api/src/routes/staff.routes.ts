@@ -7,7 +7,7 @@ import {
   type CreateStaffInput,
   type StaffListQuery,
   type UpdateStaffInput,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { auth, requireRole, requireWritableTenant } from "../middleware/auth.js";
 import { requireModule } from "../middleware/requireModule.js";

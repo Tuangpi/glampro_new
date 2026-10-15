@@ -7,7 +7,7 @@ import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { after, before, describe, it } from "node:test";
 
-import { CORE_MODULE_CODES, MODULE_CODES, type StaffSummary } from "@glampro/shared";
+import { CORE_MODULE_CODES, MODULE_CODES, type StaffSummary } from "@glampro_suite/shared";
 
 /**
  * Integration tests for the staff endpoints — handoff screen 09.

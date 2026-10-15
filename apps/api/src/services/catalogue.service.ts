@@ -14,7 +14,7 @@
  * `Product` and forgotten here throws instead of reaching the browser outside its
  * contract (AGENTS.md rule 6).
  */
-import type { PaginatedResponse } from "@glampro/shared";
+import type { PaginatedResponse } from "@glampro_suite/shared";
 import {
   productDetailSchema,
   productSummarySchema,
@@ -29,7 +29,7 @@ import {
   type ServiceSummary,
   type UpdateProductInput,
   type UpdateServiceInput,
-} from "@glampro/shared";
+} from "@glampro_suite/shared";
 
 import { notFound, validationFailed } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";
