@@ -114,6 +114,23 @@ function renderSettings() {
 }
 
 describe("Settings", () => {
+  it("uses salon-facing guidance without architecture or release-planning copy", () => {
+    renderSettings();
+
+    expect(screen.getByText("Salon identifier")).toBeInTheDocument();
+    expect(
+      screen.getByText("Products with stock at or below this quantity are marked as low stock."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        "View the features available to your salon. Contact support to change your subscription.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/ADR 0010|when those features ship|entitlements|platform operator/i),
+    ).not.toBeInTheDocument();
+  });
+
   it("renders the profile, purchased modules and the real team summary", () => {
     renderSettings();
     expect(screen.getByDisplayValue("Ava Salon")).toBeInTheDocument();

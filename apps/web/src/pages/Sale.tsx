@@ -378,8 +378,8 @@ export default function Sale() {
         <h2 className="text-xl">Sale</h2>
         <p className="mt-1 text-sm text-ink-muted">
           {receipt
-            ? "Rung up. This is the receipt the salon keeps."
-            : "The grid shows what the search returned; the server charges what the catalogue says."}
+            ? "Sale complete. Review your receipt below."
+            : "Add services and products to the cart, then take payment."}
         </p>
       </header>
 

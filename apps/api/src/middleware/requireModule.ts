@@ -1,7 +1,10 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 
+import { moduleName } from "@glampro_suite/shared";
+
 import { moduleEntitlements } from "../lib/entitlements.js";
 import { forbidden, unauthorized } from "../lib/http-error.js";
+import { logger } from "../lib/logger.js";
 import { currentScope } from "../lib/tenant-context.js";
 
 /**
@@ -47,13 +50,33 @@ export function requireModule(code: string): RequestHandler {
         // granting access, so this is a refusal and not a pass. It is a different
         // refusal from "your salon has not bought this", which is why `known` is
         // returned alongside `entitled`.
-        next(forbidden(`Unknown module "${code}".`, "MODULE_UNKNOWN"));
+        //
+        // The message is the salon's, not the developer's: the code is an internal
+        // key, so it goes to the log — where the person who can fix the seed or the
+        // route will look — rather than into a response a cashier reads.
+        logger.warn("requireModule was given a module code the catalogue does not hold", {
+          module: code,
+          path: req.path,
+        });
+        next(
+          forbidden(
+            "This feature is unavailable right now. Please contact support.",
+            "MODULE_UNKNOWN",
+            {
+              module: code,
+            },
+          ),
+        );
         return;
       }
 
       if (!entitled.has(code)) {
+        // `details.module` stays the raw code — it is the machine-readable half of
+        // the answer, and the web app matches on it. The sentence is the human half,
+        // so it names the add-on as the Modules panel does ("Gift cards") instead of
+        // quoting the key ("giftCards").
         next(
-          forbidden(`This feature needs the "${code}" add-on.`, "MODULE_NOT_ENTITLED", {
+          forbidden(`This feature needs the ${moduleName(code)} add-on.`, "MODULE_NOT_ENTITLED", {
             module: code,
           }),
         );

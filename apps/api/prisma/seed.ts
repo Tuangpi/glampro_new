@@ -11,7 +11,7 @@
 import "dotenv/config";
 
 import bcrypt from "bcrypt";
-import { CORE_MODULE_CODES, MODULE_CODES } from "@glampro_suite/shared";
+import { CORE_MODULE_CODES, MODULE_CODES, MODULE_NAMES } from "@glampro_suite/shared";
 
 import {
   DEMO_APPOINTMENTS,
@@ -45,23 +45,10 @@ import { runAsPlatform, runAsTenant } from "../src/lib/tenant-context.js";
 
 type SeedRole = "SUPER_ADMIN" | "MANAGER" | "STAFF" | "CASHIER";
 
-/** Display names for the seeded module catalogue, keyed by `Module.code`. */
-const MODULE_NAMES: Record<(typeof MODULE_CODES)[number], string> = {
-  dashboard: "Dashboard",
-  appointments: "Appointments",
-  customers: "Customers",
-  catalogue: "Catalogue",
-  staff: "Staff",
-  packages: "Packages",
-  giftCards: "Gift cards",
-  memberships: "Memberships",
-  inventory: "Inventory",
-  reports: "Reports",
-  employeeCommission: "Employee commission",
-  sales: "Sales",
-  expenses: "Expenses",
-  stock: "Stock",
-};
+// The seeded `Module.name` comes from `MODULE_NAMES` in `@glampro_suite/shared`,
+// which is also what `requireModule` names an add-on from when it refuses a route.
+// One map, so the Modules panel and the refusal cannot disagree — see the comment
+// on that constant.
 
 const MODULE_CATEGORIES: Record<(typeof MODULE_CODES)[number], string> = {
   dashboard: "Core",

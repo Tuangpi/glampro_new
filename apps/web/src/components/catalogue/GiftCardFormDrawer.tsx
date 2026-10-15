@@ -14,7 +14,11 @@
  */
 import { useState } from "react";
 
-import type { CreateGiftCardInput, GiftCardDetail, UpdateGiftCardInput } from "@glampro_suite/shared";
+import type {
+  CreateGiftCardInput,
+  GiftCardDetail,
+  UpdateGiftCardInput,
+} from "@glampro_suite/shared";
 
 import Button from "@/components/ui/Button";
 import Drawer from "@/components/ui/Drawer";
@@ -219,12 +223,12 @@ export default function GiftCardFormDrawer({ open, card, onClose }: GiftCardForm
         />
 
         <Input
-          label="QR payload"
+          label="QR code value"
           value={form.qrPayload}
           onChange={(event) => set("qrPayload")(event.target.value)}
           error={fieldError("qrPayload")}
           maxLength={2000}
-          hint="Optional. The value the till's QR renderer encodes — not an image."
+          hint="Optional. The text to put in the card's QR code, for example a code from your card supplier."
         />
       </form>
     </Drawer>

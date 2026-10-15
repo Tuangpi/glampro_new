@@ -277,6 +277,15 @@ describe("the category tabs", () => {
 });
 
 describe("the cart", () => {
+  it("explains checkout without server implementation details", () => {
+    renderSale();
+
+    expect(
+      screen.getByText("Add services and products to the cart, then take payment."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/the server charges/i)).not.toBeInTheDocument();
+  });
+
   it("adds a line and totals it in cents", async () => {
     const user = userEvent.setup();
     renderSale();

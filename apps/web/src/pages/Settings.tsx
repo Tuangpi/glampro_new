@@ -54,7 +54,7 @@ export default function Settings() {
       <header>
         <h2 className="text-xl">Settings</h2>
         <p className="mt-1 text-sm text-ink-muted">
-          What this salon is, what it has bought, and who works here.
+          Manage your salon profile, available features and team.
         </p>
       </header>
 
@@ -155,19 +155,19 @@ function ProfileCard({ canEdit }: { canEdit: boolean }) {
               onChange={(event) => setDraftThreshold(event.target.value)}
               error={fieldError("lowStockThreshold")}
               disabled={!canEdit || update.isPending}
-              hint="Stock at or below this reads as low on the rail badge and the tiles (ADR 0010)."
+              hint="Products with stock at or below this quantity are marked as low stock."
             />
           </div>
 
           <dl className="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
-            <Fact label="Slug" value={data.slug} />
+            <Fact label="Salon identifier" value={data.slug} />
             <Fact label="Status" value={data.status} />
             <Fact label="Owner" value={data.owner?.name ?? "—"} />
             <Fact label="Created" value={formatDate(data.createdAt)} />
           </dl>
           <p className="text-xs text-ink-muted">
-            Slug and status belong to the platform operator, so they are shown but never edited
-            here. Hours, tax and receipts are configured when those features ship.
+            Your salon identifier and account status are read-only. Contact support if they need to
+            change.
           </p>
 
           {canEdit ? (
@@ -238,7 +238,7 @@ function ModulesCard({
   return (
     <Card
       title="Modules"
-      description="What this salon has bought. Read-only: entitlements are granted by the platform operator."
+      description="View the features available to your salon. Contact support to change your subscription."
     >
       {isPending ? (
         <div className="flex flex-col gap-3">

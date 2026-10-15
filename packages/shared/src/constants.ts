@@ -42,6 +42,48 @@ export const MODULE_CODES = [
 export type ModuleCode = (typeof MODULE_CODES)[number];
 
 /**
+ * The name a salon sees for a module code — the copy on the Modules panel and in
+ * the refusal a missing add-on produces.
+ *
+ * A code is an internal key (`giftCards`, `employeeCommission`) and a person
+ * reading "This feature needs the giftCards add-on" is reading the database, so
+ * the two places that name a module to a human — `prisma/seed.ts` writing
+ * `Module.name`, and `middleware/requireModule.ts` refusing an unentitled route —
+ * take the name from here instead of formatting the code.
+ *
+ * The names are seeded, not read back, so this map and the `modules` table can
+ * only agree if the seed is the one source for both.
+ */
+export const MODULE_NAMES: Record<ModuleCode, string> = {
+  dashboard: "Dashboard",
+  appointments: "Appointments",
+  customers: "Customers",
+  catalogue: "Catalogue",
+  staff: "Staff",
+  packages: "Packages",
+  giftCards: "Gift cards",
+  memberships: "Memberships",
+  inventory: "Inventory",
+  reports: "Reports",
+  employeeCommission: "Employee commission",
+  sales: "Sales",
+  expenses: "Expenses",
+  stock: "Stock",
+};
+
+/**
+ * The display name for a module code, for callers that hold the code as a plain
+ * `string` (a route's `requireModule` argument, a `Module.name` row that predates
+ * this map).
+ *
+ * An unrecognised code falls back to itself: the caller is naming a module it
+ * could not resolve, and the code is the only thing that identifies it.
+ */
+export function moduleName(code: string): string {
+  return MODULE_NAMES[code as ModuleCode] ?? code;
+}
+
+/**
  * Modules every tenant has without buying them, keyed by the same `Module.code`.
  * A core module passes `requireModule` as soon as the tenant exists.
  */

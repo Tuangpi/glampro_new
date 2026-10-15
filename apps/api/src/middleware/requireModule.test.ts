@@ -16,6 +16,8 @@ const databaseUrl = process.env["DATABASE_URL"];
 const TENANT = "rm-test-tenant";
 const CORE = CORE_MODULE_CODES[0];
 const ADD_ON = "packages";
+/** A second add-on, because its key is two words and its name is two words. */
+const ADD_ON_GIFT_CARDS = "giftCards";
 
 async function seed(): Promise<void> {
   // `TenantModule` is tenant-scoped, so setup writes through the platform scope
@@ -85,6 +87,10 @@ function appFor(code: string, scope: "tenant" | "platform" | "none"): Express {
       const httpError = error as HttpError;
       res.status(httpError.statusCode ?? 500).json({
         statusCode: httpError.statusCode ?? 500,
+        // The app's own `errorHandler` sends `message` too; it is echoed here so a
+        // test can assert *what a salon would read*, which is the whole point of the
+        // copy in `requireModule`.
+        message: httpError.message,
         code: httpError.code,
         details: httpError.details,
       });
@@ -113,7 +119,7 @@ describe("requireModule", { skip: databaseUrl ? false : "DATABASE_URL is not set
   before(async () => {
     await seed();
     // The guard resolves modules from the seeded catalogue.
-    for (const [index, code] of [...CORE_MODULE_CODES, ADD_ON].entries()) {
+    for (const [index, code] of [...CORE_MODULE_CODES, ADD_ON, ADD_ON_GIFT_CARDS].entries()) {
       await prisma.module.upsert({
         where: { code },
         update: {},
@@ -149,6 +155,17 @@ describe("requireModule", { skip: databaseUrl ? false : "DATABASE_URL is not set
     assert.equal(status, 403);
     assert.equal(body.code, "MODULE_NOT_ENTITLED");
     assert.deepEqual(body.details, { module: ADD_ON });
+    // What the salon reads names the add-on the way the Modules panel does. The key
+    // stays in `details` and in the log; it is not a word to put in a sentence
+    // (P0-07).
+    assert.equal(body.message, "This feature needs the Packages add-on.");
+  });
+
+  it("refuses a `giftCards` add-on under its display name too", async () => {
+    const { body } = await call("giftCards", "tenant");
+
+    assert.equal(body.message, "This feature needs the Gift cards add-on.");
+    assert.deepEqual(body.details, { module: "giftCards" }, "details still carries the key");
   });
 
   it("allows an add-on once a TenantModule row exists", async () => {
@@ -192,6 +209,12 @@ describe("requireModule", { skip: databaseUrl ? false : "DATABASE_URL is not set
 
     assert.equal(status, 403);
     assert.equal(body.code, "MODULE_UNKNOWN");
+    // The code goes to the log and to `details` for whoever fixes the seed; the
+    // sentence a cashier would read must not say "Unknown module" and quote a key
+    // (P0-07).
+    assert.deepEqual(body.details, { module: "no-such-module" });
+    assert.match(String(body.message), /unavailable/i);
+    assert.doesNotMatch(String(body.message), /no-such-module/);
   });
 
   it("refuses outside a tenant context", async () => {
