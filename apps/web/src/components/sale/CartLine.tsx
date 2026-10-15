@@ -21,11 +21,13 @@ import { CONTROL_CLASS } from "@/components/ui/Field";
 import Select from "@/components/ui/Select";
 import { cartLineKey, type CartLine as CartLineState } from "@/hooks/useSale";
 import { cartTotalCents } from "@/lib/money";
+import { performerOptions } from "@/lib/performer-options";
 import { cn, formatPrice } from "@/lib/utils";
 
 export interface StaffOption {
   id: string;
   name: string;
+  email?: string;
 }
 
 export interface CartLineProps {
@@ -184,10 +186,7 @@ export default function CartLine({
           label={`Who performed ${line.name}`}
           value={line.staffId ?? ""}
           onChange={(event) => onStaff(key, event.target.value || undefined)}
-          options={[
-            { value: "", label: "Unassigned" },
-            ...staffOptions.map((person) => ({ value: person.id, label: person.name })),
-          ]}
+          options={[{ value: "", label: "Unassigned" }, ...performerOptions(staffOptions)]}
           disabled={disabled}
         />
       ) : null}

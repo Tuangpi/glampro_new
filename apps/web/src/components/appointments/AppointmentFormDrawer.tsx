@@ -32,6 +32,7 @@ import { useCreateAppointment, useUpdateAppointment } from "@/hooks/useAppointme
 import { useServiceList } from "@/hooks/useServices";
 import { useStaffList } from "@/hooks/useStaff";
 import { getErrorMessage, getValidationDetails } from "@/lib/api";
+import { performerOptions } from "@/lib/performer-options";
 
 const LIST_PAGE_SIZE = 200;
 
@@ -293,7 +294,7 @@ export default function AppointmentFormDrawer({
               ? "Only staff in the service's department are offered."
               : "Who performs the service. Leave as Unassigned if nobody has claimed it yet."
           }
-          options={eligibleStaff.map((person) => ({ value: person.id, label: person.name }))}
+          options={performerOptions(eligibleStaff)}
           disabled={staff.isPending}
         />
 

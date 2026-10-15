@@ -1,5 +1,70 @@
 # Glampro Suite — session handoff
 
+## User acceptance — 2026-10-15
+
+User confirmed "okay all are good. all acceptance" following the P1-09 acceptance
+request. TK2610-0014 / P1-09 is now Done in the local tracker for the delivered
+picker-only scope. The Ready for UAT entry below is historical. PJ2610-0026 update:
+user may now mark TK2610-0014 complete in the external task system; the agent has
+not updated that system. This acceptance does not complete other roadmap tasks
+or replace missing database-backed validation. P0-07 remains database-blocked.
+
+User explicitly approved a local commit containing only the accepted P1-09
+performer-picker implementation/tests and scoped acceptance documentation, leaving
+unrelated work unstaged and without pushing. The working tree contains mixed
+tooling recovery, API/migration, UI and ADR work; selectively stage only this scope.
+PostgreSQL prohibition remains in force. Commit outcome is reported in the session
+response; no push is authorized.
+
+## Current execution priority — 2026-10-15: P1-09 ready for UAT
+
+This entry supersedes the older P0-07 priority below. User explicitly chose:
+**Do not access PostgreSQL; continue other unblocked work, keeping P0-07 blocked.**
+P0-07 remains blocked on database-backed middleware integration validation;
+do not run that suite or provision/reset/reseed a database without new approval.
+
+TK2610-0014 / P1-09 is Ready for UAT, not Done. The original DOCX scope is
+"Clean up duplicate staff names in performer picker". The implemented interpretation
+is picker identity cleanup, not account deletion/merging: repeated IDs appear once,
+and distinct IDs with matching names (case/whitespace-normalized) show their email
+or full ID when email is unavailable. Unique names remain unchanged. Existing
+department eligibility and submitted staff IDs are preserved. No staff records
+were altered. If the user intended duplicate-account remediation instead, this
+slice does not complete that scope; clarify and obtain data-access approval first.
+
+Files for this slice (absolute root:
+/home/tuangpi/Documents/Aridient/Glampros/glampro_suite):
+- apps/web/src/lib/performer-options.ts: shared identity-safe option builder.
+- apps/web/src/lib/__tests__/performer-options.test.ts: four option-builder tests.
+- apps/web/src/components/sale/CartLine.tsx: consume the shared options, carry email.
+- apps/web/src/components/appointments/AppointmentFormDrawer.tsx: same option builder.
+- apps/web/src/components/appointments/AppointmentFormDrawer.test.tsx: eligibility,
+  duplicate-ID suppression and selected-ID submission regression test.
+- apps/web/src/pages/__tests__/Sale.test.tsx: equivalent sale regression test.
+- TASKS.md and docs/STATE.md: readiness and acceptance handoff.
+
+Validation: full web suite 40 files / 354 tests passed; web typecheck and lint
+passed; Prettier check on the six application/test files passed. Production web
+build completed (shared prebuild, web typecheck and Vite; 426 modules transformed).
+These are database-independent frontend checks with mocked hooks/API; they do
+not establish production account quality or replace P0-07's required API tests.
+
+Manual acceptance requested (not performed by the agent):
+1. In Sale, add a service; verify each eligible account appears once and same-name
+   accounts have distinct labels. Unique names should remain uncluttered.
+2. In an appointment form, select a department-specific service and verify the
+   same behavior; staff outside that department must remain excluded.
+3. Confirm same-name people remain separate identities; confirm the label choice
+   and picker-only interpretation meet the requested cleanup. Exercise desktop
+   and mobile widths. Do not create live sales/bookings solely for this review.
+4. After user acceptance, mark TK2610-0014 complete in the external task system
+   and record acceptance here before changing tracker status to Done.
+
+No PostgreSQL access, staging, commits or pushes. Extensive pre-existing changes
+remain mixed in the working tree. Review scoped diffs before any future staging;
+explicit commit/push approval is still outstanding. Original DOCX/PDF and design
+folder unchanged. ADR 0017/0018 reviews remain deferred.
+
 Last updated: 2026-10-15. Current scope: setup for incremental roadmap improvements.
 Read /home/tuangpi/Documents/Aridient/Glampros/glampro_suite/TASKS.md first.
 

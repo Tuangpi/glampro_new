@@ -209,6 +209,50 @@ beforeEach(() => {
   del.mockReset().mockResolvedValue({ id: "sale-9" });
 });
 
+describe("performer identities", () => {
+  it("deduplicates account options, distinguishes equal names and posts the selected ID", async () => {
+    const user = userEvent.setup();
+    const sam = {
+      id: "sam-a",
+      name: "Sam Lee",
+      email: "sam.a@example.test",
+      departments: [{ id: "hair" }],
+    };
+    useServiceList.mockReturnValue(listResult([{ id: "s1", departmentId: "hair" }]));
+    useStaffList.mockReturnValue(
+      listResult([
+        sam,
+        sam,
+        { ...sam, id: "sam-b", email: "sam.b@example.test" },
+        { ...sam, id: "nails", email: "nails@example.test", departments: [{ id: "nails" }] },
+      ]),
+    );
+    renderSale();
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    const picker = screen.getByRole("combobox", { name: "Who performed Root colour" });
+    expect(
+      within(picker).getAllByRole("option", { name: "Sam Lee (sam.a@example.test)" }),
+    ).toHaveLength(1);
+    expect(
+      within(picker).getByRole("option", { name: "Sam Lee (sam.b@example.test)" }),
+    ).toHaveValue("sam-b");
+    expect(within(picker).queryByRole("option", { name: /nails@example/ })).not.toBeInTheDocument();
+    await user.selectOptions(picker, "sam-b");
+    await user.click(screen.getByRole("button", { name: "Take payment" }));
+    await user.click(
+      within(await screen.findByRole("dialog")).getByRole("button", { name: "Take payment" }),
+    );
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith(
+        "/sales",
+        expect.objectContaining({
+          lines: [{ itemType: "SERVICE", itemId: "s1", quantity: 1, staffId: "sam-b" }],
+        }),
+      ),
+    );
+  });
+});
+
 describe("the category tabs", () => {
   it("draws one per kind the server named, and no other", () => {
     renderSale();

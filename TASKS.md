@@ -72,7 +72,7 @@ Phase 1: October 16–20; Phase 2: October 19–22; Phase 3: October 19–23, 20
 | TK2610-0012 | P0-06 Reports: Z-report, sales by staff/service, package liability | Phase 1 | P0 – Launch blocker | Not assessed | Audit current implementation against DOCX scope. |
 | TK2610-0013 | MILESTONE – P0 UAT & sales-demo readiness sign-off (20 Oct) | Phase 1 | Program | Not assessed | Audit current implementation against DOCX scope. |
 | TK2610-0002 | Phase 2 – P1 Competitive parity | Phase 2 | Program | Not assessed | Audit current implementation against DOCX scope. |
-| TK2610-0014 | P1-09 Clean up duplicate staff names in performer picker | Phase 2 | P1 – Competitive | Not assessed | Audit current implementation against DOCX scope. |
+| TK2610-0014 | P1-09 Clean up duplicate staff names in performer picker | Phase 2 | P1 – Competitive | Done | User accepted the delivered picker-only scope on 2026-10-15. Sale and appointment pickers deduplicate repeated account IDs and distinguish matching names by email (ID fallback), without merging staff records or changing eligibility. Web suite: 40 files / 354 tests passed; web typecheck, lint, scoped Prettier and production build passed. No database access. External task-system completion remains a user action. |
 | TK2610-0015 | P1-06 PDPA consent + marketing opt-in | Phase 2 | P1 – Competitive | Not assessed | Audit current implementation against DOCX scope. |
 | TK2610-0016 | P1-05 Customer profile page | Phase 2 | P1 – Competitive | Not assessed | Audit current implementation against DOCX scope. |
 | TK2610-0017 | P1-07 POS upgrades | Phase 2 | P1 – Competitive | Not assessed | Audit current implementation against DOCX scope. |
