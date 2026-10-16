@@ -7,7 +7,13 @@
  * the team page, and one answer per question is the rule (ADR 0010's shape).
  */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import type { ModuleSummary, SalonProfile, UpdateSalonProfileInput } from "@glampro_suite/shared";
+import type {
+  ModuleSummary,
+  SalonOperatingHours,
+  SalonProfile,
+  UpdateSalonOperatingHoursInput,
+  UpdateSalonProfileInput,
+} from "@glampro_suite/shared";
 
 import { queryKeys } from "@/constants/queryKeys";
 import { get, patch } from "@/lib/api";
@@ -46,6 +52,32 @@ export function useUpdateSalonProfile() {
       void queryClient.setQueryData(queryKeys.settings.general(), profile);
       void queryClient.setQueryData(queryKeys.settings.general(profile.id), profile);
       void queryClient.invalidateQueries({ queryKey: queryKeys.auth.profile() });
+    },
+  });
+}
+
+/** The salon's published operating hours. */
+export function useSalonOperatingHours() {
+  return useQuery({
+    queryKey: queryKeys.settings.businessHours(),
+    queryFn: () => get<SalonOperatingHours>("/settings/hours"),
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Saves the salon's operating hours. Only the days sent are changed; omitted
+ * days keep their stored values. Invalidating the hours query after a write
+ * keeps the read and the edit in sync.
+ */
+export function useUpdateSalonOperatingHours() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: UpdateSalonOperatingHoursInput) =>
+      patch<SalonOperatingHours>("/settings/hours", input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.settings.businessHours() });
     },
   });
 }

@@ -112,3 +112,64 @@ export const moduleSummarySchema = z.object({
 });
 
 export type ModuleSummary = z.infer<typeof moduleSummarySchema>;
+
+/** One day's open window. A `null` day means the salon is closed that day. */
+export const dayHoursSchema = z
+  .object({
+    open: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/, "Use HH:mm, such as 09:00"),
+    close: z
+      .string()
+      .regex(/^\d{2}:\d{2}$/, "Use HH:mm, such as 20:00"),
+  })
+  .refine(
+    (data) => data.open < data.close,
+    { message: "Closing time must be after opening time", path: ["close"] },
+  );
+
+export type DayHours = z.infer<typeof dayHoursSchema>;
+
+/**
+ * `GET /api/settings/hours` — the salon's published operating hours.
+ *
+ * One row per day of the week, Sunday first. `null` = closed.
+ */
+export const salonOperatingHoursSchema = z.object({
+  tenantId: z.string(),
+  sunday: dayHoursSchema.nullable(),
+  monday: dayHoursSchema.nullable(),
+  tuesday: dayHoursSchema.nullable(),
+  wednesday: dayHoursSchema.nullable(),
+  thursday: dayHoursSchema.nullable(),
+  friday: dayHoursSchema.nullable(),
+  saturday: dayHoursSchema.nullable(),
+});
+
+export type SalonOperatingHours = z.infer<typeof salonOperatingHoursSchema>;
+
+/**
+ * `PATCH /api/settings/hours` — the salon's editable operating hours.
+ *
+ * Only the days being changed are sent; omitted days are left untouched. At
+ * least one day must be provided.
+ */
+export const updateSalonOperatingHoursSchema = z
+  .object({
+    sunday: dayHoursSchema.nullable().optional(),
+    monday: dayHoursSchema.nullable().optional(),
+    tuesday: dayHoursSchema.nullable().optional(),
+    wednesday: dayHoursSchema.nullable().optional(),
+    thursday: dayHoursSchema.nullable().optional(),
+    friday: dayHoursSchema.nullable().optional(),
+    saturday: dayHoursSchema.nullable().optional(),
+  })
+  .strict()
+  .refine(
+    (data) => Object.keys(data).length > 0,
+    { message: "At least one day must be provided" },
+  );
+
+export type UpdateSalonOperatingHoursInput = z.infer<
+  typeof updateSalonOperatingHoursSchema
+>;

@@ -7,6 +7,8 @@ const {
   useModules,
   useSalonProfile,
   useUpdateSalonProfile,
+  useSalonOperatingHours,
+  useUpdateSalonOperatingHours,
   useStaffList,
   mutateAsync,
   getValidationDetails,
@@ -14,13 +16,21 @@ const {
   useModules: vi.fn(),
   useSalonProfile: vi.fn(),
   useUpdateSalonProfile: vi.fn(),
+  useSalonOperatingHours: vi.fn(),
+  useUpdateSalonOperatingHours: vi.fn(),
   useStaffList: vi.fn(),
   mutateAsync: vi.fn(),
   getValidationDetails: vi.fn(() => ({})),
 }));
 const auth = vi.hoisted(() => ({ role: "SUPER_ADMIN", readOnly: false }));
 
-vi.mock("@/hooks/useSettings", () => ({ useModules, useSalonProfile, useUpdateSalonProfile }));
+vi.mock("@/hooks/useSettings", () => ({
+  useModules,
+  useSalonProfile,
+  useUpdateSalonProfile,
+  useSalonOperatingHours,
+  useUpdateSalonOperatingHours,
+}));
 vi.mock("@/hooks/useStaff", () => ({ useStaffList }));
 vi.mock("@/contexts/AuthContext", () => ({
   useAuth: () => ({
@@ -105,6 +115,21 @@ beforeEach(() => {
     isError: false,
   });
   useUpdateSalonProfile.mockReturnValue({ mutateAsync, isPending: false });
+  useSalonOperatingHours.mockReturnValue({
+    data: {
+      tenantId: "tenant-1",
+      sunday: null,
+      monday: null,
+      tuesday: null,
+      wednesday: null,
+      thursday: null,
+      friday: null,
+      saturday: null,
+    },
+    isPending: false,
+    isError: false,
+  });
+  useUpdateSalonOperatingHours.mockReturnValue({ mutateAsync, isPending: false });
 });
 
 function renderSettings() {
@@ -193,6 +218,122 @@ describe("Settings", () => {
     expect(screen.getByLabelText("Salon timezone")).toBeDisabled();
     expect(screen.getByLabelText("Formatting locale")).toBeDisabled();
     expect(screen.queryByRole("button", { name: "Save profile" })).not.toBeInTheDocument();
+  });
+
+  it("renders the business hours card", () => {
+    useSalonOperatingHours.mockReturnValue({
+      data: {
+        tenantId: "tenant-1",
+        sunday: null,
+        monday: null,
+        tuesday: null,
+        wednesday: null,
+        thursday: null,
+        friday: null,
+        saturday: null,
+      },
+      isPending: false,
+      isError: false,
+    });
+    renderSettings();
+    expect(screen.getByText("Business hours")).toBeInTheDocument();
+    expect(screen.getByText("Used to generate available appointment slots.")).toBeInTheDocument();
+    for (const day of [
+      "Monday",
+      "Tuesday",
+      "Wednesday",
+      "Thursday",
+      "Friday",
+      "Saturday",
+      "Sunday",
+    ]) {
+      expect(screen.getByText(day)).toBeInTheDocument();
+    }
+  });
+
+  it("allows a manager to toggle business hours days", async () => {
+    auth.role = "MANAGER";
+    const user = userEvent.setup();
+    useUpdateSalonOperatingHours.mockReturnValue({ mutateAsync, isPending: false });
+    useSalonOperatingHours.mockReturnValue({
+      data: {
+        tenantId: "tenant-1",
+        sunday: null,
+        monday: { open: "09:00", close: "20:00" },
+        tuesday: { open: "09:00", close: "20:00" },
+        wednesday: null,
+        thursday: null,
+        friday: null,
+        saturday: null,
+      },
+      isPending: false,
+      isError: false,
+    });
+    renderSettings();
+    // Tuesday is open: click the checkbox to close it.
+    await user.click(screen.getByLabelText("Tuesday"));
+    // Monday opens at 09:00 and closes at 20:00.
+    expect(screen.getAllByDisplayValue("09:00")[0]).toBeInTheDocument();
+    expect(screen.getAllByDisplayValue("20:00")[0]).toBeInTheDocument();
+    // Submit the form to trigger the save.
+    await user.click(screen.getByRole("button", { name: "Save hours" }));
+    expect(mutateAsync).toHaveBeenCalledWith({
+      tuesday: null,
+    });
+  });
+
+  it("allows a manager to change a business-hours window", async () => {
+    auth.role = "MANAGER";
+    const user = userEvent.setup();
+    useUpdateSalonOperatingHours.mockReturnValue({ mutateAsync, isPending: false });
+    useSalonOperatingHours.mockReturnValue({
+      data: {
+        tenantId: "tenant-1",
+        sunday: null,
+        monday: null,
+        tuesday: null,
+        wednesday: null,
+        thursday: null,
+        friday: null,
+        saturday: null,
+      },
+      isPending: false,
+      isError: false,
+    });
+    renderSettings();
+    // Open the Monday checkbox (closed -> open with defaults).
+    await user.click(screen.getByLabelText("Monday"));
+    // The Opens and Closes inputs for the panels: Monday is the first.
+    const opens = screen.getAllByLabelText("Opens");
+    const closes = screen.getAllByLabelText("Closes");
+    await user.clear(opens[0]);
+    await user.type(opens[0], "10:00");
+    await user.clear(closes[0]);
+    await user.type(closes[0], "18:00");
+    await user.click(screen.getByRole("button", { name: "Save hours" }));
+    expect(mutateAsync).toHaveBeenCalledWith({
+      monday: { open: "10:00", close: "18:00" },
+    });
+  });
+
+  it("hides the save action for a staff member", () => {
+    auth.role = "STAFF";
+    useSalonOperatingHours.mockReturnValue({
+      data: {
+        tenantId: "tenant-1",
+        sunday: null,
+        monday: null,
+        tuesday: null,
+        wednesday: null,
+        thursday: null,
+        friday: null,
+        saturday: null,
+      },
+      isPending: false,
+      isError: false,
+    });
+    renderSettings();
+    expect(screen.queryByRole("button", { name: "Save hours" })).not.toBeInTheDocument();
   });
 
   it("removes the save action for a staff member", () => {

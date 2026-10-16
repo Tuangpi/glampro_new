@@ -10,8 +10,18 @@
  * about a lapsed grant — it is a read of the boundary, not a second
  * implementation of it.
  */
-import { moduleSummarySchema, salonProfileSchema } from "@glampro_suite/shared";
-import type { ModuleSummary, SalonProfile, UpdateSalonProfileInput } from "@glampro_suite/shared";
+import {
+  moduleSummarySchema,
+  salonOperatingHoursSchema,
+  salonProfileSchema,
+  updateSalonOperatingHoursSchema,
+} from "@glampro_suite/shared";
+import type {
+  ModuleSummary,
+  SalonOperatingHours,
+  SalonProfile,
+  UpdateSalonOperatingHoursInput,
+} from "@glampro_suite/shared";
 
 import { notFound } from "../lib/http-error.js";
 import { prisma } from "../lib/prisma.js";
@@ -125,4 +135,98 @@ export async function listModules(): Promise<ModuleSummary[]> {
       expiresAt: granted && expiry !== null ? expiry.toISOString() : null,
     });
   });
+}
+
+/** `GET /api/settings/hours` — the salon's published operating hours. */
+export async function getSalonOperatingHours(): Promise<SalonOperatingHours> {
+  const tenantId = requireTenantId();
+
+  const hours = await prisma.tenantOperatingHours.findUnique({
+    where: { tenantId },
+  });
+
+  const allClosed = {
+    sunday: null,
+    monday: null,
+    tuesday: null,
+    wednesday: null,
+    thursday: null,
+    friday: null,
+    saturday: null,
+  };
+
+  return salonOperatingHoursSchema.parse({
+    tenantId,
+    ...allClosed,
+    ...(hours ? {
+      sunday: hours.sundayOpen && hours.sundayClose
+        ? { open: hours.sundayOpen, close: hours.sundayClose }
+        : null,
+      monday: hours.mondayOpen && hours.mondayClose
+        ? { open: hours.mondayOpen, close: hours.mondayClose }
+        : null,
+      tuesday: hours.tuesdayOpen && hours.tuesdayClose
+        ? { open: hours.tuesdayOpen, close: hours.tuesdayClose }
+        : null,
+      wednesday: hours.wednesdayOpen && hours.wednesdayClose
+        ? { open: hours.wednesdayOpen, close: hours.wednesdayClose }
+        : null,
+      thursday: hours.thursdayOpen && hours.thursdayClose
+        ? { open: hours.thursdayOpen, close: hours.thursdayClose }
+        : null,
+      friday: hours.fridayOpen && hours.fridayClose
+        ? { open: hours.fridayOpen, close: hours.fridayClose }
+        : null,
+      saturday: hours.saturdayOpen && hours.saturdayClose
+        ? { open: hours.saturdayOpen, close: hours.saturdayClose }
+        : null,
+    } : {}),
+  });
+}
+
+/**
+ * `PATCH /api/settings/hours` — save the salon's operating hours.
+ *
+ * Only the days sent are changed; omitted days keep their stored values.
+ * Creates the row when none exists yet.
+ */
+export async function updateSalonOperatingHours(
+  input: UpdateSalonOperatingHoursInput,
+): Promise<SalonOperatingHours> {
+  const tenantId = requireTenantId();
+
+  const days = [
+    "sunday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+  ] as const;
+
+  const data: Record<string, { set?: string | null }> = {};
+  for (const day of days) {
+    const value = input[day];
+    // Omitted days are left out of `update` entirely so stored values survive.
+    if (value === undefined) continue;
+    data[`${day}Open`] = { set: value.open };
+    data[`${day}Close`] = { set: value.close };
+  }
+
+  await prisma.tenantOperatingHours.upsert({
+    where: { tenantId },
+    update: data,
+    create: {
+      tenantId,
+      ...Object.fromEntries(
+        days.flatMap((day) => [
+          [`${day}Open`, input[day]?.open ?? null],
+          [`${day}Close`, input[day]?.close ?? null],
+        ]),
+      ),
+    },
+  });
+
+  return getSalonOperatingHours();
 }

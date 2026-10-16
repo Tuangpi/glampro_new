@@ -321,10 +321,50 @@ model Tenant {
   employeePerformances EmployeePerformance[]
   employeeLeaves      EmployeeLeave[]
   staffShifts         StaffShift[]
+  operatingHours      TenantOperatingHours?
 
   @@index([status])
   @@map("tenants")
 }
+
+/// The salon's published operating hours, one row per day of the week
+/// (`0 = Sunday` ... `6 = Saturday`). Used to generate available appointment
+/// slots and to tell customers when the salon is open.
+///
+/// P0-03 stores one tenant-wide schedule. Multi-outlet hours land in P2-02,
+/// which introduces the `outlet` model; until then there is exactly one schedule
+/// per salon and `tenantId` is the scope.
+model TenantOperatingHours {
+  id        String   @id @default(cuid())
+  tenantId  String   @unique
+  /// Each day is a `null` pair (closed) or an `open`/`close` pair (open).
+  /// Monday first in the UI; Sunday at index 0 matches JavaScript's `getDay()`.
+  sundayOpen  String?
+  sundayClose String?
+  mondayOpen  String?
+  mondayClose String?
+  tuesdayOpen String?
+  tuesdayClose String?
+  wednesdayOpen String?
+  wednesdayClose String?
+  thursdayOpen String?
+  thursdayClose String?
+  fridayOpen String?
+  fridayClose String?
+  saturdayOpen String?
+  saturdayClose String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("tenant_operating_hours")
+}
+
+/// Both bounds are required when the day is open; a null pair means the day is
+/// closed. Times are local wall-clock `HH:mm` values, never instants — a salon
+/// at `Asia/Singapore` opens at 09:00 local whatever the host's timezone.
 
 /// The catalogue of switchable features. Seeded, never user-created.
 model Module {

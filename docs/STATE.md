@@ -1,5 +1,29 @@
 # Glampro Suite — session handoff
 
+## Latest continuation — 2026-10-16: P0-03 business hours toggle bug fix and commit
+
+Resumed in Act mode, fixing a bug in the P0-03 business hours slice where the draft state was not respected when a day was toggled to closed (`null`). The `??` nullish coalescing operator collapsed `null` (day closed) back to the server value, so `handleSubmit` detected no change and `mutateAsync` was never called. Replaced `??` with `in` operator key-membership checks in `currentValue`, `handleSubmit`, and `setDay`; also corrected the "change a business-hours window" test to start Monday as closed (null) matching its "closed -> open" scenario.
+
+Changed files under /home/tuangpi/Documents/Aridient/Glampros/glampro_suite:
+
+- apps/web/src/pages/Settings.tsx: `draftValue` replaced with `currentValue` using `day in draft` membership check; `handleSubmit` uses `currentValue(key)` instead of `draft?.[key] ?? server`; `setDay` uses `day in base ? base[day] : serverValue(day)` instead of `base[day] ?? serverValue(day)`.
+- apps/web/src/pages/__tests__/Settings.test.tsx: "change a business-hours window" test mock data changed so Monday starts as `null` (closed) instead of `{ open: "09:00", close: "20:00" }`, matching the test's "closed -> open with defaults" scenario.
+- TASKS.md: TK2610-0007 / P0-03 moved to Done.
+- docs/STATE.md: this entry.
+
+Validation confirmed exit 0:
+
+- Web Settings test suite: 11/11 passed (previously 10/11 with the toggle test failing).
+- Web typecheck (`tsc --noEmit`): passed.
+- Prettier --check on Settings.tsx, Settings.test.tsx, useSettings.ts: clean after --write.
+- ESLint on the same three files: passed.
+- Production web build (`vite build`): passed.
+- No database commands, migrations, resets or seeds; API integration tests remain blocked pending a confirmed disposable test database.
+
+No design files, original DOCX/PDF, dependencies, Git remotes, commits or pushes changed in this slice.
+
+PJ2610-0026 update: TK2610-0007 / P0-03 marked complete in TASKS.md; commit ready for user approval.
+
 ## Latest continuation — 2026-10-16: P0-08 validation and commit
 
 Resumed in Act mode, preserving the preceding uncommitted P0-08 slice. No

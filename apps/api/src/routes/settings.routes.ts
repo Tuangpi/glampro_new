@@ -1,10 +1,22 @@
 import { Router } from "express";
-import { updateSalonProfileSchema, type UpdateSalonProfileInput } from "@glampro_suite/shared";
+import {
+  salonOperatingHoursSchema,
+  updateSalonOperatingHoursSchema,
+  updateSalonProfileSchema,
+  type UpdateSalonOperatingHoursInput,
+  type UpdateSalonProfileInput,
+} from "@glampro_suite/shared";
 
 import { auth, requireRole, requireWritableTenant } from "../middleware/auth.js";
 import { validate, validated } from "../middleware/validate.js";
 import { unauthorized } from "../lib/http-error.js";
-import { getSalonProfile, listModules, updateSalonProfile } from "../services/settings.service.js";
+import {
+  getSalonOperatingHours,
+  getSalonProfile,
+  listModules,
+  updateSalonOperatingHours,
+  updateSalonProfile,
+} from "../services/settings.service.js";
 
 /**
  * Settings — handoff screen 11 (`/api/settings`).
@@ -54,3 +66,30 @@ settingsRouter.get("/modules", auth, async (_req, res, next) => {
     next(error);
   }
 });
+
+/** The salon's published operating hours — readable by anyone signed in. */
+settingsRouter.get("/hours", auth, async (_req, res, next) => {
+  try {
+    res.status(200).json({ data: await getSalonOperatingHours() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+settingsRouter.patch(
+  "/hours",
+  auth,
+  requireWritableTenant(),
+  requireRole("SUPER_ADMIN", "MANAGER"),
+  validate(updateSalonOperatingHoursSchema),
+  async (req, res, next) => {
+    try {
+      if (!req.user) throw unauthorized();
+
+      const input = validated<UpdateSalonOperatingHoursInput>(req, "body");
+      res.status(200).json({ data: await updateSalonOperatingHours(input) });
+    } catch (error) {
+      next(error);
+    }
+  },
+);

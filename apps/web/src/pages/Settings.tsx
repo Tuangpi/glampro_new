@@ -22,19 +22,30 @@ import { useState } from "react";
 
 import { Link } from "react-router";
 
-import type { ModuleSummary, StaffSummary } from "@glampro_suite/shared";
+import type {
+  ModuleSummary,
+  StaffSummary,
+  UpdateSalonOperatingHoursInput,
+} from "@glampro_suite/shared";
 
 import { Briefcase, Settings as SettingsIcon } from "@/components/icons";
 import Badge from "@/components/ui/Badge";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
+import Checkbox from "@/components/ui/Checkbox";
 import Input from "@/components/ui/Input";
 import Skeleton from "@/components/ui/Skeleton";
 import Table, { type TableColumn } from "@/components/ui/Table";
 import { showToast } from "@/components/ui/toast-store";
 import { ROLE_BADGE, ROLE_LABELS } from "@/constants/staff";
 import { useAuth } from "@/contexts/AuthContext";
-import { useModules, useSalonProfile, useUpdateSalonProfile } from "@/hooks/useSettings";
+import {
+  useModules,
+  useSalonOperatingHours,
+  useSalonProfile,
+  useUpdateSalonOperatingHours,
+  useUpdateSalonProfile,
+} from "@/hooks/useSettings";
 import { useStaffList } from "@/hooks/useStaff";
 import { getErrorMessage, getValidationDetails } from "@/lib/api";
 import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
@@ -60,6 +71,7 @@ export default function Settings() {
 
       <ProfileCard canEdit={canEdit} />
       <ModulesCard modules={modules.data} isPending={modules.isPending} isError={modules.isError} />
+      <OperatingHoursCard canEdit={canEdit} />
       <TeamCard
         rows={team.data?.data ?? []}
         total={team.data?.total ?? 0}
@@ -369,6 +381,204 @@ function TeamCard({
             </p>
           }
         />
+      )}
+    </Card>
+  );
+}
+
+/**
+ * The salon's published operating hours — one editable row per day of the
+ * week. Times are the salon's local wall-clock time. Read-only for roles that
+ * cannot edit settings; the save action is absent entirely.
+ */
+function OperatingHoursCard({ canEdit }: { canEdit: boolean }) {
+  const hours = useSalonOperatingHours();
+  const update = useUpdateSalonOperatingHours();
+  const data = hours.data;
+
+  // The seven day keys of `SalonOperatingHours`. Restricted to days only so the
+  // draft and index access can never collide with the `tenantId` field.
+  type DayKey = "sunday" | "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday";
+
+  const DAYS: { key: DayKey; label: string }[] = [
+    { key: "monday", label: "Monday" },
+    { key: "tuesday", label: "Tuesday" },
+    { key: "wednesday", label: "Wednesday" },
+    { key: "thursday", label: "Thursday" },
+    { key: "friday", label: "Friday" },
+    { key: "saturday", label: "Saturday" },
+    { key: "sunday", label: "Sunday" },
+  ];
+
+  // `null` means "show the server's values". Once a day is touched, its draft
+  // is stored here and the draft wins over the server value until save.
+  const [draft, setDraft] = useState<Record<DayKey, { open: string; close: string } | null> | null>(
+    null,
+  );
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const pending = hours.isPending || update.isPending;
+  const disabled = !canEdit || pending;
+
+  const serverValue = (day: DayKey): { open: string; close: string } | null => data?.[day] ?? null;
+  // `null` in the draft means "close this day" and must be distinguished from
+  // "not drafted" (undefined). `??` would collapse both to the server value,
+  // so we check key membership with `in` instead.
+  const currentValue = (day: DayKey): { open: string; close: string } | null => {
+    if (draft !== null && day in draft) return draft[day];
+    return serverValue(day);
+  };
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFieldErrors({});
+    setFormError(null);
+
+    if (!data) return;
+
+    const changed: UpdateSalonOperatingHoursInput = {};
+    for (const day of DAYS) {
+      const key = day.key;
+      const server = serverValue(key);
+      const current = currentValue(key);
+      const serverOpen = server ? server.open : null;
+      const serverClose = server ? server.close : null;
+      const currentOpen = current ? current.open : null;
+      const currentClose = current ? current.close : null;
+      if (currentOpen !== serverOpen || currentClose !== serverClose) {
+        changed[key] = current;
+      }
+    }
+
+    if (Object.keys(changed).length === 0) return;
+
+    try {
+      await update.mutateAsync(changed);
+      showToast("success", "Business hours saved.");
+    } catch (error) {
+      const details = getValidationDetails(error);
+      if (Object.keys(details).length > 0) {
+        setFieldErrors(details);
+        return;
+      }
+      setFormError(getErrorMessage(error));
+    }
+  }
+
+  const setDay = (
+    day: DayKey,
+    updater: (
+      current: { open: string; close: string } | null,
+    ) => { open: string; close: string } | null,
+  ) => {
+    setDraft((prev: Record<DayKey, { open: string; close: string } | null> | null) => {
+      const base: Record<DayKey, { open: string; close: string } | null> =
+        prev ?? ({} as Record<DayKey, { open: string; close: string } | null>);
+      const next = updater(day in base ? base[day] : serverValue(day));
+      return { ...base, [day]: next };
+    });
+    setFieldErrors({});
+    setFormError(null);
+  };
+
+  return (
+    <Card title="Business hours" description="Used to generate available appointment slots.">
+      {hours.isPending ? (
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-9" />
+          <Skeleton className="h-9" />
+          <Skeleton className="h-9" />
+        </div>
+      ) : hours.isError || data === undefined ? (
+        <p role="alert" className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
+          The business hours could not be loaded.
+        </p>
+      ) : (
+        <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
+          {formError ? (
+            <p role="alert" className="rounded-md bg-danger/10 px-3 py-2 text-sm text-danger">
+              {formError}
+            </p>
+          ) : null}
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {DAYS.map((day) => {
+              const key = day.key;
+              const current = currentValue(key);
+              const isOpen = current !== null;
+              const dayError = fieldErrors[key] ?? fieldErrors[`body.${key}`];
+              return (
+                <div
+                  key={key}
+                  className="flex flex-col gap-2 p-3 rounded-lg border border-line bg-surface"
+                >
+                  <div className="flex items-center justify-between">
+                    <Checkbox
+                      label={day.label}
+                      checked={isOpen}
+                      disabled={disabled}
+                      onChange={(event) =>
+                        setDay(key, () =>
+                          event.target.checked
+                            ? (current ?? { open: "09:00", close: "20:00" })
+                            : null,
+                        )
+                      }
+                    />
+                    {isOpen && current ? (
+                      <span className="text-xs text-ink-muted">
+                        {current.open} – {current.close}
+                      </span>
+                    ) : null}
+                  </div>
+                  {isOpen && current ? (
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Input
+                        label="Opens"
+                        type="time"
+                        value={current.open}
+                        onChange={(event) =>
+                          setDay(key, (c) => ({
+                            open: event.target.value,
+                            close: c?.close ?? "20:00",
+                          }))
+                        }
+                        error={dayError}
+                        disabled={disabled}
+                        hint="Local time"
+                      />
+                      <Input
+                        label="Closes"
+                        type="time"
+                        value={current.close}
+                        onChange={(event) =>
+                          setDay(key, (c) => ({
+                            open: c?.open ?? "09:00",
+                            close: event.target.value,
+                          }))
+                        }
+                        error={dayError}
+                        disabled={disabled}
+                        hint="Local time"
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+
+          <p className="text-xs text-ink-muted">Times are shown in your salon's local time.</p>
+
+          {canEdit ? (
+            <div className="flex justify-end">
+              <Button type="submit" loading={update.isPending} disabled={disabled}>
+                Save hours
+              </Button>
+            </div>
+          ) : null}
+        </form>
       )}
     </Card>
   );
