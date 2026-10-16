@@ -1,5 +1,19 @@
 # Glampro Suite — session handoff
 
+## Resumed session — 2026-10-16: SETUP-01 verification complete; Ready for UAT
+
+Completed read-only verification for SETUP-01 (tracker and session handoff): all 29 TK2610-XXXX product rows and all 6 SETUP rows are present in TASKS.md; DOCX, PDF, STATE.md and ADRs 0002–0018 + README all resolve on disk with no dangling references. Marked SETUP-01 Ready for UAT in TASKS.md (line 48); awaiting your acceptance for Done.
+
+SETUP-06 remains In progress: ADR 0010 (low-stock threshold override semantics) and ADR 0011 (legacy per-tenant receipt numbering) are documented as open conflicts awaiting your explicit decision — neither resolved unilaterally, and no application code, test, or design change was made. SETUP-02 / SETUP-05 / P0-07 API validation remains blocked pending your confirmation of a disposable test database; no database commands, migrations, resets or seeds were run.
+
+Changed files under /home/tuangpi/Documents/Aridient/Glampros/glampro_suite:
+- TASKS.md: SETUP-01 status Testing → Ready for UAT with coverage/reference evidence.
+- docs/STATE.md: this entry.
+
+Validation: file/directory listing and link-resolution checks against TASKS.md and docs/ — exit 0; all referenced files present.
+
+PJ2610-0026 update: no external task is ready to mark complete; SETUP-01 awaits your acceptance for Done.
+
 ## Latest continuation — 2026-10-16: P0-03 business hours toggle bug fix and commit
 
 Resumed in Act mode, fixing a bug in the P0-03 business hours slice where the draft state was not respected when a day was toggled to closed (`null`). The `??` nullish coalescing operator collapsed `null` (day closed) back to the server value, so `handleSubmit` detected no change and `mutateAsync` was never called. Replaced `??` with `in` operator key-membership checks in `currentValue`, `handleSubmit`, and `setDay`; also corrected the "change a business-hours window" test to start Monday as closed (null) matching its "closed -> open" scenario.
