@@ -28,7 +28,9 @@ import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import Skeleton from "@/components/ui/Skeleton";
 import { CALENDAR_WEEKDAY_LABELS } from "@/constants/appointments";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 import { cn } from "@/lib/utils";
+import { toSalonDate } from "@/lib/salon-time";
 import AppointmentBlock from "./AppointmentBlock";
 import {
   DAY_HOURS,
@@ -71,6 +73,7 @@ export default function WeekView({
   onEdit,
   onRetry,
 }: WeekViewProps) {
+  const { timeZone } = useSalonFormatting();
   if (isPending) {
     return (
       <div className="flex flex-col gap-3 p-5" aria-busy="true">
@@ -98,9 +101,13 @@ export default function WeekView({
     );
   }
 
-  const days = weekDays(day);
-  const byDay = bookingsByDay(appointments);
-  const today = new Date();
+  // The anchor day and "today" are read as salon-local wall clock: a desk in
+  // Los Angeles looking at a Singapore salon sees Singapore's day, not its own.
+  const salonDay = toSalonDate(day, timeZone) ?? day;
+  const salonToday = toSalonDate(new Date(), timeZone) ?? new Date();
+
+  const days = weekDays(salonDay);
+  const byDay = bookingsByDay(appointments, timeZone);
 
   if (appointments.length === 0) {
     return (
@@ -136,7 +143,7 @@ export default function WeekView({
               aria-hidden
               className={cn(
                 "flex size-6 items-center justify-center rounded-pill text-xs font-extrabold",
-                isSameDay(column, today) ? "bg-purple text-white" : "text-ink",
+                isSameDay(column, salonToday) ? "bg-purple text-white" : "text-ink",
               )}
             >
               {column.getDate()}
@@ -172,8 +179,9 @@ export default function WeekView({
               key={dayKey(column)}
               day={column}
               appointments={byDay.get(dayKey(column)) ?? []}
-              showingToday={isSameDay(column, today)}
+              showingToday={isSameDay(column, salonToday)}
               isReadOnly={isReadOnly}
+              timeZone={timeZone}
               onEdit={onEdit}
             />
           ))}
@@ -196,25 +204,28 @@ function DayTrack({
   showingToday,
   isReadOnly,
   onEdit,
+  timeZone,
 }: {
   day: Date;
   appointments: AppointmentSummary[];
   showingToday: boolean;
   isReadOnly: boolean;
   onEdit: (appointment: AppointmentSummary) => void;
+  timeZone: string;
 }) {
   // `blockMinutes` answers "is this booking on this day at all?", which is what keeps the
   // week honest: a booking is drawn in its own column and in no other.
+  const salonNow = toSalonDate(new Date(), timeZone) ?? new Date();
   const placed = appointments.flatMap((booking) => {
-    const span = blockMinutes(booking, day);
-    const box = blockBox(booking, day);
+    const span = blockMinutes(booking, day, timeZone);
+    const box = blockBox(booking, day, timeZone);
     return span === null || box === null ? [] : [{ booking, span, box }];
   });
 
   const lanes = packLanes(
     placed.map(({ booking, span }) => ({ id: booking.id, start: span.start, end: span.end })),
   );
-  const nowTop = showingToday ? nowLineTop(new Date()) : null;
+  const nowTop = showingToday ? nowLineTop(salonNow, timeZone) : null;
 
   return (
     <div

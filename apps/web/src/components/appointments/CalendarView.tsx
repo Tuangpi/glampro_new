@@ -32,6 +32,8 @@ import { Calendar } from "@/components/icons";
 import EmptyState from "@/components/ui/EmptyState";
 import Skeleton from "@/components/ui/Skeleton";
 import { cn, getInitials } from "@/lib/utils";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
+import { toSalonDate } from "@/lib/salon-time";
 import AppointmentBlock from "./AppointmentBlock";
 import {
   DAY_HOURS,
@@ -41,6 +43,7 @@ import {
   PX_PER_MINUTE,
   TRACK_HEIGHT,
   blockBox,
+  dayKey,
   type CalendarColumn,
   gridTemplate,
   nowLineTop,
@@ -98,6 +101,7 @@ export default function CalendarView({
   onReschedule,
   onRetry,
 }: CalendarViewProps) {
+  const { timeZone } = useSalonFormatting();
   if (isPending) {
     return (
       <div className="flex flex-col gap-3 p-5" aria-busy="true">
@@ -130,7 +134,11 @@ export default function CalendarView({
     else byColumn.set(key, [booking]);
   }
 
-  const showingToday = day.toDateString() === new Date().toDateString();
+  // The anchor day and "today" are read as salon-local wall clock.
+  const salonDay = toSalonDate(day, timeZone) ?? day;
+  const salonToday = toSalonDate(new Date(), timeZone) ?? new Date();
+
+  const showingToday = dayKey(salonDay) === dayKey(salonToday);
 
   if (appointments.length === 0) {
     return (
@@ -203,11 +211,12 @@ export default function CalendarView({
             <StaffTrack
               key={column.id ?? "unassigned"}
               column={column}
-              day={day}
+              day={salonDay}
               appointments={byColumn.get(column.id) ?? []}
               allAppointments={appointments}
               showingToday={showingToday}
               isReadOnly={isReadOnly}
+              timeZone={timeZone}
               onEdit={onEdit}
               onReschedule={onReschedule}
             />
@@ -239,6 +248,7 @@ function StaffTrack({
   isReadOnly,
   onEdit,
   onReschedule,
+  timeZone,
 }: {
   column: CalendarColumn;
   day: Date;
@@ -248,12 +258,14 @@ function StaffTrack({
   isReadOnly: boolean;
   onEdit: (appointment: AppointmentSummary) => void;
   onReschedule?: (id: string, input: RescheduleInput) => void;
+  timeZone: string;
 }) {
-  const nowTop = showingToday ? nowLineTop(new Date()) : null;
+  const salonNow = toSalonDate(new Date(), timeZone) ?? new Date();
+  const nowTop = showingToday ? nowLineTop(salonNow, timeZone) : null;
   // `day` is what makes the placement truthful across views: a booking only gets a box
   // on a day it actually occupies (ADR 0018, decision 2).
   const placed = appointments
-    .map((booking) => ({ booking, box: blockBox(booking, day) }))
+    .map((booking) => ({ booking, box: blockBox(booking, day, timeZone) }))
     .filter(
       (entry): entry is { booking: AppointmentSummary; box: { top: number; height: number } } =>
         entry.box !== null,
@@ -270,7 +282,7 @@ function StaffTrack({
     // Pointer offset within the track, in minutes from the top of the day.
     const rect = event.currentTarget.getBoundingClientRect();
     const offsetMinutes = (event.clientY - rect.top) / PX_PER_MINUTE;
-    const input = rescheduleFields(booking, { day, offsetMinutes, staffId: column.id });
+    const input = rescheduleFields(booking, { day, offsetMinutes, staffId: column.id }, timeZone);
     // A drop that changed nothing posts nothing.
     if (Object.keys(input).length > 0) onReschedule(booking.id, input);
   }

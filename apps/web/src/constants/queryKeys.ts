@@ -128,7 +128,8 @@ export const queryKeys = {
   },
 
   settings: {
-    general: () => ["settings", "general"] as const,
+    general: (tenantId?: string) =>
+      tenantId ? (["settings", "general", tenantId] as const) : (["settings", "general"] as const),
     /** The module catalogue joined to this salon's grants (screen 11's panel). */
     modules: () => ["settings", "modules"] as const,
     businessHours: () => ["settings", "businessHours"] as const,

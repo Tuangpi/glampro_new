@@ -1,5 +1,162 @@
 # Glampro Suite — session handoff
 
+## Latest continuation — 2026-10-16: P0-08 validation and commit
+
+Resumed in Act mode, preserving the preceding uncommitted P0-08 slice. No
+database commands, dependency changes, commits or pushes in this continuation.
+
+Changed files under /home/tuangpi/Documents/Aridient/Glampros/glampro_suite:
+
+- apps/web/src/components/appointments/{CalendarView,WeekView,MonthView}.tsx:
+  moved the `useSalonFormatting()` hook call above the `isPending`/`isError`
+  early returns, fixing a react-hooks/rules-of-hooks violation; hook ordering
+  is now stable across every render.
+- TASKS.md and docs/STATE.md: P0-08 (TK2610-0006) moved to Ready for UAT;
+  P0-07 (TK2610-0004) also Ready for UAT awaiting acceptance.
+
+Validation confirmed exit 0:
+
+- Full web suite: 42 files / 377 tests, none skipped; shared suite 87 tests /
+  32 suites, none skipped.
+- Workspace-wide ESLint; web and shared typecheck; production web build.
+- Prettier clean on all P0-08 source files.
+- No database commands, migrations, resets or seeds; API integration tests
+  remain blocked pending a confirmed disposable test database.
+- No manual browser UAT in this continuation; that is the user's acceptance
+  step.
+
+No design files, original DOCX/PDF, dependencies, Git remotes, commits or
+pushes changed in this slice.
+
+PJ2610-0026 update: TK2610-0006 / P0-08 and TK2610-0004 / P0-07 are Ready for
+UAT; after acceptance mark them complete in your task system.
+
+## Latest continuation — 2026-10-16: P0-08 preference propagation and formatting
+
+Resumed in Act mode, preserving the preceding uncommitted persistence slice. No
+database commands, dependency changes, commits or pushes in this continuation.
+
+New/updated files under /home/tuangpi/Documents/Aridient/Glampros/glampro_suite:
+
+- apps/web/src/contexts/SalonFormattingContext.tsx and its **tests** suite:
+  authenticated provider reads saved salon settings, blocks initial rendering until
+  available, offers retry on initial failure and rejects mismatched tenant data.
+  Tenant-keyed queries and keyed provider remounts prevent reuse across salons.
+  Public routes do not fetch preferences. Context values are immutable per render,
+  not global mutable tenant state; standalone component tests use Singapore defaults.
+- apps/web/src/constants/queryKeys.ts, hooks/useSettings.ts and main.tsx: session
+  provider wiring and tenant-specific settings cache. Successful profile writes
+  update both the legacy settings cache and the profile's tenant-specific cache.
+- apps/web/src/lib/utils.ts and utils.test.ts: pure bound salon formatters, explicit
+  S$ currency labels, default en-SG numeric dates, salon-zone timestamp display and
+  date-only preservation/invalid-date checks. Major-unit prices remain separate
+  from cents; explicit alternate-currency utility callers remain supported.
+- apps/web/src/pages/{Customers,Dashboard,Products,Reports,Settings,Staff}.tsx,
+  components/layouts/AppShell.tsx and components/sale/{CartLine,CartPanel,
+  HeldCartsPanel,PaymentDialog,ReceiptView,SaleItemGrid}.tsx: use bound formatters.
+  Report day buckets now format the API's date-only value directly rather than
+  inventing a noon UTC instant. Settings shares the tenant-keyed provider query.
+- apps/web/src/pages/**tests**/{Dashboard,Products,Reports,Sale}.test.tsx and
+  components/ui/**tests**/Table.test.tsx: updated currency assertions/accessibility
+  labels to explicit S$. Existing generic hardcoded Card/Table examples preserved.
+- apps/web/eslint.config.js: extended the existing provider-plus-hook Fast Refresh
+  exception to the new context, with the same rationale as AuthContext.
+- TASKS.md and docs/STATE.md: current evidence and remaining scope.
+
+Validation confirmed exit 0:
+
+- Full web suite: 41 files / 368 tests, none skipped. New coverage includes profile
+  loading/retry, save propagation, public routes, tenant switch/mismatch rejection,
+  date-only preservation, currency-unit contracts, locale separators and DST display.
+- Formatter/provider suites with TZ=America/Los_Angeles and TZ=Pacific/Auckland:
+  2 files / 20 tests passed in each environment.
+- Workspace-wide ESLint; web typecheck; production web build (also shared build).
+- Initial runs exposed expected old currency labels and two test synchronization/
+  whitespace matcher issues; corrected assertions. A remaining regex typo and the
+  new context's Fast Refresh lint exception were corrected before the passing runs.
+- Scoped formatting, final whitespace/diff review and protected-file Git comparisons
+  are performed at session completion; see completion report for outcomes.
+- No API integration rerun or manual browser UAT in this frontend-only continuation.
+
+Remaining/next: P0-08 technical scope is complete and validated. Calendar grid
+windows (day/week/month via `salonStartOfDay`/`instantFromSalonDate`), booking
+datetime input (`AppointmentFormDrawer` `toSalonInstant`/`toSalonInputValue`,
+`bookingStart`), dashboard summary boundaries (`todayWindow`) and report
+date-range/bucketing (`reportOverview` salon-local-day buckets; explicit
+`from`/`to`/`timeZone` range) all use the salon zone. Appointment blocks/chips
+render through the bound salon-zone formatters, not the browser-local path.
+Validation: web 42 files / 377 tests, shared 87 tests, workspace lint, web
+typecheck/build, format clean; cross-zone formatter/provider tests pass under
+Los Angeles and Auckland. Remaining: manual browser UAT. Mark Done only after
+user acceptance; TK2610-0004 / P0-07 is also Ready for UAT awaiting acceptance.
+The initial profile fetch is now a prerequisite for rendering authenticated pages;
+it fails visibly rather than silently displaying a different salon clock.
+
+PJ2610-0026 update: TK2610-0004 / P0-07 remains ready for final acceptance; after
+acceptance mark it complete in your task system. No additional external task is
+ready to mark complete: TK2610-0006 / P0-08 still needs calendar/input/report/summary
+time semantics and full validation/UAT.
+
+## Latest continuation — 2026-10-15: P0-08 persisted preferences slice
+
+User approved Act-mode implementation after the read-only plan. The starting tree
+was clean at `186b94b` (`chore: checkpoint workspace setup and decision audit`);
+older references below to mixed uncommitted work are historical, not current.
+No design or original DOCX/PDF changes. No commit or push in this slice.
+
+Changed files (all relative to /home/tuangpi/Documents/Aridient/Glampros/glampro_suite):
+
+- packages/shared/src/schemas/settings.ts and settings.test.ts: validated named
+  timezones and supported formatting locales. Kept existing required name/threshold
+  request fields; new preferences are optional without request defaults so older
+  clients cannot reset stored preferences. Corrected misleading PATCH comments.
+- apps/api/prisma/schema.prisma and
+  apps/api/prisma/migrations/20261015210000_tenant_localisation/migration.sql:
+  additive tenant preferences defaulting to Asia/Singapore and en-SG.
+- apps/api/src/services/settings.service.ts: include saved fields in profile reads;
+  existing scoped writes persist them under unchanged route authorization.
+- apps/api/src/routes/settings.routes.test.ts: defaults, persistence/readback,
+  invalid values, tenant isolation, older-client preservation and refused writes.
+- apps/web/src/hooks/useSettings.ts: updated profile documentation; existing
+  successful-write query-cache replacement carries new settings too.
+- apps/web/src/pages/Settings.tsx and its **tests**/Settings.test.tsx: editable
+  timezone/locale fields with existing role/read-only guards and field errors.
+  Locale explicitly means formatting, not interface translation. Preferences are
+  saved only in this slice; downstream formatting/time calculations are unchanged.
+- TASKS.md and docs/STATE.md: progress, evidence and remaining scope.
+
+Validation confirmed:
+
+- Shared build and Prisma client generation: exit 0; generated files not hand-edited.
+- API and web typechecks: exit 0. Full shared suite: 87 passed, none skipped.
+- Focused Settings web suite: 7 passed. Full web suite: 40 files / 357 passed.
+- Workspace-wide ESLint and Prettier check on all seven edited TS/TSX files: exit 0.
+- Dedicated PostgreSQL 18 cluster at /tmp/glampro-p008-jsc4nezg/data, owner-only
+  parent, Unix socket in that directory, port 55488, no TCP listener; database
+  glampro_disposable. Explicit DATABASE_URL override for every child command.
+  All ten migrations deployed; second deploy found none pending. Settings API
+  integration suite: 6 tests passed, none skipped. Cluster stopped successfully;
+  temporary files retained. Log: /tmp/glampro-p008-db.log. No existing configured
+  database accessed, no app seed/reset or production commands executed.
+- Some direct terminal checks had unobserved completion; captured subprocess
+  reruns confirmed formatter, typechecks and shared test exit codes. Full API suite,
+  production deployment and manual browser UAT were not run.
+- Final diff/whitespace and SHA-256 protected-file comparison are checked at session
+  completion; see completion report for outcomes.
+
+Next bounded slice: propagate saved preferences through the authenticated web app
+without global mutable tenant state; implement S$ and DD/MM/YYYY formatting while
+preserving major/minor-unit money contracts and date-only values. Then align booking
+inputs, calendar day/week/month boundaries/drag geometry and reporting/export
+timezone semantics, with cross-browser-timezone and DST regression coverage.
+Apply migration before deploying API/UI to any approved environment; no such
+deployment occurred here. P0-08 remains In progress, not Ready for UAT.
+
+PJ2610-0026 update: TK2610-0004 / P0-07 is still ready for final acceptance; after
+acceptance mark it complete in your task system. No additional external task is
+ready to mark complete: TK2610-0006 / P0-08 needs propagation, formatting, consistent
+time semantics and full validation/UAT.
+
 ## Current acceptance gate — 2026-10-15: P0-07 ready for final acceptance
 
 User chose salon-wide persisted timezone/locale settings for P0-08 and explicitly
@@ -186,13 +343,14 @@ slice does not complete that scope; clarify and obtain data-access approval firs
 
 Files for this slice (absolute root:
 /home/tuangpi/Documents/Aridient/Glampros/glampro_suite):
+
 - apps/web/src/lib/performer-options.ts: shared identity-safe option builder.
-- apps/web/src/lib/__tests__/performer-options.test.ts: four option-builder tests.
+- apps/web/src/lib/**tests**/performer-options.test.ts: four option-builder tests.
 - apps/web/src/components/sale/CartLine.tsx: consume the shared options, carry email.
 - apps/web/src/components/appointments/AppointmentFormDrawer.tsx: same option builder.
 - apps/web/src/components/appointments/AppointmentFormDrawer.test.tsx: eligibility,
   duplicate-ID suppression and selected-ID submission regression test.
-- apps/web/src/pages/__tests__/Sale.test.tsx: equivalent sale regression test.
+- apps/web/src/pages/**tests**/Sale.test.tsx: equivalent sale regression test.
 - TASKS.md and docs/STATE.md: readiness and acceptance handoff.
 
 Validation: full web suite 40 files / 354 tests passed; web typecheck and lint
@@ -202,6 +360,7 @@ These are database-independent frontend checks with mocked hooks/API; they do
 not establish production account quality or replace P0-07's required API tests.
 
 Manual acceptance requested (not performed by the agent):
+
 1. In Sale, add a service; verify each eligible account appears once and same-name
    accounts have distinct labels. Unique names should remain uncluttered.
 2. In an appointment form, select a department-specific service and verify the
@@ -279,8 +438,8 @@ folder and original DOCX/PDF unchanged. Ask when scope/data safety is unclear.
 - Web `npm test -- --run src/pages/__tests__/Dashboard.test.tsx`: failed (exit 127), vitest not found.
 - Static tracker/reference/branding checks: performed at session end; see final report.
 - No dependency installation, compilation, API suite or full runtime verification performed.
-No product completion claimed; setup/branding remain Testing pending tooling recovery.
-Root npm run verify is unavailable while the root manifest is missing.
+  No product completion claimed; setup/branding remain Testing pending tooling recovery.
+  Root npm run verify is unavailable while the root manifest is missing.
 
 ## Resumed session — 2026-10-15: P0-07 dashboard slice
 
@@ -288,11 +447,12 @@ User reconfirmed GitHub rename complete. Current origin was inspected and is
 already git@github.com:Tuangpi/glampro_suite.git; no remote change needed.
 
 Changed files (absolute repository root: /home/tuangpi/Documents/Aridient/Glampros/glampro_suite):
+
 - apps/web/src/pages/Dashboard.tsx: removed system-status panel, recheck button,
   health hook invocation/polling and unused diagnostic helpers/icons. Replaced
   design-system copy and technical failure text with customer-facing wording.
   Kept business summary query, four metrics, loading dashes and error notice.
-- apps/web/src/pages/__tests__/Dashboard.test.tsx: covers business figures,
+- apps/web/src/pages/**tests**/Dashboard.test.tsx: covers business figures,
   diagnostics absence, no health-hook call, loading dashes and friendly error.
 - TASKS.md: TK2610-0004 / P0-07 In progress, not ready for UAT.
 
@@ -301,9 +461,10 @@ customer dashboard's consumption was removed. No design changes, dependency
 installation, deleted-file restoration, database action, commit or push.
 
 Validation attempted this session:
-- npm test -- --run src/pages/__tests__/Dashboard.test.tsx: exit 127, vitest not found.
+
+- npm test -- --run src/pages/**tests**/Dashboard.test.tsx: exit 127, vitest not found.
 - npm run typecheck: exit 127, tsc not found.
-- npm run lint -- src/pages/Dashboard.tsx src/pages/__tests__/Dashboard.test.tsx:
+- npm run lint -- src/pages/Dashboard.tsx src/pages/**tests**/Dashboard.test.tsx:
   exit 127, eslint not found (existing lint script also includes the app directory).
 - Source inspection and static checks only; no runtime/test pass claimed.
 - Scoped pre-edit snapshots saved in /tmp/glampro-p007-baseline for review only;
@@ -392,8 +553,8 @@ Changed files under /home/tuangpi/Documents/Aridient/Glampros/glampro_suite:
   "Slug" is now "Salon identifier"; stored values, permissions and contracts are unchanged.
 - apps/web/src/pages/Sale.tsx: replaced server/catalogue implementation wording
   with checkout guidance and a clear completed-sale message.
-- apps/web/src/pages/__tests__/Settings.test.tsx and
-  apps/web/src/pages/__tests__/Sale.test.tsx: added copy regression coverage.
+- apps/web/src/pages/**tests**/Settings.test.tsx and
+  apps/web/src/pages/**tests**/Sale.test.tsx: added copy regression coverage.
 - TASKS.md: updated P0-07 evidence; remains In progress, not ready for UAT.
 
 Validation:
@@ -448,7 +609,7 @@ Changed files under /home/tuangpi/Documents/Aridient/Glampros/glampro_suite:
 - apps/web/src/components/catalogue/GiftCardFormDrawer.tsx: "QR payload" is now
   "QR code value" and its hint no longer mentions a QR renderer or an image. Field
   name `qrPayload` and the contract are unchanged.
-- apps/web/src/pages/__tests__/Products.test.tsx: opens the gift-card form and
+- apps/web/src/pages/**tests**/Products.test.tsx: opens the gift-card form and
   asserts the salon-facing label with no `payload`/`renderer` wording.
 
 Audit performed (no copy changed):
@@ -478,7 +639,7 @@ Validation:
 - ESLint on every changed file (api, web, shared) : passed.
 - npx prettier --check on the changed source/test files: passed. Note the repository
   is not Prettier-clean overall — TASKS.md, docs/STATE.md, docs/decisions/0008,
-  apps/web/src/components/sale/PaymentDialog.tsx, apps/web/src/pages/__tests__/
+  apps/web/src/components/sale/PaymentDialog.tsx, apps/web/src/pages/**tests**/
   Dashboard.test.tsx and apps/api/src/routes/catalogue.routes.test.ts already fail on
   the new `.prettierrc.json` at HEAD, so the trackers were left in their filed style
   rather than reformatted.
@@ -503,15 +664,15 @@ unblocked SETUP-03 verification slice instead of assuming product-policy decisio
 
 Changed files under /home/tuangpi/Documents/Aridient/Glampros/glampro_suite:
 
-- apps/web/src/pages/__tests__/Login.test.tsx: added an accessible-heading assertion
+- apps/web/src/pages/**tests**/Login.test.tsx: added an accessible-heading assertion
   for "Sign in to Glampro Suite" to the existing sign-in form regression test.
 - TASKS.md: replaced stale SETUP-03 missing-validation wording with current evidence.
 - docs/STATE.md: recorded this slice and remaining work.
 
 Validation:
 
-- npm test --workspace @glampro_suite/web -- src/pages/__tests__/Login.test.tsx
-  src/pages/__tests__/Dashboard.test.tsx: 2 files / 19 tests passed, exit 0.
+- npm test --workspace @glampro_suite/web -- src/pages/**tests**/Login.test.tsx
+  src/pages/**tests**/Dashboard.test.tsx: 2 files / 19 tests passed, exit 0.
 - npm run typecheck --workspace @glampro_suite/web: passed, exit 0.
 - npm run lint --workspace @glampro_suite/web: passed, saved exit code 0.
 - Prettier check of the edited Login.test.tsx: passed, saved exit code 0.
@@ -595,7 +756,7 @@ Changed files under /home/tuangpi/Documents/Aridient/Glampros/glampro_suite:
 Validation:
 
 - npm test --workspace @glampro_suite/web -- src/constants/navigation.test.ts
-  src/pages/__tests__/Products.test.tsx: 2 files / 31 tests passed, exit 0.
+  src/pages/**tests**/Products.test.tsx: 2 files / 31 tests passed, exit 0.
 - Local Prettier --check on ADR 0005: passed, exit 0.
 - git diff --check: passed, exit 0. All five current evidence-link targets resolve;
   the ADR index heading anchor exists. SHA-256 comparison of all 62 protected
@@ -655,7 +816,7 @@ Findings for security-policy review (no authentication behavior changed):
 Validation:
 
 - npm test --workspace @glampro_suite/web --
-  src/contexts/__tests__/AuthContext.test.tsx: 1 file / 6 tests passed, exit 0.
+  src/contexts/**tests**/AuthContext.test.tsx: 1 file / 6 tests passed, exit 0.
   Requests are mocked; this is not evidence of database revocation.
 - Local Prettier --check on ADR 0007: passed, exit 0.
 - git diff --check: passed, exit 0. All seven current evidence-link targets resolve.
@@ -701,7 +862,7 @@ or formally revise it; then add regression coverage for the chosen semantics.
 Validation:
 
 - npm test --workspace @glampro_suite/web --
-  src/pages/__tests__/Settings.test.tsx: 1 file / 4 tests passed, exit 0.
+  src/pages/**tests**/Settings.test.tsx: 1 file / 4 tests passed, exit 0.
   Requests are mocked; this does not establish persistence or API authorization.
 - Local Prettier --check on ADR 0010: passed, exit 0.
 - git diff --check: passed, exit 0. All ten new evidence-link targets resolve.
@@ -752,7 +913,7 @@ Findings:
 
 Validation:
 
-- npm test --workspace @glampro_suite/web -- src/pages/__tests__/Sale.test.tsx:
+- npm test --workspace @glampro_suite/web -- src/pages/**tests**/Sale.test.tsx:
   1 file / 23 tests passed, exit 0. Browser requests are mocked.
 - node --import tsx --test packages/shared/src/schemas/sales.test.ts:
   35 tests passed, exit 0; database-free contract checks.
@@ -803,7 +964,7 @@ Validation:
 
 - node --import tsx --test packages/shared/src/schemas/sales.test.ts:
   35 tests passed, exit 0; database-free contract checks.
-- npm test --workspace @glampro_suite/web -- src/pages/__tests__/Sale.test.tsx:
+- npm test --workspace @glampro_suite/web -- src/pages/**tests**/Sale.test.tsx:
   1 file / 23 tests passed, exit 0; mocked browser requests.
 - Local Prettier --check on ADR 0012: passed, exit 0.
 - git diff --check: passed, exit 0 before the handoff update; repeated at final
@@ -1026,7 +1187,7 @@ Validation:
 
 - node --import tsx --test packages/shared/src/schemas/sales.test.ts: 35 tests passed,
   exit 0. Initial combined invocation completion was unobserved; rerun confirmed.
-- npm test --workspace @glampro_suite/web -- src/pages/__tests__/Sale.test.tsx:
+- npm test --workspace @glampro_suite/web -- src/pages/**tests**/Sale.test.tsx:
   1 file / 23 tests passed, exit 0; mocked browser requests, not ledger evidence.
 - ADR formatting, whitespace, evidence-link and protected-file checks performed
   at final verification; see completion report for outcomes.

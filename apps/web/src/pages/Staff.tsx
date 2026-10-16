@@ -42,11 +42,12 @@ import { ROLE_BADGE, ROLE_LABELS, STATUS_FILTERS, type StaffStatusFilter } from 
 import { useAuth } from "@/contexts/AuthContext";
 import { useStaffCount, useStaffList } from "@/hooks/useStaff";
 import { get, getErrorMessage } from "@/lib/api";
-import { formatDateTime } from "@/lib/utils";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 
 const PAGE_SIZE = 20;
 
 export default function Staff() {
+  const { formatDateTime } = useSalonFormatting();
   const { user, isReadOnly } = useAuth();
 
   const [searchInput, setSearchInput] = useState("");

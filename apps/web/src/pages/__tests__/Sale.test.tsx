@@ -228,7 +228,7 @@ describe("performer identities", () => {
       ]),
     );
     renderSale();
-    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, S$80.00" }));
     const picker = screen.getByRole("combobox", { name: "Who performed Root colour" });
     expect(
       within(picker).getAllByRole("option", { name: "Sam Lee (sam.a@example.test)" }),
@@ -290,11 +290,11 @@ describe("the cart", () => {
     const user = userEvent.setup();
     renderSale();
 
-    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, S$80.00" }));
 
     expect(within(cartPanel()).getByText("1 line · 1 item")).toBeInTheDocument();
     // Twice: the line's own total and the cart's total — one item at one price.
-    expect(within(cartPanel()).getAllByText("$80.00")).toHaveLength(2);
+    expect(within(cartPanel()).getAllByText("S$80.00")).toHaveLength(2);
     expect(screen.getByLabelText("Quantity of Root colour")).toHaveValue(1);
   });
 
@@ -305,20 +305,20 @@ describe("the cart", () => {
     // A product lives on the Products tab, and only the active panel is drawn.
     await user.click(screen.getByRole("tab", { name: "Products" }));
 
-    const add = screen.getByRole("button", { name: "Add Shampoo to the cart, $12.50" });
+    const add = screen.getByRole("button", { name: "Add Shampoo to the cart, S$12.50" });
     await user.click(add);
     await user.click(add);
 
     expect(within(cartPanel()).getByText("1 line · 2 items")).toBeInTheDocument();
-    expect(within(cartPanel()).getAllByText("$25.00")).toHaveLength(2);
+    expect(within(cartPanel()).getAllByText("S$25.00")).toHaveLength(2);
   });
 
   it("re-prices every line for the customer's membership", async () => {
     const user = userEvent.setup();
     renderSale();
 
-    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
-    expect(within(cartPanel()).getAllByText("$80.00")).toHaveLength(2);
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, S$80.00" }));
+    expect(within(cartPanel()).getAllByText("S$80.00")).toHaveLength(2);
 
     // The member price is applied by the cart, not at add time — the search returns
     // both prices for exactly this reason.
@@ -326,7 +326,7 @@ describe("the cart", () => {
     await user.click(await screen.findByRole("button", { name: "Attach Mrs Loi, member" }));
 
     await waitFor(() => {
-      expect(within(cartPanel()).getAllByText("$70.00")).toHaveLength(2);
+      expect(within(cartPanel()).getAllByText("S$70.00")).toHaveLength(2);
     });
   });
 
@@ -334,17 +334,17 @@ describe("the cart", () => {
     const user = userEvent.setup();
     const first = renderSale();
 
-    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, S$80.00" }));
     await user.type(screen.getByLabelText("Attach a customer by name or phone"), "Mrs");
     await user.click(await screen.findByRole("button", { name: "Attach Mrs Loi, member" }));
-    await waitFor(() => expect(within(cartPanel()).getAllByText("$70.00")).toHaveLength(2));
+    await waitFor(() => expect(within(cartPanel()).getAllByText("S$70.00")).toHaveLength(2));
 
     first.unmount();
     renderSale();
 
     expect(await screen.findByText("1 line · 1 item")).toBeInTheDocument();
     expect(screen.getByText("Mrs Loi")).toBeInTheDocument();
-    expect(within(cartPanel()).getAllByText("$70.00")).toHaveLength(2);
+    expect(within(cartPanel()).getAllByText("S$70.00")).toHaveLength(2);
   });
 });
 
@@ -353,7 +353,7 @@ describe("taking payment", () => {
     const user = userEvent.setup();
     renderSale();
 
-    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, S$80.00" }));
     await user.click(screen.getByRole("button", { name: "Take payment" }));
 
     const dialog = await screen.findByRole("dialog");
@@ -386,7 +386,7 @@ describe("taking payment", () => {
     const user = userEvent.setup();
     renderSale();
 
-    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, S$80.00" }));
 
     await user.click(screen.getByRole("button", { name: "Take payment" }));
     await user.click(
@@ -397,7 +397,7 @@ describe("taking payment", () => {
     // Dismiss the receipt, which is what closes the first attempt's dialog.
     await user.click(await screen.findByRole("button", { name: "New sale" }));
 
-    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, S$80.00" }));
     await user.click(screen.getByRole("button", { name: "Take payment" }));
     await user.click(
       within(await screen.findByRole("dialog")).getByRole("button", { name: "Take payment" }),
@@ -418,7 +418,7 @@ describe("taking payment", () => {
     // The bundle is on its own tab, which exists only because the server named it.
     await user.click(screen.getByRole("tab", { name: "Packages" }));
     await user.click(
-      screen.getByRole("button", { name: "Add Five-cut bundle to the cart, $250.00" }),
+      screen.getByRole("button", { name: "Add Five-cut bundle to the cart, S$250.00" }),
     );
     await user.click(screen.getByRole("button", { name: "Take payment" }));
 
@@ -434,7 +434,7 @@ describe("taking payment", () => {
     post.mockRejectedValue(new Error("Not found"));
 
     renderSale();
-    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, S$80.00" }));
     await user.click(screen.getByRole("button", { name: "Take payment" }));
 
     const dialog = await screen.findByRole("dialog");
@@ -456,7 +456,7 @@ describe("printing the receipt", () => {
     const user = userEvent.setup();
     renderSale();
 
-    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, S$80.00" }));
     await user.click(screen.getByRole("button", { name: "Take payment" }));
     await user.click(
       within(await screen.findByRole("dialog")).getByRole("button", { name: "Take payment" }),
@@ -479,7 +479,7 @@ describe("a suspended salon", () => {
     const user = userEvent.setup();
     renderSale();
 
-    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, S$80.00" }));
 
     expect(within(cartPanel()).getByText("The cart is empty")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Take payment" })).not.toBeInTheDocument();
@@ -543,7 +543,7 @@ describe("holding a cart", () => {
     const user = userEvent.setup();
     renderSale();
 
-    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, S$80.00" }));
     await user.click(screen.getByRole("button", { name: "Hold" }));
 
     await waitFor(() => {
@@ -597,7 +597,7 @@ describe("picking a parked cart up", () => {
     // figure rather than the catalogue's member/non-member pair, and the server re-prices
     // everything at completion.
     expect(await screen.findByText("1 line · 1 item")).toBeInTheDocument();
-    expect(within(cartPanel()).getAllByText("$80.00")).toHaveLength(2);
+    expect(within(cartPanel()).getAllByText("S$80.00")).toHaveLength(2);
     expect(screen.getByText(/Ringing up the/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Take payment" }));
@@ -637,7 +637,7 @@ describe("picking a parked cart up", () => {
 
 /** Rings a sale up through the UI, so the receipt is on screen for the void tests. */
 async function ringUpAReceipt(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+  await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, S$80.00" }));
   await user.click(screen.getByRole("button", { name: "Take payment" }));
   await user.click(
     within(await screen.findByRole("dialog")).getByRole("button", { name: "Take payment" }),
@@ -650,7 +650,7 @@ describe("discounting a line", () => {
     const user = userEvent.setup();
     renderSale();
 
-    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, S$80.00" }));
 
     // The rate is committed on blur, the same way the quantity is, so typing "1" of "10"
     // never briefly sets one percent.
@@ -660,11 +660,11 @@ describe("discounting a line", () => {
 
     // 80.00 less a quarter is 60.00 — the cart re-prices the line from the rate, in cents.
     await waitFor(() => {
-      expect(within(cartPanel()).getAllByText("$60.00").length).toBeGreaterThan(0);
+      expect(within(cartPanel()).getAllByText("S$60.00").length).toBeGreaterThan(0);
     });
     expect(within(cartPanel()).getByText("Discount")).toBeInTheDocument();
-    expect(within(cartPanel()).getByText("−$20.00")).toBeInTheDocument();
-    expect(within(cartPanel()).getByText(/25% off \$80\.00/)).toBeInTheDocument();
+    expect(within(cartPanel()).getByText("−S$20.00")).toBeInTheDocument();
+    expect(within(cartPanel()).getByText(/25% off S\$80\.00/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Take payment" }));
     await user.click(
@@ -686,7 +686,7 @@ describe("discounting a line", () => {
     const user = userEvent.setup();
     renderSale();
 
-    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, $80.00" }));
+    await user.click(screen.getByRole("button", { name: "Add Root colour to the cart, S$80.00" }));
 
     const discount = screen.getByLabelText("Discount percent for Root colour");
     await user.type(discount, "10");

@@ -17,7 +17,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import type { SaleSummary } from "@glampro_suite/shared";
 
 import { priceToCents } from "@/lib/money";
-import { formatDateTime, formatPrice } from "@/lib/utils";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 
 export interface HeldCartsPanelProps {
   holds: SaleSummary[];
@@ -45,6 +45,7 @@ export default function HeldCartsPanel({
   onDiscard,
   onRetry,
 }: HeldCartsPanelProps) {
+  const { formatDateTime, formatPrice } = useSalonFormatting();
   return (
     <Card
       title="Held carts"

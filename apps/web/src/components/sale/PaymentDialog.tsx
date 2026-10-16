@@ -28,7 +28,11 @@
  */
 import { useState } from "react";
 
-import { MAX_SALE_PAYMENTS, type SalePaymentInput, type SalePaymentMethod } from "@glampro_suite/shared";
+import {
+  MAX_SALE_PAYMENTS,
+  type SalePaymentInput,
+  type SalePaymentMethod,
+} from "@glampro_suite/shared";
 
 import { Plus, Trash } from "@/components/icons";
 import Button from "@/components/ui/Button";
@@ -39,7 +43,8 @@ import Select from "@/components/ui/Select";
 import { PAYMENT_METHOD_OPTIONS } from "@/constants/sale";
 import { newIdempotencyKey } from "@/lib/idempotency";
 import { centsToPrice, priceToCents } from "@/lib/money";
-import { cn, formatPrice } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 
 /** One row of the sheet, as typed. Amounts stay strings until they are posted. */
 interface TenderDraft {
@@ -74,6 +79,7 @@ export default function PaymentDialog({
   onClose,
   onConfirm,
 }: PaymentDialogProps) {
+  const { formatPrice } = useSalonFormatting();
   // One key per mount, i.e. per attempt — see the module comment.
   const [idempotencyKey] = useState(newIdempotencyKey);
   // One tender, pre-filled with the exact total: the overwhelmingly common case

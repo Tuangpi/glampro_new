@@ -12,10 +12,10 @@ import type { ModuleSummary, SalonProfile, UpdateSalonProfileInput } from "@glam
 import { queryKeys } from "@/constants/queryKeys";
 import { get, patch } from "@/lib/api";
 
-/** The salon's profile — name, slug, status, threshold and owner. */
-export function useSalonProfile() {
+/** The salon's profile, including saved timezone and formatting locale. */
+export function useSalonProfile(tenantId?: string) {
   return useQuery({
-    queryKey: queryKeys.settings.general(),
+    queryKey: queryKeys.settings.general(tenantId),
     queryFn: () => get<SalonProfile>("/settings/profile"),
     staleTime: 60_000,
   });
@@ -31,7 +31,7 @@ export function useModules() {
 }
 
 /**
- * Saves the salon's two fields.
+ * Saves the salon's editable profile fields.
  *
  * The profile query is invalidated with the auth profile too: the shell's
  * header draws `tenant.name`, so a rename that left the top bar saying the old
@@ -44,6 +44,7 @@ export function useUpdateSalonProfile() {
     mutationFn: (input: UpdateSalonProfileInput) => patch<SalonProfile>("/settings/profile", input),
     onSuccess: (profile) => {
       void queryClient.setQueryData(queryKeys.settings.general(), profile);
+      void queryClient.setQueryData(queryKeys.settings.general(profile.id), profile);
       void queryClient.invalidateQueries({ queryKey: queryKeys.auth.profile() });
     },
   });

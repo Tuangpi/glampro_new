@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router";
 import { Bell, LogOut, Plus, Search } from "@/components/icons";
 import { activeNavItem, visibleNavItems } from "@/constants/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 import { useSaleCart } from "@/hooks/useSale";
 import { useLowStockCount } from "@/hooks/useProducts";
 import { cn, getInitials } from "@/lib/utils";
@@ -22,6 +23,7 @@ import { cn, getInitials } from "@/lib/utils";
  * `navItems` declares is not drawn because the counter is live data.
  */
 export default function AppShell() {
+  const { formatDate } = useSalonFormatting();
   const location = useLocation();
   const navigate = useNavigate();
   const { user, tenant, entitlements, isReadOnly, signOut } = useAuth();
@@ -118,7 +120,7 @@ export default function AppShell() {
           <div className="min-w-0">
             <h1 className="truncate text-lg leading-tight">{current?.label ?? "Glampro"}</h1>
             <p className="text-xs text-ink-muted">
-              {tenant?.name ?? "Glampro Suite"} — {weekdayToday()}
+              {tenant?.name ?? "Glampro Suite"} — {formatDate(new Date())}
             </p>
           </div>
 
@@ -183,8 +185,4 @@ export default function AppShell() {
       </div>
     </div>
   );
-}
-
-function weekdayToday(): string {
-  return new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 }

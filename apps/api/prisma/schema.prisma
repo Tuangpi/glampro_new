@@ -259,6 +259,9 @@ model Tenant {
   /// "low" is a salon's own judgement, and a shop that holds forty bottles of
   /// shampoo does not agree with one that holds four. See ADR 0010.
   lowStockThreshold Int @default(5)
+  /// Salon-wide formatting and wall-clock preferences (P0-08).
+  timeZone String @default("Asia/Singapore") @map("time_zone")
+  locale   String @default("en-SG")
   /// The last receipt number this salon has issued. `receiptNumber` on `Sale` is a
   /// per-tenant sequence rather than legacy's `random_int(100000, 999999)`, which no
   /// constraint protected (ADR 0011).

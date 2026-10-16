@@ -7,6 +7,65 @@
 
 const EMPTY = "—";
 
+export interface SalonFormattingPreferences {
+  timeZone: string;
+  locale: string;
+}
+
+export const DEFAULT_SALON_FORMATTING: Readonly<SalonFormattingPreferences> = Object.freeze({
+  timeZone: "Asia/Singapore",
+  locale: "en-SG",
+});
+
+/** Explicitly bound per provider; never store a tenant's preferences in module state. */
+export function createSalonFormatters(preferences: SalonFormattingPreferences) {
+  const dateOptions = { year: "numeric", month: "2-digit", day: "2-digit" } as const;
+  const date = (
+    value: string | Date | null | undefined,
+    options = dateOptions as Intl.DateTimeFormatOptions,
+  ) => {
+    // Birthdays, expiries and report buckets are calendar dates, not UTC instants.
+    const dateOnly = typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
+    const parsed = toDate(dateOnly ? `${value}T00:00:00.000Z` : value);
+    if (!parsed) return EMPTY;
+    if (dateOnly && parsed.toISOString().slice(0, 10) !== value) return EMPTY;
+    return new Intl.DateTimeFormat(preferences.locale, {
+      ...options,
+      timeZone: dateOnly ? "UTC" : preferences.timeZone,
+    }).format(parsed);
+  };
+  return {
+    formatDate: date,
+    formatDateTime: (value: string | Date | null | undefined) =>
+      date(value, {
+        ...dateOptions,
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }),
+    formatTime: (value: string | Date | null | undefined) =>
+      date(value, {
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+      }),
+    formatMoney: (value: number | null | undefined) =>
+      formatMoney(value, "SGD", preferences.locale),
+    formatPrice: (value: string | number | null | undefined) =>
+      formatPrice(value, "SGD", preferences.locale),
+  };
+}
+
+function currencyFormat(amount: number, currency: string, locale: string): string {
+  const formatter = new Intl.NumberFormat(locale, { style: "currency", currency });
+  // en-SG otherwise abbreviates SGD as an ambiguous "$". Keep the requested S$
+  // label explicit even when another formatting locale is selected.
+  return formatter
+    .formatToParts(amount)
+    .map((part) => (part.type === "currency" && currency === "SGD" ? "S$" : part.value))
+    .join("");
+}
+
 export function formatDate(
   value: string | Date | null | undefined,
   options: Intl.DateTimeFormatOptions = { year: "numeric", month: "short", day: "numeric" },
@@ -43,11 +102,11 @@ export function formatDateInputValue(date: Date): string {
 /** Formats a minor-unit amount (cents) as a currency string. */
 export function formatMoney(
   minorUnits: number | null | undefined,
-  currency = "USD",
-  locale = "en-US",
+  currency = "SGD",
+  locale = "en-SG",
 ): string {
   if (minorUnits === null || minorUnits === undefined || !Number.isFinite(minorUnits)) return EMPTY;
-  return new Intl.NumberFormat(locale, { style: "currency", currency }).format(minorUnits / 100);
+  return currencyFormat(minorUnits / 100, currency, locale);
 }
 
 /**
@@ -62,15 +121,15 @@ export function formatMoney(
  */
 export function formatPrice(
   value: string | number | null | undefined,
-  currency = "USD",
-  locale = "en-US",
+  currency = "SGD",
+  locale = "en-SG",
 ): string {
   // `Number("")` is 0, which would print a price for a blank field, so empty is
   // checked before the coercion rather than after it.
   if (value === null || value === undefined || value === "") return EMPTY;
   const amount = typeof value === "string" ? Number(value) : value;
   if (!Number.isFinite(amount)) return EMPTY;
-  return new Intl.NumberFormat(locale, { style: "currency", currency }).format(amount);
+  return currencyFormat(amount, currency, locale);
 }
 
 /** "1h 15m" / "45m" from a duration in minutes. */

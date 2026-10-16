@@ -22,7 +22,8 @@ import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import Skeleton from "@/components/ui/Skeleton";
 import { SALE_KIND_LABELS } from "@/constants/sale";
-import { formatDuration, formatPrice } from "@/lib/utils";
+import { formatDuration } from "@/lib/utils";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 
 export interface SaleItemGridProps {
   /** The tab this grid sits under — for the empty "no rows" sentence. */
@@ -50,6 +51,7 @@ export default function SaleItemGrid({
   onRetry,
   onClearSearch,
 }: SaleItemGridProps) {
+  const { formatPrice } = useSalonFormatting();
   if (isPending) {
     return (
       <div
@@ -137,6 +139,7 @@ export default function SaleItemGrid({
 
 /** The one-line fact that kind actually has. Exhaustive, like the service's kinds. */
 function ItemMeta({ item }: { item: SaleItem }) {
+  const { formatPrice } = useSalonFormatting();
   switch (item.kind) {
     case "SERVICE":
       return (

@@ -37,7 +37,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useModules, useSalonProfile, useUpdateSalonProfile } from "@/hooks/useSettings";
 import { useStaffList } from "@/hooks/useStaff";
 import { getErrorMessage, getValidationDetails } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 
 export default function Settings() {
   const { isReadOnly, user } = useAuth();
@@ -70,23 +70,29 @@ export default function Settings() {
   );
 }
 
-/** Salon profile: two editable fields, four read-only facts. */
+/** Salon profile and salon-wide localisation preferences. */
 function ProfileCard({ canEdit }: { canEdit: boolean }) {
-  const profile = useSalonProfile();
+  const { formatDate } = useSalonFormatting();
+  const { tenant } = useAuth();
+  const profile = useSalonProfile(tenant?.id);
   const update = useUpdateSalonProfile();
   const data = profile.data;
 
-  // The two editable fields show the server's values until the user types, and
+  // Editable fields show the server's values until the user types, and
   // the user's from then on. Deliberately **not** an effect that seeds state: the
   // read lands after mount, and a write-back would clobber a half-typed name
   // whenever the profile refetched behind the form.
   const [draftName, setDraftName] = useState<string | null>(null);
   const [draftThreshold, setDraftThreshold] = useState<string | null>(null);
+  const [draftTimeZone, setDraftTimeZone] = useState<string | null>(null);
+  const [draftLocale, setDraftLocale] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
   const name = draftName ?? data?.name ?? "";
   const threshold = draftThreshold ?? (data === undefined ? "" : String(data.lowStockThreshold));
+  const timeZone = draftTimeZone ?? data?.timeZone ?? "";
+  const locale = draftLocale ?? data?.locale ?? "";
 
   const fieldError = (field: string): string | undefined =>
     fieldErrors[field] ?? fieldErrors[`body.${field}`];
@@ -100,6 +106,8 @@ function ProfileCard({ canEdit }: { canEdit: boolean }) {
       await update.mutateAsync({
         name: name.trim(),
         lowStockThreshold: Number(threshold),
+        timeZone: timeZone.trim(),
+        locale: locale.trim(),
       });
       showToast("success", "Salon profile saved.");
     } catch (error) {
@@ -115,7 +123,7 @@ function ProfileCard({ canEdit }: { canEdit: boolean }) {
   return (
     <Card
       title="Salon profile"
-      description="The name the app shows everywhere, and what counts as low stock for this salon."
+      description="Manage your salon name, low-stock threshold and saved timezone and formatting preferences."
     >
       {profile.isPending ? (
         <div className="flex flex-col gap-3">
@@ -156,6 +164,26 @@ function ProfileCard({ canEdit }: { canEdit: boolean }) {
               error={fieldError("lowStockThreshold")}
               disabled={!canEdit || update.isPending}
               hint="Products with stock at or below this quantity are marked as low stock."
+            />
+            <Input
+              label="Salon timezone"
+              required
+              value={timeZone}
+              onChange={(event) => setDraftTimeZone(event.target.value)}
+              error={fieldError("timeZone")}
+              disabled={!canEdit || update.isPending}
+              maxLength={100}
+              hint="Use a timezone identifier, such as Asia/Singapore. Saved for the whole salon."
+            />
+            <Input
+              label="Formatting locale"
+              required
+              value={locale}
+              onChange={(event) => setDraftLocale(event.target.value)}
+              error={fieldError("locale")}
+              disabled={!canEdit || update.isPending}
+              maxLength={100}
+              hint="Use a locale identifier, such as en-SG. This preference does not translate the app."
             />
           </div>
 
@@ -209,6 +237,7 @@ function ModulesCard({
   isPending: boolean;
   isError: boolean;
 }) {
+  const { formatDate } = useSalonFormatting();
   const columns: TableColumn<ModuleSummary>[] = [
     {
       key: "name",

@@ -20,7 +20,8 @@ import {
   APPOINTMENT_BLOCK_TONE,
   APPOINTMENT_STATUS_LABELS,
 } from "@/constants/appointments";
-import { cn, formatTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 import type { LanePlacement } from "./calendar-geometry";
 
 export interface AppointmentBlockProps {
@@ -63,6 +64,7 @@ export default function AppointmentBlock({
   showStaff = false,
   onEdit,
 }: AppointmentBlockProps) {
+  const { formatTime } = useSalonFormatting();
   const tone = APPOINTMENT_BLOCK_TONE[booking.status];
   const customer = booking.customerName ?? "Walk-in";
   const label = `${customer}, ${APPOINTMENT_STATUS_LABELS[booking.status]}`;

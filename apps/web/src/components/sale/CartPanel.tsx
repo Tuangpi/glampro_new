@@ -18,7 +18,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import CartLine, { type StaffOption } from "@/components/sale/CartLine";
 import { lineUnitPrice, listUnitPrice, type CartLine as CartLineState } from "@/hooks/useSale";
 import { cartTotalCents } from "@/lib/money";
-import { formatPrice } from "@/lib/utils";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 
 export interface CartPanelProps {
   lines: CartLineState[];
@@ -58,6 +58,7 @@ export default function CartPanel({
   onHold,
   holdPending,
 }: CartPanelProps) {
+  const { formatPrice } = useSalonFormatting();
   const units = lines.reduce((sum, line) => sum + line.quantity, 0);
   // Every line carries both figures: what it costs **after** its discount, and what the
   // catalogue asked. The difference is what the `Discount` row shows (ADR 0017).

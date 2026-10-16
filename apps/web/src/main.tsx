@@ -6,6 +6,7 @@ import { BrowserRouter } from "react-router";
 import App from "./App";
 import { ToastProvider } from "@/components/ui/Toast";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { SalonFormattingProvider } from "@/contexts/SalonFormattingContext";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -33,7 +34,9 @@ createRoot(rootElement).render(
         {/* Inside the query client: signing out clears every cached query. */}
         <AuthProvider>
           <ToastProvider>
-            <App />
+            <SalonFormattingProvider>
+              <App />
+            </SalonFormattingProvider>
           </ToastProvider>
         </AuthProvider>
       </BrowserRouter>

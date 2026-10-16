@@ -59,7 +59,7 @@ describe("Table", () => {
     // The header row is not a row of data.
     expect(screen.getAllByRole("row")).toHaveLength(3);
     expect(screen.getByText("Maria Santos")).toBeInTheDocument();
-    expect(screen.getByText("$125.00")).toBeInTheDocument();
+    expect(screen.getByText("S$125.00")).toBeInTheDocument();
   });
 
   it("right-aligns a column that asks for it", () => {

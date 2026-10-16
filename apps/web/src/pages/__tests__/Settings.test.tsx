@@ -47,6 +47,8 @@ beforeEach(() => {
       slug: "ava-salon",
       status: "ACTIVE",
       lowStockThreshold: 5,
+      timeZone: "Asia/Singapore",
+      locale: "en-SG",
       owner: { id: "owner-1", name: "Ava Owner", email: "ava@example.com" },
       createdAt: "2026-01-02T00:00:00.000Z",
       updatedAt: "2026-10-09T00:00:00.000Z",
@@ -140,7 +142,7 @@ describe("Settings", () => {
     expect(screen.getByText("Senior stylist")).toBeInTheDocument();
   });
 
-  it("saves only the two salon-editable fields", async () => {
+  it("saves salon-editable fields including persisted localisation preferences", async () => {
     const user = userEvent.setup();
     renderSettings();
     await user.clear(screen.getByLabelText("Salon name"));
@@ -148,7 +150,49 @@ describe("Settings", () => {
     await user.clear(screen.getByLabelText("Low-stock threshold"));
     await user.type(screen.getByLabelText("Low-stock threshold"), "8");
     await user.click(screen.getByRole("button", { name: "Save profile" }));
-    expect(mutateAsync).toHaveBeenCalledWith({ name: "New Salon Name", lowStockThreshold: 8 });
+    expect(mutateAsync).toHaveBeenCalledWith({
+      name: "New Salon Name",
+      lowStockThreshold: 8,
+      timeZone: "Asia/Singapore",
+      locale: "en-SG",
+    });
+  });
+
+  it("allows a manager to change the saved timezone and formatting locale", async () => {
+    auth.role = "MANAGER";
+    const user = userEvent.setup();
+    renderSettings();
+    await user.clear(screen.getByLabelText("Salon timezone"));
+    await user.type(screen.getByLabelText("Salon timezone"), "Europe/London");
+    await user.clear(screen.getByLabelText("Formatting locale"));
+    await user.type(screen.getByLabelText("Formatting locale"), "en-GB");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    expect(mutateAsync).toHaveBeenCalledWith({
+      name: "Ava Salon",
+      lowStockThreshold: 5,
+      timeZone: "Europe/London",
+      locale: "en-GB",
+    });
+  });
+
+  it("displays server validation errors without losing the draft preferences", async () => {
+    mutateAsync.mockRejectedValueOnce(new Error("Invalid timezone"));
+    getValidationDetails.mockReturnValueOnce({ "body.timeZone": "Choose a valid timezone" });
+    const user = userEvent.setup();
+    renderSettings();
+    await user.clear(screen.getByLabelText("Salon timezone"));
+    await user.type(screen.getByLabelText("Salon timezone"), "Mars/Olympus");
+    await user.click(screen.getByRole("button", { name: "Save profile" }));
+    expect(screen.getByText("Choose a valid timezone")).toBeInTheDocument();
+    expect(screen.getByLabelText("Salon timezone")).toHaveValue("Mars/Olympus");
+  });
+
+  it("disables localisation changes for a read-only salon", () => {
+    auth.readOnly = true;
+    renderSettings();
+    expect(screen.getByLabelText("Salon timezone")).toBeDisabled();
+    expect(screen.getByLabelText("Formatting locale")).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Save profile" })).not.toBeInTheDocument();
   });
 
   it("removes the save action for a staff member", () => {
@@ -159,5 +203,7 @@ describe("Settings", () => {
       screen.getByText("Only a manager or the owner can change the salon profile."),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Salon name")).toBeDisabled();
+    expect(screen.getByLabelText("Salon timezone")).toBeDisabled();
+    expect(screen.getByLabelText("Formatting locale")).toBeDisabled();
   });
 });

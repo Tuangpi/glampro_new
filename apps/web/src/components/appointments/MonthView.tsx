@@ -29,7 +29,9 @@ import {
   APPOINTMENT_STATUS_LABELS,
   CALENDAR_WEEKDAY_LABELS,
 } from "@/constants/appointments";
-import { cn, formatTime } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
+import { toSalonDate } from "@/lib/salon-time";
 import { bookingsByDay, dayKey, isSameDay, monthGridDays, startOfMonth } from "./calendar-geometry";
 
 /**
@@ -63,6 +65,7 @@ export default function MonthView({
   onEdit,
   onRetry,
 }: MonthViewProps) {
+  const { timeZone, formatTime } = useSalonFormatting();
   if (isPending) {
     return (
       <div className="flex flex-col gap-3 p-5" aria-busy="true">
@@ -90,10 +93,13 @@ export default function MonthView({
     );
   }
 
-  const first = startOfMonth(day);
-  const cells = monthGridDays(day);
-  const byDay = bookingsByDay(appointments);
-  const today = new Date();
+  // The anchor day and "today" are read as salon-local wall clock.
+  const salonDay = toSalonDate(day, timeZone) ?? day;
+  const salonToday = toSalonDate(new Date(), timeZone) ?? new Date();
+
+  const first = startOfMonth(salonDay);
+  const cells = monthGridDays(salonDay);
+  const byDay = bookingsByDay(appointments, timeZone);
 
   if (appointments.length === 0) {
     return (
@@ -121,7 +127,7 @@ export default function MonthView({
         ))}
       </div>
 
-      <div className="grid grid-cols-7" aria-label={`Month of ${day.toDateString()}`}>
+      <div className="grid grid-cols-7" aria-label={`Month of ${salonDay.toDateString()}`}>
         {cells.map((cell) => {
           const inMonth = cell.getMonth() === first.getMonth();
           return (
@@ -134,9 +140,10 @@ export default function MonthView({
               // would put a chip in a day whose edges nobody fetched (ADR 0018,
               // decision 6). Enforced here so a wider window in future cannot leak in.
               appointments={inMonth ? (byDay.get(dayKey(cell)) ?? []) : []}
-              isToday={isSameDay(cell, today)}
+              isToday={isSameDay(cell, salonToday)}
               isReadOnly={isReadOnly}
               onEdit={onEdit}
+              formatTime={formatTime}
             />
           );
         })}
@@ -160,6 +167,7 @@ function DayCell({
   isToday,
   isReadOnly,
   onEdit,
+  formatTime,
 }: {
   day: Date;
   inMonth: boolean;
@@ -167,6 +175,7 @@ function DayCell({
   isToday: boolean;
   isReadOnly: boolean;
   onEdit: (appointment: AppointmentSummary) => void;
+  formatTime: (value: string | Date | null | undefined) => string;
 }) {
   const shown = appointments.slice(0, MAX_CHIPS_PER_DAY);
   const hidden = appointments.length - shown.length;

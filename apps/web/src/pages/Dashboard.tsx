@@ -2,7 +2,7 @@ import { AlertTriangle, Banknote, Calendar, Package, Users } from "@/components/
 import StatTile from "@/components/ui/StatTile";
 import { useAuth } from "@/contexts/AuthContext";
 import { useDashboardSummary } from "@/hooks/useDashboard";
-import { formatPrice } from "@/lib/utils";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 
 /**
  * Dashboard — handoff screen 05.
@@ -19,6 +19,7 @@ import { formatPrice } from "@/lib/utils";
  * are different statements and only one of them is true.
  */
 export default function Dashboard() {
+  const { formatPrice } = useSalonFormatting();
   const { user } = useAuth();
   const summary = useDashboardSummary();
 

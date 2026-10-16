@@ -22,7 +22,8 @@ import Select from "@/components/ui/Select";
 import { cartLineKey, type CartLine as CartLineState } from "@/hooks/useSale";
 import { cartTotalCents } from "@/lib/money";
 import { performerOptions } from "@/lib/performer-options";
-import { cn, formatPrice } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 
 export interface StaffOption {
   id: string;
@@ -60,6 +61,7 @@ export default function CartLine({
   onRemove,
   disabled,
 }: CartLineProps) {
+  const { formatPrice } = useSalonFormatting();
   const key = cartLineKey(line);
   // The draft the cashier is typing, held apart from the committed quantity so
   // an intermediate keystroke never rewrites the cart. `null` means "not

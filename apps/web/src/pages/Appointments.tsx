@@ -17,10 +17,11 @@
  * hole in it. Shifts/leave, the skill matrix and reminders are still not stubbed here: an
  * absent capability is absent, not faked.
  *
- * Each window is computed from the **browser's** day, week and month and sent as instants,
- * the same edges the dashboard's tiles count, so "3 appointments today" and the three rows
- * below are one fact asked twice. "Today" is local because the salon's day is local; the
- * schema has no timezone column to ask about (see `schemas/appointment.ts`).
+ * Each window is computed from the **salon's** day, week and month (its saved
+ * timezone) and sent as instants, the same edges the dashboard's tiles count, so
+ * "3 appointments today" and the three rows below are one fact asked twice.
+ * "Today" is the salon's day because the salon's day is local to its clock
+ * (see `schemas/settings.ts`).
  */
 import { useState } from "react";
 
@@ -33,6 +34,7 @@ import WeekView from "@/components/appointments/WeekView";
 import {
   addDays,
   buildCalendarColumns,
+  dayKey,
   dayWindow,
   monthWindow,
   shiftMonth,
@@ -55,6 +57,7 @@ import {
   OPEN_APPOINTMENT_STATUSES,
 } from "@/constants/appointments";
 import { useAuth } from "@/contexts/AuthContext";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 import {
   CALENDAR_PAGE_SIZE,
   useAppointmentList,
@@ -64,7 +67,8 @@ import {
 } from "@/hooks/useAppointments";
 import { useStaffList } from "@/hooks/useStaff";
 import { get, getErrorMessage } from "@/lib/api";
-import { cn, formatDate } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { instantFromSalonDate, toSalonDate } from "@/lib/salon-time";
 
 const PAGE_SIZE = 20;
 
@@ -78,9 +82,12 @@ const VIEW_OPTIONS = [
 
 type AppointmentView = (typeof VIEW_OPTIONS)[number]["key"];
 
-/** Whether the list is showing the browser's own day. */
-function isToday(day: Date): boolean {
-  return day.toDateString() === new Date().toDateString();
+/** Whether the list is showing the salon's own day. */
+function isToday(day: Date, timeZone: string): boolean {
+  return (
+    dayKey(toSalonDate(day, timeZone) ?? day) ===
+    dayKey(toSalonDate(new Date(), timeZone) ?? new Date())
+  );
 }
 
 /**
@@ -91,20 +98,27 @@ function isToday(day: Date): boolean {
  * misread. `formatDate` reads local calendar fields, which is the same clock the windows
  * and the grid are built from.
  */
-function viewSubtitle(view: AppointmentView, day: Date): string {
+function viewSubtitle(
+  view: AppointmentView,
+  day: Date,
+  formatDate: (
+    value: string | Date | null | undefined,
+    options?: Intl.DateTimeFormatOptions,
+  ) => string,
+): string {
   if (view === "month") {
-    return formatDate(day.toISOString(), { month: "long", year: "numeric" });
+    return formatDate(day, { month: "long", year: "numeric" });
   }
 
   if (view === "week") {
     const first = startOfWeek(day);
     const last = addDays(first, 6);
-    const from = formatDate(first.toISOString(), { day: "numeric", month: "short" });
-    const to = formatDate(last.toISOString(), { day: "numeric", month: "short", year: "numeric" });
+    const from = formatDate(first, { day: "numeric", month: "short" });
+    const to = formatDate(last, { day: "numeric", month: "short", year: "numeric" });
     return `${from} – ${to}`;
   }
 
-  return formatDate(day.toISOString(), {
+  return formatDate(day, {
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -113,7 +127,7 @@ function viewSubtitle(view: AppointmentView, day: Date): string {
 }
 
 /**
- * Where a booking made from this view starts.
+ * Where a booking made from this view starts — in salon time.
  *
  * The desk books *into the view it is looking at*, so a new appointment lands on
  * the next half hour when that view is today, and at 09:00 on a day that is not —
@@ -121,19 +135,31 @@ function viewSubtitle(view: AppointmentView, day: Date): string {
  * the value is only read by the drawer's initialiser, and it has to be right at
  * the moment the desk opens the form, not whenever the day last changed.
  */
-function bookingStart(day: Date): string {
-  if (!isToday(day)) {
-    return new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9, 0).toISOString();
+function bookingStart(day: Date, timeZone: string): string {
+  const salonDay = toSalonDate(day, timeZone) ?? day;
+  if (!isToday(day, timeZone)) {
+    // 09:00 salon time on the anchor day.
+    const start = new Date(
+      salonDay.getFullYear(),
+      salonDay.getMonth(),
+      salonDay.getDate(),
+      9,
+      0,
+      0,
+      0,
+    );
+    return instantFromSalonDate(start, timeZone).toISOString();
   }
 
-  const now = new Date();
-  const rounded = new Date(now);
-  rounded.setMinutes(now.getMinutes() > 30 ? 60 : 30, 0, 0);
-  return rounded.toISOString();
+  const salonNow = toSalonDate(new Date(), timeZone) ?? new Date();
+  const rounded = new Date(salonNow);
+  rounded.setMinutes(salonNow.getMinutes() > 30 ? 60 : 30, 0, 0);
+  return instantFromSalonDate(rounded, timeZone).toISOString();
 }
 
 export default function Appointments() {
   const { isReadOnly } = useAuth();
+  const { formatDate, formatTime, timeZone } = useSalonFormatting();
 
   const [day, setDay] = useState(() => new Date());
   const [status, setStatus] = useState("");
@@ -154,9 +180,13 @@ export default function Appointments() {
   const showMonth = view === "month";
   const stepUnit = showMonth ? "month" : showWeek ? "week" : "day";
 
-  const dayRange = dayWindow(day);
-  const weekRange = weekWindow(day);
-  const monthRange = monthWindow(day);
+  // The anchor day is read as salon-local wall clock: a desk in Los Angeles
+  // looking at a Singapore salon sees Singapore's day, not its own.
+  const salonDay = toSalonDate(day, timeZone) ?? day;
+
+  const dayRange = dayWindow(day, timeZone);
+  const weekRange = weekWindow(day, timeZone);
+  const monthRange = monthWindow(day, timeZone);
 
   const { data, isPending, isError, error, isFetching, refetch } = useAppointmentList({
     page: 1,
@@ -192,7 +222,7 @@ export default function Appointments() {
   const update = useUpdateAppointment();
   const reschedule = useRescheduleAppointment();
   const rows = data?.data ?? [];
-  const showingToday = isToday(day);
+  const showingToday = isToday(day, timeZone);
   // A calendar read is one page (`CALENDAR_PAGE_SIZE`), and a month can hold more. The
   // envelope carries the total, so the page **says** what it is not drawing rather than
   // drawing a confident month with holes in it (ADR 0018, decision 7). Only ever true off
@@ -259,12 +289,7 @@ export default function Appointments() {
       header: "Time",
       cell: (row) => (
         <div>
-          <p className="font-bold text-ink">
-            {new Date(row.startsAt).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </p>
+          <p className="font-bold text-ink">{formatTime(row.startsAt)}</p>
           <p className="text-xs text-ink-muted">
             {row.durationMinutes ? `${row.durationMinutes} min` : "—"}
           </p>
@@ -331,7 +356,7 @@ export default function Appointments() {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="text-xl">Appointments</h2>
-          <p className="mt-1 text-sm text-ink-muted">{viewSubtitle(view, day)}</p>
+          <p className="mt-1 text-sm text-ink-muted">{viewSubtitle(view, salonDay, formatDate)}</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -539,7 +564,7 @@ export default function Appointments() {
         key={`${editing?.id ?? "new"}:${drawerOpen}`}
         open={drawerOpen}
         appointment={editing}
-        defaultStartsAt={bookingStart(day)}
+        defaultStartsAt={bookingStart(day, timeZone)}
         onClose={() => setDrawerOpen(false)}
       />
     </div>

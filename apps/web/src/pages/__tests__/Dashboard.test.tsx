@@ -34,11 +34,13 @@ describe("Dashboard", () => {
     render(<Dashboard />);
 
     expect(screen.getByText("Welcome, Ava to Glampro Suite")).toBeInTheDocument();
-    expect(screen.getByText("$125.50")).toBeInTheDocument();
+    expect(screen.getByText("S$125.50")).toBeInTheDocument();
     expect(screen.getByText("Today’s income · 3 sales")).toBeInTheDocument();
     expect(screen.getByText("4")).toBeInTheDocument();
     expect(
-      screen.getByText("Manage your sales, appointments, customers, stock and reports in one place."),
+      screen.getByText(
+        "Manage your sales, appointments, customers, stock and reports in one place.",
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/system status|Salon Pro|design system/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /re-check status/i })).not.toBeInTheDocument();

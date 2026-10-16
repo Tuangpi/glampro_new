@@ -47,6 +47,8 @@ export async function getSalonProfile(): Promise<SalonProfile> {
       slug: true,
       status: true,
       lowStockThreshold: true,
+      timeZone: true,
+      locale: true,
       createdAt: true,
       updatedAt: true,
       owner: { select: { id: true, name: true, email: true } },
@@ -65,7 +67,7 @@ export async function getSalonProfile(): Promise<SalonProfile> {
 }
 
 /**
- * `PATCH /api/settings/profile` — the salon's own two fields.
+ * `PATCH /api/settings/profile` — the salon's editable profile fields.
  *
  * `slug` and `status` are not accepted at all (the schema is `.strict()`): the
  * first is the isolation key's public face and the second is the platform

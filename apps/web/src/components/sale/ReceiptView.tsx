@@ -27,7 +27,7 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { PAYMENT_METHOD_BADGE, PAYMENT_METHOD_LABELS } from "@/constants/sale";
 import { priceToCents } from "@/lib/money";
-import { formatDateTime, formatPrice } from "@/lib/utils";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 
 export interface ReceiptViewProps {
   sale: SaleDetail;
@@ -44,6 +44,7 @@ export interface ReceiptViewProps {
 }
 
 export default function ReceiptView({ sale, onNewSale, canVoid, onVoid }: ReceiptViewProps) {
+  const { formatDateTime, formatPrice } = useSalonFormatting();
   const changeCents = priceToCents(sale.paidAmount) - priceToCents(sale.totalAmount);
   // A void is only reachable from a sale that stands: a voided one has nothing left to
   // take off the books, and the service says the same thing.

@@ -60,7 +60,8 @@ import { usePackageList } from "@/hooks/usePackages";
 import { useProductCount, useProductList } from "@/hooks/useProducts";
 import { useServiceCount, useServiceList } from "@/hooks/useServices";
 import { get, getErrorCode, getErrorMessage } from "@/lib/api";
-import { cn, formatDate, formatDuration, formatPrice } from "@/lib/utils";
+import { cn, formatDuration } from "@/lib/utils";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 
 const PAGE_SIZE = 20;
 
@@ -113,6 +114,7 @@ const NOUNS: Record<
 };
 
 export default function Products() {
+  const { formatDate, formatPrice } = useSalonFormatting();
   const { isReadOnly } = useAuth();
 
   const [tab, setTab] = useState<CatalogueTab>("products");

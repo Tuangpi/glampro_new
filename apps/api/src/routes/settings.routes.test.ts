@@ -28,6 +28,8 @@ interface ProfileBody {
   slug: string;
   status: string;
   lowStockThreshold: number;
+  timeZone: string;
+  locale: string;
   owner: { id: string; name: string; email: string } | null;
 }
 
@@ -229,6 +231,8 @@ describe("settings endpoints", { skip: databaseUrl ? false : "DATABASE_URL is no
     assert.equal(profile.name, "Settings A");
     assert.equal(profile.slug, TENANT_A);
     assert.equal(profile.lowStockThreshold, 6);
+    assert.equal(profile.timeZone, "Asia/Singapore");
+    assert.equal(profile.locale, "en-SG");
     assert.deepEqual(profile.owner, {
       id: "settings-rt-owner",
       name: "Sonia Owner",
@@ -249,7 +253,7 @@ describe("settings endpoints", { skip: databaseUrl ? false : "DATABASE_URL is no
     assert.equal(byCode.get("inventory")?.entitled, false);
   });
 
-  it("accepts only the two salon-editable profile fields", async () => {
+  it("accepts salon-editable profile fields while preserving platform fields", async () => {
     const invalid = await request("PATCH", "/api/settings/profile", ownerToken, {
       name: "Renamed Salon",
       lowStockThreshold: 9,
@@ -270,16 +274,65 @@ describe("settings endpoints", { skip: databaseUrl ? false : "DATABASE_URL is no
     assert.equal(profile.status, "ACTIVE");
   });
 
+  it("persists localisation, preserves it for older clients and isolates other salons", async () => {
+    const response = await request("PATCH", "/api/settings/profile", ownerToken, {
+      name: "Renamed Salon",
+      lowStockThreshold: 9,
+      timeZone: "Europe/London",
+      locale: "en-GB",
+    });
+    assert.equal(response.status, 200);
+    const saved = await dataOf<ProfileBody>(response);
+    assert.equal(saved.timeZone, "Europe/London");
+    assert.equal(saved.locale, "en-GB");
+
+    const legacy = await request("PATCH", "/api/settings/profile", ownerToken, {
+      name: "Renamed Salon",
+      lowStockThreshold: 9,
+    });
+    assert.equal(legacy.status, 200);
+    const reread = await dataOf<ProfileBody>(
+      await request("GET", "/api/settings/profile", ownerToken),
+    );
+    assert.equal(reread.timeZone, "Europe/London");
+    assert.equal(reread.locale, "en-GB");
+    const other = await runAsPlatform(() =>
+      prisma.tenant.findUniqueOrThrow({ where: { id: TENANT_B } }),
+    );
+    assert.equal(other.timeZone, "Asia/Singapore");
+    assert.equal(other.locale, "en-SG");
+  });
+
+  it("rejects invalid localisation without changing the stored preferences", async () => {
+    for (const preference of [{ timeZone: "Mars/Olympus" }, { locale: "en_SG" }]) {
+      const response = await request("PATCH", "/api/settings/profile", ownerToken, {
+        name: "Renamed Salon",
+        lowStockThreshold: 9,
+        ...preference,
+      });
+      assert.equal(response.status, 422);
+    }
+    const profile = await dataOf<ProfileBody>(
+      await request("GET", "/api/settings/profile", ownerToken),
+    );
+    assert.equal(profile.timeZone, "Europe/London");
+    assert.equal(profile.locale, "en-GB");
+  });
+
   it("refuses profile writes by staff and suspended salons", async () => {
     const staffResponse = await request("PATCH", "/api/settings/profile", staffToken, {
       name: "Staff Rename",
       lowStockThreshold: 1,
+      timeZone: "America/New_York",
+      locale: "en-US",
     });
     assert.equal(staffResponse.status, 403);
 
     const suspendedResponse = await request("PATCH", "/api/settings/profile", suspendedToken, {
       name: "Suspended Rename",
       lowStockThreshold: 1,
+      timeZone: "America/New_York",
+      locale: "en-US",
     });
     assert.equal(suspendedResponse.status, 403);
     assert.equal(((await suspendedResponse.json()) as ErrorEnvelope).code, "TENANT_SUSPENDED");

@@ -25,11 +25,12 @@ import Table, { type TableColumn } from "@/components/ui/Table";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCustomerList } from "@/hooks/useCustomers";
 import { get, getErrorMessage } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 
 const PAGE_SIZE = 20;
 
 export default function Customers() {
+  const { formatDate } = useSalonFormatting();
   const { isReadOnly } = useAuth();
 
   const [searchInput, setSearchInput] = useState("");

@@ -218,8 +218,8 @@ describe("the table", () => {
     const rows = screen.getAllByRole("row").slice(1); // drop the header row
     expect(rows).toHaveLength(2);
     expect(within(rows[0]!).getByText("Magken Shampoo")).toBeInTheDocument();
-    expect(within(rows[0]!).getByText("$88.00")).toBeInTheDocument();
-    expect(within(rows[0]!).getByText("$78.00")).toBeInTheDocument();
+    expect(within(rows[0]!).getByText("S$88.00")).toBeInTheDocument();
+    expect(within(rows[0]!).getByText("S$78.00")).toBeInTheDocument();
     expect(within(rows[0]!).getByText("42 units")).toBeInTheDocument();
     expect(within(rows[1]!).getByText("0 units")).toBeInTheDocument();
   });

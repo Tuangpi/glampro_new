@@ -17,17 +17,30 @@ import type { DashboardSummary } from "@glampro_suite/shared";
 
 import { queryKeys } from "@/constants/queryKeys";
 import { get } from "@/lib/api";
+import { instantFromSalonDate, toSalonDate } from "@/lib/salon-time";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 
-/** The day's edges as instants: midnight to the last millisecond, local time. */
-export function todayWindow(): { from: string; to: string } {
-  const now = new Date();
+/**
+ * The salon's day's edges as instants: midnight to the last millisecond, in the
+ * salon's timezone — so "today's income" means the salon's today, not the desk's.
+ * The window key is stable across renders because both edges are derived from
+ * calendar midnight rather than from `Date.now()`, so a dashboard that re-renders
+ * does not refetch itself; only the day turning over changes the key, which is
+ * exactly when the answer would change.
+ */
+export function todayWindow(timeZone: string): { from: string; to: string } {
+  const now = toSalonDate(new Date(), timeZone) ?? new Date();
   const from = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const to = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-  return { from: from.toISOString(), to: to.toISOString() };
+  return {
+    from: instantFromSalonDate(from, timeZone).toISOString(),
+    to: instantFromSalonDate(to, timeZone).toISOString(),
+  };
 }
 
 export function useDashboardSummary() {
-  const window = todayWindow();
+  const { timeZone } = useSalonFormatting();
+  const window = todayWindow(timeZone);
 
   return useQuery({
     queryKey: [...queryKeys.dashboard.summary(), window],

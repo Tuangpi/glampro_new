@@ -37,10 +37,10 @@ export default defineConfig([
   },
   {
     // The provider and the hook that reads it are one unit — a consumer that can
-    // call `useAuth` without being able to mount the provider it needs is a footgun,
+    // call its hook without being able to mount the provider it needs is a footgun,
     // and splitting them to satisfy a dev-ergonomics rule would make both halves
-    // worse. Fast Refresh loses component-level granularity on this one file.
-    files: ["src/contexts/AuthContext.tsx"],
+    // worse. Fast Refresh loses component-level granularity on these files.
+    files: ["src/contexts/AuthContext.tsx", "src/contexts/SalonFormattingContext.tsx"],
     rules: {
       "react-refresh/only-export-components": "off",
     },

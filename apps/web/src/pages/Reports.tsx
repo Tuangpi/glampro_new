@@ -17,7 +17,9 @@ import StatTile from "@/components/ui/StatTile";
 import Table, { type TableColumn } from "@/components/ui/Table";
 import { useReportOverview } from "@/hooks/useReports";
 import { getErrorMessage } from "@/lib/api";
-import { formatDate, formatDateInputValue, formatPrice } from "@/lib/utils";
+import { formatDateInputValue } from "@/lib/utils";
+import { instantFromSalonDate } from "@/lib/salon-time";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 
 function initialDates(): { from: string; to: string } {
   const today = new Date();
@@ -34,14 +36,25 @@ function dateParts(value: string): [number, number, number] {
   return [year, month, day];
 }
 
-function rangeInstants(from: string, to: string): { from: string; to: string; timeZone: string } {
+function rangeInstants(
+  from: string,
+  to: string,
+  timeZone: string,
+): { from: string; to: string; timeZone: string } {
   const [fromYear, fromMonth, fromDay] = dateParts(from);
   const [toYear, toMonth, toDay] = dateParts(to);
-  return {
-    from: new Date(fromYear, fromMonth - 1, fromDay).toISOString(),
-    to: new Date(toYear, toMonth - 1, toDay, 23, 59, 59, 999).toISOString(),
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-  };
+  // The user picks calendar dates in the salon's timezone; turn both edges into
+  // the instants that bound that salon-local day, so a Singapore salon's "today"
+  // is not America's yesterday.
+  const fromInstant = instantFromSalonDate(
+    new Date(fromYear, fromMonth - 1, fromDay, 0, 0, 0, 0),
+    timeZone,
+  );
+  const toInstant = instantFromSalonDate(
+    new Date(toYear, toMonth - 1, toDay, 23, 59, 59, 999),
+    timeZone,
+  );
+  return { from: fromInstant.toISOString(), to: toInstant.toISOString(), timeZone };
 }
 
 const ITEM_LABELS: Record<ReportItem["itemType"], string> = {
@@ -53,13 +66,17 @@ const ITEM_LABELS: Record<ReportItem["itemType"], string> = {
 };
 
 export default function Reports() {
+  const { formatDate, formatPrice, timeZone } = useSalonFormatting();
   const [dates, setDates] = useState(initialDates);
-  const range = useMemo(() => rangeInstants(dates.from, dates.to), [dates.from, dates.to]);
+  const range = useMemo(
+    () => rangeInstants(dates.from, dates.to, timeZone),
+    [dates.from, dates.to, timeZone],
+  );
   const report = useReportOverview(range);
   const data = report.data;
 
   const salesColumns: TableColumn<ReportSalesByDay>[] = [
-    { key: "date", header: "Date", cell: (row) => formatDate(`${row.date}T12:00:00.000Z`) },
+    { key: "date", header: "Date", cell: (row) => formatDate(row.date) },
     { key: "sales", header: "Sales", align: "right", cell: (row) => row.sales },
     { key: "items", header: "Items", align: "right", cell: (row) => row.quantity },
     { key: "revenue", header: "Revenue", align: "right", cell: (row) => formatPrice(row.revenue) },
