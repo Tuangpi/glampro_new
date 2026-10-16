@@ -2,6 +2,13 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { toSalonDate } from "@/lib/salon-time";
+
+/** Read a UTC instant as salon-local wall clock (Asia/Singapore is the default salon TZ). */
+function salonOf(iso: string): Date {
+  return toSalonDate(new Date(iso), "Asia/Singapore")!;
+}
+
 const {
   useAppointmentList,
   useUpdateAppointment,
@@ -136,8 +143,8 @@ describe("Appointments", () => {
     render(<Appointments />);
 
     const filters = useAppointmentList.mock.calls[0]?.[0] as { from: string; to: string };
-    const from = new Date(filters.from);
-    const to = new Date(filters.to);
+    const from = salonOf(filters.from);
+    const to = salonOf(filters.to);
     expect(from.getHours()).toBe(0);
     expect(to.getHours()).toBe(23);
     expect(to.getMinutes()).toBe(59);
@@ -207,10 +214,10 @@ describe("Appointments", () => {
     expect(enabledWindows()).toHaveLength(1);
     // One day: midnight to the last minute of the same date.
     const day = enabledWindows()[0];
-    expect(new Date(day!.from).getHours()).toBe(0);
-    expect(new Date(day!.to).getHours()).toBe(23);
-    expect(new Date(day!.to).getMinutes()).toBe(59);
-    expect(new Date(day!.from).toDateString()).toBe(new Date(day!.to).toDateString());
+    expect(salonOf(day!.from).getHours()).toBe(0);
+    expect(salonOf(day!.to).getHours()).toBe(23);
+    expect(salonOf(day!.to).getMinutes()).toBe(59);
+    expect(salonOf(day!.from).toDateString()).toBe(salonOf(day!.to).toDateString());
     // The same edges the list read, because the switch moved nothing.
     expect(day).toEqual({ from: listWindow.from, to: listWindow.to });
 
@@ -218,8 +225,8 @@ describe("Appointments", () => {
     expect(enabledWindows()).toHaveLength(1);
     // Seven days, Monday midnight to a Sunday's last minute (ADR 0018: the week is
     // Monday-first, the same first day the month grid pads to).
-    const weekFrom = new Date(enabledWindows()[0]!.from);
-    const weekTo = new Date(enabledWindows()[0]!.to);
+    const weekFrom = salonOf(enabledWindows()[0]!.from);
+    const weekTo = salonOf(enabledWindows()[0]!.to);
     expect(weekFrom.getDay()).toBe(1);
     expect(weekFrom.getHours()).toBe(0);
     expect(weekTo.getDay()).toBe(0);
@@ -233,8 +240,8 @@ describe("Appointments", () => {
     await user.click(screen.getByRole("button", { name: "Month" }));
     expect(enabledWindows()).toHaveLength(1);
     // The calendar month alone: the 1st at midnight to the last day's last minute.
-    const monthFrom = new Date(enabledWindows()[0]!.from);
-    const monthTo = new Date(enabledWindows()[0]!.to);
+    const monthFrom = salonOf(enabledWindows()[0]!.from);
+    const monthTo = salonOf(enabledWindows()[0]!.to);
     expect(monthFrom.getDate()).toBe(1);
     expect(monthFrom.getHours()).toBe(0);
     expect(monthTo.getMonth()).toBe(monthFrom.getMonth());
@@ -256,15 +263,15 @@ describe("Appointments", () => {
     await user.click(screen.getByRole("button", { name: "Week" }));
     const weekBefore = new Date(enabledWindows()[0]!.from);
     await user.click(screen.getByRole("button", { name: "Next week" }));
-    const weekAfter = new Date(enabledWindows()[0]!.from);
+    const weekAfter = salonOf(enabledWindows()[0]!.from);
     // Seven days, not one — and still a Monday.
     expect(Math.round((Number(weekAfter) - Number(weekBefore)) / 86_400_000)).toBe(7);
     expect(weekAfter.getDay()).toBe(1);
 
     await user.click(screen.getByRole("button", { name: "Month" }));
-    const monthBefore = new Date(enabledWindows()[0]!.from);
+    const monthBefore = salonOf(enabledWindows()[0]!.from);
     await user.click(screen.getByRole("button", { name: "Previous month" }));
-    const monthAfter = new Date(enabledWindows()[0]!.from);
+    const monthAfter = salonOf(enabledWindows()[0]!.from);
     expect(monthAfter.getDate()).toBe(1);
     expect(monthAfter.getMonth()).toBe((monthBefore.getMonth() + 11) % 12);
   });

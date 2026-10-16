@@ -6,8 +6,15 @@
  * functions of a `Date`, so they are pinned here without rendering a single
  * block: a block drawn at the wrong `top` is a booking shown at the wrong time,
  * which is the one thing a calendar must never do.
+ *
+ * Every geometry function that needs a timezone now takes `timeZone` explicitly.
+ * Tests use `Asia/Singapore` as the salon timezone and construct instants with
+ * `instantFromSalonDate` so the assertions hold no matter what timezone the test
+ * process itself runs in.
  */
 import { describe, expect, it } from "vitest";
+
+import { instantFromSalonDate, salonMinutesIntoDay, salonWallClock } from "@/lib/salon-time";
 
 import {
   DAY_START_HOUR,
@@ -37,44 +44,58 @@ import {
   weekWindow,
 } from "../calendar-geometry";
 
-/** Local-time helper: the geometry reads local hours, so the fixtures must too. */
-function at(day: number, hour: number, minute = 0): Date {
+/** The salon's saved timezone — used by every geometry call in this file. */
+const TIME_ZONE = "Asia/Singapore";
+
+/** A salon-local date: its host-local getters read the salon wall clock. */
+function salonAt(day: number, hour: number, minute = 0): Date {
   return new Date(2026, 9, day, hour, minute, 0, 0);
+}
+
+/** The UTC instant whose wall clock in `TIME_ZONE` is `day hour:minute`. */
+function salonInstant(day: number, hour: number, minute = 0): string {
+  return instantFromSalonDate(salonAt(day, hour, minute), TIME_ZONE).toISOString();
 }
 
 describe("blockBox", () => {
   /** The day every fixture below is on — a box is drawn on a day, not "somewhere". */
-  const DAY = at(9, 0);
+  const DAY = salonAt(9, 0);
 
   it("places a block by its real start and duration", () => {
     // 09:00 for 60 minutes → one hour below the 08:00 top, one hour tall.
     const box = blockBox(
       {
-        startsAt: at(9, DAY_START_HOUR + 1).toISOString(),
-        endsAt: at(9, DAY_START_HOUR + 2).toISOString(),
+        startsAt: salonInstant(9, DAY_START_HOUR + 1),
+        endsAt: salonInstant(9, DAY_START_HOUR + 2),
       },
       DAY,
+      TIME_ZONE,
     );
     expect(box).toEqual({ top: HOUR_HEIGHT, height: HOUR_HEIGHT });
   });
 
   it("scales honestly: a 30-minute fill is half as tall as an hour", () => {
     const box = blockBox(
-      { startsAt: at(9, 10, 0).toISOString(), endsAt: at(9, 10, 30).toISOString() },
+      {
+        startsAt: salonInstant(9, 10, 0),
+        endsAt: salonInstant(9, 10, 30),
+      },
       DAY,
+      TIME_ZONE,
     );
     expect(box?.height).toBe(30 * PX_PER_MINUTE);
   });
 
   it("falls back to durationMinutes when endsAt is absent", () => {
-    const box = blockBox({ startsAt: at(9, 10).toISOString(), durationMinutes: 45 }, DAY);
+    const box = blockBox({ startsAt: salonInstant(9, 10), durationMinutes: 45 }, DAY, TIME_ZONE);
     expect(box?.height).toBe(45 * PX_PER_MINUTE);
   });
 
   it("falls back to durationMinutes when endsAt is unparseable", () => {
     const box = blockBox(
-      { startsAt: at(9, 10).toISOString(), endsAt: "not-a-date", durationMinutes: 45 },
+      { startsAt: salonInstant(9, 10), endsAt: "not-a-date", durationMinutes: 45 },
       DAY,
+      TIME_ZONE,
     );
     // The contract allows an absent end, so a bad one must not collapse the block.
     expect(box?.height).toBe(45 * PX_PER_MINUTE);
@@ -84,18 +105,20 @@ describe("blockBox", () => {
     // A 06:00–09:00 block is drawn from the top, not hung off above it.
     const box = blockBox(
       {
-        startsAt: at(9, DAY_START_HOUR - 2).toISOString(),
-        endsAt: at(9, DAY_START_HOUR + 1).toISOString(),
+        startsAt: salonInstant(9, DAY_START_HOUR - 2),
+        endsAt: salonInstant(9, DAY_START_HOUR + 1),
       },
       DAY,
+      TIME_ZONE,
     );
     expect(box?.top).toBe(0);
   });
 
   it("gives a very short booking the minimum clickable height", () => {
     const box = blockBox(
-      { startsAt: at(9, 10).toISOString(), endsAt: at(9, 10, 5).toISOString() },
+      { startsAt: salonInstant(9, 10), endsAt: salonInstant(9, 10, 5) },
       DAY,
+      TIME_ZONE,
     );
     expect(box?.height).toBe(MIN_BLOCK_PX);
   });
@@ -103,8 +126,9 @@ describe("blockBox", () => {
   it("returns null for a booking wholly outside the day", () => {
     // 22:00–23:00 is past the 20:00 track end, so it never renders.
     const box = blockBox(
-      { startsAt: at(9, 22).toISOString(), endsAt: at(9, 23).toISOString() },
+      { startsAt: salonInstant(9, 22), endsAt: salonInstant(9, 23) },
       DAY,
+      TIME_ZONE,
     );
     expect(box).toBeNull();
   });
@@ -112,13 +136,16 @@ describe("blockBox", () => {
   it("returns null when the day asked about is not the booking's own day", () => {
     // The date-aware half of the signature: a 10:00 booking is a block on the 9th and
     // nothing at all on the 8th or the 10th (ADR 0018, decision 2).
-    const booking = { startsAt: at(9, 10).toISOString(), endsAt: at(9, 11).toISOString() };
-    expect(blockBox(booking, at(8, 0))).toBeNull();
-    expect(blockBox(booking, at(10, 0))).toBeNull();
+    const booking = {
+      startsAt: salonInstant(9, 10),
+      endsAt: salonInstant(9, 11),
+    };
+    expect(blockBox(booking, salonAt(8, 0), TIME_ZONE)).toBeNull();
+    expect(blockBox(booking, salonAt(10, 0), TIME_ZONE)).toBeNull();
   });
 
   it("returns null for an unparseable instant", () => {
-    expect(blockBox({ startsAt: "not-a-date", endsAt: "not-a-date" }, DAY)).toBeNull();
+    expect(blockBox({ startsAt: "not-a-date", endsAt: "not-a-date" }, DAY, TIME_ZONE)).toBeNull();
   });
 });
 
@@ -126,15 +153,19 @@ describe("blockMinutes", () => {
   it("measures from the top of the visible window, not from midnight", () => {
     // 10:00–11:00 is two hours past the 08:00 top, one hour long.
     const span = blockMinutes(
-      { startsAt: at(9, 10).toISOString(), endsAt: at(9, 11).toISOString() },
-      at(9, 0),
+      { startsAt: salonInstant(9, 10), endsAt: salonInstant(9, 11) },
+      salonAt(9, 0),
+      TIME_ZONE,
     );
     expect(span).toEqual({ start: 2 * 60, end: 3 * 60 });
   });
 
   it("is null when the booking is not on that day at all", () => {
-    const booking = { startsAt: at(9, 14).toISOString(), endsAt: at(9, 15).toISOString() };
-    expect(blockMinutes(booking, at(10, 0))).toBeNull();
+    const booking = {
+      startsAt: salonInstant(9, 14),
+      endsAt: salonInstant(9, 15),
+    };
+    expect(blockMinutes(booking, salonAt(10, 0), TIME_ZONE)).toBeNull();
   });
 
   it("is null on both days of a booking that crosses midnight", () => {
@@ -142,48 +173,49 @@ describe("blockMinutes", () => {
     // start is past 20:00) and the end day clamps to nothing (its end is before 08:00).
     // ADR 0018, decision 2: the booking is drawn in no view, and the straddle-aware read
     // this replaces would have changed no pixel.
-    const overnight = { startsAt: at(9, 23).toISOString(), endsAt: at(10, 1).toISOString() };
-    expect(blockMinutes(overnight, at(9, 0))).toBeNull();
-    expect(blockMinutes(overnight, at(10, 0))).toBeNull();
+    const overnight = {
+      startsAt: salonInstant(9, 23),
+      endsAt: salonInstant(10, 1),
+    };
+    expect(blockMinutes(overnight, salonAt(9, 0), TIME_ZONE)).toBeNull();
+    expect(blockMinutes(overnight, salonAt(10, 0), TIME_ZONE)).toBeNull();
     // It is still on the 9th in every list-shaped sense — the day it *starts*.
-    expect(dayKey(new Date(overnight.startsAt))).toBe(dayKey(at(9, 0)));
+    expect(dayKey(new Date(overnight.startsAt))).toBe(dayKey(salonAt(9, 0)));
   });
 });
 
 describe("calendar windows", () => {
   it("reads one local day, midnight to its last millisecond", () => {
-    const range = dayWindow(at(9, 13));
-    const from = new Date(range.from);
-    const to = new Date(range.to);
-    expect([from.getDate(), from.getHours(), from.getMinutes()]).toEqual([9, 0, 0]);
-    expect([to.getDate(), to.getHours(), to.getMinutes(), to.getMilliseconds()]).toEqual([
-      9, 23, 59, 999,
-    ]);
+    const range = dayWindow(salonAt(9, 13), TIME_ZONE);
+    const from = salonWallClock(new Date(range.from), TIME_ZONE)!;
+    const to = salonWallClock(new Date(range.to), TIME_ZONE)!;
+    expect([from.day, from.hour, from.minute]).toEqual([9, 0, 0]);
+    expect([to.day, to.hour, to.minute, to.millisecond]).toEqual([9, 23, 59, 999]);
   });
 
   it("reads the whole Monday-first week", () => {
     // 9 October 2026 is a Friday, so its week runs Monday the 5th to Sunday the 11th.
-    const range = weekWindow(at(9, 13));
-    const from = new Date(range.from);
-    const to = new Date(range.to);
-    expect([from.getDate(), from.getHours()]).toEqual([5, 0]);
-    expect([to.getDate(), to.getHours()]).toEqual([11, 23]);
+    const range = weekWindow(salonAt(9, 13), TIME_ZONE);
+    const from = salonWallClock(new Date(range.from), TIME_ZONE)!;
+    const to = salonWallClock(new Date(range.to), TIME_ZONE)!;
+    expect([from.day, from.hour]).toEqual([5, 0]);
+    expect([to.day, to.hour]).toEqual([11, 23]);
   });
 
   it("reads the calendar month, not the drawn grid", () => {
     // October 2026 starts on a Thursday and ends on a Saturday, so its *grid* is padded
     // with September and November days — none of which is fetched (ADR 0018, decision 6).
-    const range = monthWindow(at(9, 13));
-    const from = new Date(range.from);
-    const to = new Date(range.to);
-    expect([from.getMonth(), from.getDate()]).toEqual([9, 1]);
-    expect([to.getMonth(), to.getDate()]).toEqual([9, 31]);
+    const range = monthWindow(salonAt(9, 13), TIME_ZONE);
+    const from = salonWallClock(new Date(range.from), TIME_ZONE)!;
+    const to = salonWallClock(new Date(range.to), TIME_ZONE)!;
+    expect([from.month, from.day]).toEqual([10, 1]);
+    expect([to.month, to.day]).toEqual([10, 31]);
   });
 });
 
 describe("the week and the month", () => {
   it("returns seven days from the Monday of the anchor's week", () => {
-    const days = weekDays(at(9, 13));
+    const days = weekDays(salonAt(9, 13));
     expect(days).toHaveLength(7);
     expect(days[0]?.getDay()).toBe(WEEK_STARTS_ON);
     expect(days[0]?.getDate()).toBe(5); // Monday 5 October 2026
@@ -193,7 +225,7 @@ describe("the week and the month", () => {
   });
 
   it("draws whole Monday-first weeks, padded at both ends", () => {
-    const days = monthGridDays(at(9, 13));
+    const days = monthGridDays(salonAt(9, 13));
     // 28 September — the Monday of the week that holds 1 October — to 1 November.
     expect(days).toHaveLength(35);
     expect([days[0]?.getMonth(), days[0]?.getDate()]).toEqual([8, 28]);
@@ -220,41 +252,44 @@ describe("the week and the month", () => {
 
   it("holds the wall clock at midnight when the day steps", () => {
     // Calendar-field arithmetic, so a DST night cannot drag the grid's day boundary.
-    expect(addDays(at(9, 23, 30), 1).getHours()).toBe(0);
-    expect(addDays(at(9, 0), 1).getDate()).toBe(10);
-    expect(addDays(at(9, 0), -9).getDate()).toBe(30);
-    expect(addDays(at(9, 0), -9).getMonth()).toBe(8);
+    expect(addDays(salonAt(9, 23, 30), 1).getHours()).toBe(0);
+    expect(addDays(salonAt(9, 0), 1).getDate()).toBe(10);
+    expect(addDays(salonAt(9, 0), -9).getDate()).toBe(30);
+    expect(addDays(salonAt(9, 0), -9).getMonth()).toBe(8);
   });
 
   it("names a day by its local fields, never by UTC's", () => {
-    expect(dayKey(at(9, 23, 59))).toBe("2026-10-09");
-    expect(dayKey(at(9, 0))).toBe("2026-10-09");
-    expect(isSameDay(at(9, 0), at(9, 23, 59))).toBe(true);
-    expect(isSameDay(at(9, 23, 59), at(10, 0))).toBe(false);
+    expect(dayKey(salonAt(9, 23, 59))).toBe("2026-10-09");
+    expect(dayKey(salonAt(9, 0))).toBe("2026-10-09");
+    expect(isSameDay(salonAt(9, 0), salonAt(9, 23, 59))).toBe(true);
+    expect(isSameDay(salonAt(9, 23, 59), salonAt(10, 0))).toBe(false);
   });
 });
 
 describe("bookingsByDay", () => {
   it("buckets a booking under the day it starts on, not the day it ends on", () => {
-    const byDay = bookingsByDay([
-      { id: "a", startsAt: at(9, 10).toISOString() },
-      { id: "b", startsAt: at(9, 15).toISOString() },
-      { id: "c", startsAt: at(10, 9).toISOString() },
-    ]);
+    const byDay = bookingsByDay(
+      [
+        { id: "a", startsAt: salonInstant(9, 10) },
+        { id: "b", startsAt: salonInstant(9, 15) },
+        { id: "c", startsAt: salonInstant(10, 9) },
+      ],
+      TIME_ZONE,
+    );
 
     expect(byDay.get("2026-10-09")?.map((booking) => booking.id)).toEqual(["a", "b"]);
     expect(byDay.get("2026-10-10")?.map((booking) => booking.id)).toEqual(["c"]);
   });
 
   it("puts an overnight booking on the day it started, where no view can draw it", () => {
-    const byDay = bookingsByDay([{ id: "overnight", startsAt: at(9, 23).toISOString() }]);
+    const byDay = bookingsByDay([{ id: "overnight", startsAt: salonInstant(9, 23) }], TIME_ZONE);
     // The bucket follows the start day; `blockMinutes` is what then refuses to draw it.
     expect(byDay.get("2026-10-09")).toHaveLength(1);
     expect(byDay.get("2026-10-10")).toBeUndefined();
   });
 
   it("ignores a booking whose instant cannot be read", () => {
-    expect(bookingsByDay([{ id: "broken", startsAt: "not-a-date" }]).size).toBe(0);
+    expect(bookingsByDay([{ id: "broken", startsAt: "not-a-date" }], TIME_ZONE).size).toBe(0);
   });
 });
 
@@ -314,12 +349,14 @@ describe("packLanes", () => {
     // A 07:00 booking and an 08:00 one are both drawn from the 08:00 top, so they must
     // divide the column rather than hide each other behind the clamp.
     const early = blockMinutes(
-      { startsAt: at(9, 7).toISOString(), endsAt: at(9, 9).toISOString() },
-      at(9, 0),
+      { startsAt: salonInstant(9, 7), endsAt: salonInstant(9, 9) },
+      salonAt(9, 0),
+      TIME_ZONE,
     );
     const onTime = blockMinutes(
-      { startsAt: at(9, 8).toISOString(), endsAt: at(9, 9).toISOString() },
-      at(9, 0),
+      { startsAt: salonInstant(9, 8), endsAt: salonInstant(9, 9) },
+      salonAt(9, 0),
+      TIME_ZONE,
     );
     if (!early || !onTime) throw new Error("Both bookings belong to the day being drawn.");
 
@@ -334,18 +371,18 @@ describe("packLanes", () => {
 
 describe("nowLineTop", () => {
   it("sits at the hour mark for a time on the grid", () => {
-    expect(nowLineTop(at(9, 10))).toBe(2 * HOUR_HEIGHT);
+    expect(nowLineTop(salonAt(9, 10), TIME_ZONE)).toBe(2 * HOUR_HEIGHT);
   });
 
   it("is null before the day opens and after it closes", () => {
-    expect(nowLineTop(at(9, 3))).toBeNull();
-    expect(nowLineTop(at(9, 23))).toBeNull();
+    expect(nowLineTop(salonAt(9, 3), TIME_ZONE)).toBeNull();
+    expect(nowLineTop(salonAt(9, 23), TIME_ZONE)).toBeNull();
   });
 });
 
 describe("minutesIntoDay", () => {
   it("counts local minutes since midnight", () => {
-    expect(minutesIntoDay(at(9, 13, 45))).toBe(13 * 60 + 45);
+    expect(minutesIntoDay(new Date(salonInstant(9, 13, 45)), TIME_ZONE)).toBe(13 * 60 + 45);
   });
 });
 
@@ -364,21 +401,27 @@ describe("snapToSlot", () => {
 describe("instantFromOffset", () => {
   it("turns a minute offset into a real instant on the day", () => {
     // Two hours past the 08:00 top is 10:00 local.
-    const instant = instantFromOffset(at(9, 0), 2 * 60);
-    expect(instant.getHours()).toBe(10);
-    expect(instant.getMinutes()).toBe(0);
+    const instant = instantFromOffset(salonAt(9, 0), 2 * 60, TIME_ZONE);
+    const wall = salonWallClock(instant, TIME_ZONE)!;
+    expect(wall.hour).toBe(10);
+    expect(wall.minute).toBe(0);
   });
 
   it("snaps a raw drop offset to the slot", () => {
-    const instant = instantFromOffset(at(9, 0), 2 * 60 + 7);
-    expect(instant.getHours()).toBe(10);
-    expect(instant.getMinutes()).toBe(0);
+    const instant = instantFromOffset(salonAt(9, 0), 2 * 60 + 7, TIME_ZONE);
+    const wall = salonWallClock(instant, TIME_ZONE)!;
+    expect(wall.hour).toBe(10);
+    expect(wall.minute).toBe(0);
   });
 
   it("clamps a drop below or above the track", () => {
-    expect(instantFromOffset(at(9, 0), -30).getHours()).toBe(DAY_START_HOUR);
+    expect(salonWallClock(instantFromOffset(salonAt(9, 0), -30, TIME_ZONE), TIME_ZONE)!.hour).toBe(
+      DAY_START_HOUR,
+    );
     // Past the day's end clamps to the last instant, never off-grid.
-    expect(instantFromOffset(at(9, 0), 99 * 60).getHours()).toBe(20);
+    expect(
+      salonWallClock(instantFromOffset(salonAt(9, 0), 99 * 60, TIME_ZONE), TIME_ZONE)!.hour,
+    ).toBe(20);
   });
 });
 
@@ -426,11 +469,11 @@ describe("buildCalendarColumns", () => {
 });
 
 describe("rescheduleFields", () => {
-  const DAY = at(9, 0);
+  const DAY = salonAt(9, 0);
   const base = {
     id: "appt-1",
-    startsAt: at(9, 10, 0).toISOString(), // 10:00 local
-    endsAt: at(9, 11, 0).toISOString(),
+    startsAt: salonInstant(9, 10, 0), // 10:00 salon time
+    endsAt: salonInstant(9, 11, 0),
     status: "SCHEDULED" as const,
     durationMinutes: 60,
     comment: null,
@@ -447,34 +490,54 @@ describe("rescheduleFields", () => {
 
   it("moves the start when dropped at a new time", () => {
     // Drop two hours below the 08:00 top → 10:00; three hours → 11:00.
-    const fields = rescheduleFields(base, { day: DAY, offsetMinutes: 3 * 60, staffId: "staff-1" });
-    expect(new Date(fields.startsAt as string).getHours()).toBe(11);
+    const fields = rescheduleFields(
+      base,
+      { day: DAY, offsetMinutes: 3 * 60, staffId: "staff-1" },
+      TIME_ZONE,
+    );
+    expect(salonMinutesIntoDay(new Date(fields.startsAt as string), TIME_ZONE)).toBe(11 * 60);
     expect(fields.staffId).toBeUndefined();
   });
 
   it("reassigns the performer when dropped in another column", () => {
-    const fields = rescheduleFields(base, {
-      day: DAY,
-      offsetMinutes: 2 * 60, // same 10:00 it already starts at
-      staffId: "staff-2",
-    });
+    const fields = rescheduleFields(
+      base,
+      {
+        day: DAY,
+        offsetMinutes: 2 * 60, // same 10:00 it already starts at
+        staffId: "staff-2",
+      },
+      TIME_ZONE,
+    );
     expect(fields.startsAt).toBeUndefined();
     expect(fields.staffId).toBe("staff-2");
   });
 
   it("clears the performer when dropped into the Unassigned column", () => {
-    const fields = rescheduleFields(base, { day: DAY, offsetMinutes: 2 * 60, staffId: null });
+    const fields = rescheduleFields(
+      base,
+      { day: DAY, offsetMinutes: 2 * 60, staffId: null },
+      TIME_ZONE,
+    );
     expect(fields.staffId).toBeNull();
   });
 
   it("posts nothing when the block is dropped back where it was", () => {
-    const fields = rescheduleFields(base, { day: DAY, offsetMinutes: 2 * 60, staffId: "staff-1" });
+    const fields = rescheduleFields(
+      base,
+      { day: DAY, offsetMinutes: 2 * 60, staffId: "staff-1" },
+      TIME_ZONE,
+    );
     expect(fields).toEqual({});
   });
 
   it("combines a time move and a reassignment in one PATCH", () => {
-    const fields = rescheduleFields(base, { day: DAY, offsetMinutes: 4 * 60, staffId: "staff-2" });
-    expect(new Date(fields.startsAt as string).getHours()).toBe(12);
+    const fields = rescheduleFields(
+      base,
+      { day: DAY, offsetMinutes: 4 * 60, staffId: "staff-2" },
+      TIME_ZONE,
+    );
+    expect(salonMinutesIntoDay(new Date(fields.startsAt as string), TIME_ZONE)).toBe(12 * 60);
     expect(fields.staffId).toBe("staff-2");
   });
 });

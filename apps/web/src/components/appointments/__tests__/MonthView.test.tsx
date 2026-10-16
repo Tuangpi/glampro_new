@@ -23,8 +23,9 @@ function at(day: number, hour: number, minute = 0): Date {
 function booking(overrides: Partial<AppointmentSummary> = {}): AppointmentSummary {
   return {
     id: "appt-1",
-    startsAt: at(9, 9).toISOString(),
-    endsAt: at(9, 10).toISOString(),
+    // 09:00–10:00 salon time (Asia/Singapore = UTC+8): 01:00–02:00 UTC.
+    startsAt: "2026-10-09T01:00:00.000Z",
+    endsAt: "2026-10-09T02:00:00.000Z",
     status: "SCHEDULED",
     durationMinutes: 60,
     comment: null,
@@ -108,8 +109,9 @@ describe("MonthView", () => {
     // start time and a name, so the day it starts on is the whole answer.
     const overnight = booking({
       id: "appt-overnight",
-      startsAt: at(9, 23).toISOString(),
-      endsAt: at(10, 1).toISOString(),
+      // 23:00–01:00 salon time (Asia/Singapore = UTC+8): starts 15:00 UTC Oct 9, ends 17:00 UTC Oct 9.
+      startsAt: "2026-10-09T15:00:00.000Z",
+      endsAt: "2026-10-09T17:00:00.000Z",
     });
     const { container } = render(
       <MonthView day={MONTH} appointments={[overnight]} onEdit={vi.fn()} />,

@@ -31,7 +31,9 @@ import { useCustomerList } from "@/hooks/useCustomers";
 import { useCreateAppointment, useUpdateAppointment } from "@/hooks/useAppointments";
 import { useServiceList } from "@/hooks/useServices";
 import { useStaffList } from "@/hooks/useStaff";
+import { useSalonFormatting } from "@/contexts/SalonFormattingContext";
 import { getErrorMessage, getValidationDetails } from "@/lib/api";
+import { instantFromSalonDate, toSalonDate } from "@/lib/salon-time";
 import { performerOptions } from "@/lib/performer-options";
 
 const LIST_PAGE_SIZE = 200;
@@ -40,7 +42,7 @@ interface FormState {
   serviceId: string;
   customerId: string;
   staffId: string;
-  /** `datetime-local` value: `YYYY-MM-DDTHH:mm` in the browser's timezone. */
+  /** `datetime-local` value: `YYYY-MM-DDTHH:mm` in the salon's timezone. */
   startsAt: string;
   comment: string;
 }
@@ -50,13 +52,24 @@ function emptyForm(defaultStartsAt: string): FormState {
   return { serviceId: "", customerId: "", staffId: "", startsAt: defaultStartsAt, comment: "" };
 }
 
-/** ISO instant → the local value `<input type="datetime-local">` reads and writes. */
-function toLocalInputValue(iso: string): string {
-  const date = new Date(iso);
+/** ISO instant → the salon-local value `<input type="datetime-local">` reads and writes. */
+function toSalonInputValue(iso: string, timeZone: string): string {
+  const salon = toSalonDate(iso, timeZone);
+  if (!salon) return "";
   const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(
-    date.getHours(),
-  )}:${pad(date.getMinutes())}`;
+  return `${salon.getFullYear()}-${pad(salon.getMonth() + 1)}-${pad(salon.getDate())}T${pad(
+    salon.getHours(),
+  )}:${pad(salon.getMinutes())}`;
+}
+
+/** Salon-local `YYYY-MM-DDTHH:mm` input → the real instant the API expects. */
+function toSalonInstant(value: string, timeZone: string): Date | null {
+  // A `datetime-local` string carries no zone, so `new Date` reads its fields as
+  // local — those fields *are* the salon wall clock the user typed. `instantFromSalonDate`
+  // turns that salon wall clock back into the UTC instant to post.
+  const start = new Date(value);
+  if (Number.isNaN(start.getTime())) return null;
+  return instantFromSalonDate(start, timeZone);
 }
 
 export interface AppointmentFormDrawerProps {
@@ -77,16 +90,21 @@ export default function AppointmentFormDrawer({
   // Seeded once at mount; the page keys this component on record + open state,
   // so a cancelled edit cannot leak into the next one without an effect that
   // would render the form twice on every open.
+  const { timeZone } = useSalonFormatting();
+
+  // Seeded once at mount; the page keys this component on record + open state,
+  // so a cancelled edit cannot leak into the next one without an effect that
+  // would render the form twice on every open.
   const [form, setForm] = useState<FormState>(() =>
     appointment
       ? {
           serviceId: appointment.serviceId ?? "",
           customerId: appointment.customerId ?? "",
           staffId: appointment.staffId ?? "",
-          startsAt: toLocalInputValue(appointment.startsAt),
+          startsAt: toSalonInputValue(appointment.startsAt, timeZone),
           comment: appointment.comment ?? "",
         }
-      : emptyForm(toLocalInputValue(defaultStartsAt)),
+      : emptyForm(toSalonInputValue(defaultStartsAt, timeZone)),
   );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
@@ -120,12 +138,16 @@ export default function AppointmentFormDrawer({
   /** The end time the server will compute — shown, never posted. */
   const previewEndsAt = useMemo(() => {
     if (!selectedService || form.startsAt === "") return null;
-    const start = new Date(form.startsAt);
-    if (Number.isNaN(start.getTime())) return null;
+    const start = toSalonInstant(form.startsAt, timeZone);
+    if (!start) return null;
     const minutes = selectedService.durationMinutes ?? 60;
     const end = new Date(start.getTime() + minutes * 60_000);
-    return { time: end.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), minutes };
-  }, [selectedService, form.startsAt]);
+    const endSalon = toSalonDate(end, timeZone);
+    if (!endSalon) return null;
+    const pad = (value: number) => String(value).padStart(2, "0");
+    const time = `${pad(endSalon.getHours())}:${pad(endSalon.getMinutes())}`;
+    return { time, minutes };
+  }, [selectedService, form.startsAt, timeZone]);
 
   function setField<K extends keyof FormState>(field: K, value: FormState[K]) {
     setForm((previous) => {
@@ -157,8 +179,8 @@ export default function AppointmentFormDrawer({
 
     const localErrors: Record<string, string> = {};
     if (form.serviceId === "") localErrors["serviceId"] = "Service is required";
-    const start = new Date(form.startsAt);
-    if (form.startsAt === "" || Number.isNaN(start.getTime())) {
+    const start = toSalonInstant(form.startsAt, timeZone);
+    if (form.startsAt === "" || !start) {
       localErrors["startsAt"] = "Start time is required";
     }
     if (Object.keys(localErrors).length > 0) {
@@ -166,7 +188,7 @@ export default function AppointmentFormDrawer({
       return;
     }
 
-    const startsAt = start.toISOString();
+    const startsAt = start!.toISOString();
     const staffId = form.staffId === "" ? undefined : form.staffId;
     const customerId = form.customerId === "" ? undefined : form.customerId;
     const comment = form.comment.trim() === "" ? undefined : form.comment.trim();

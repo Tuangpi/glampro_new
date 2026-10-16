@@ -21,7 +21,16 @@
 
 import type { AppointmentSummary } from "@glampro_suite/shared";
 
-/** First hour shown in the gutter (local time). */
+import {
+  instantFromSalonDate,
+  salonDayKey,
+  salonEndOfDay,
+  salonMinutesIntoDay,
+  salonStartOfDay,
+  toSalonDate,
+} from "@/lib/salon-time";
+
+/** First hour shown in the gutter (salon time). */
 export const DAY_START_HOUR = 8;
 /** First hour *past* the last one shown — the track ends at this hour. */
 export const DAY_END_HOUR = 20;
@@ -70,12 +79,22 @@ export function gridTemplate(columnCount: number): string {
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
-/** Minutes since local midnight for an instant, fractional seconds dropped. */
-export function minutesIntoDay(instant: Date): number {
-  return instant.getHours() * 60 + instant.getMinutes();
+/**
+ * Minutes since salon-local midnight for `instant`, fractional seconds dropped.
+ * `instant` is a UTC moment; the salon's timezone decides which wall-clock day
+ * and time it falls on.
+ */
+export function minutesIntoDay(instant: Date, timeZone: string): number {
+  const minutes = salonMinutesIntoDay(instant, timeZone);
+  if (minutes === null) return Number.NaN;
+  return minutes;
 }
 
-/** Local midnight of the day an instant falls on. */
+/**
+ * Salon-local midnight of the day `day` falls on, as a salon-local `Date` whose
+ * host-local getters read the salon wall clock. Callers pass a salon-local
+ * `Date` (see `toSalonDate`); the geometry stays pure field maths on it.
+ */
 export function startOfDay(day: Date): Date {
   return new Date(day.getFullYear(), day.getMonth(), day.getDate());
 }
@@ -176,12 +195,14 @@ export function isSameDay(left: Date, right: Date): boolean {
  */
 export function bookingsByDay<T extends { startsAt: string }>(
   bookings: readonly T[],
+  timeZone: string,
 ): Map<string, T[]> {
   const byDay = new Map<string, T[]>();
   for (const booking of bookings) {
     const start = new Date(booking.startsAt);
     if (Number.isNaN(start.getTime())) continue;
-    const key = dayKey(start);
+    const key = salonDayKey(start, timeZone);
+    if (key === null) continue;
     const bucket = byDay.get(key);
     if (bucket) bucket.push(booking);
     else byDay.set(key, [booking]);
@@ -195,23 +216,44 @@ export interface CalendarWindow {
   to: string;
 }
 
-/** One local day, midnight to its last millisecond. */
-export function dayWindow(day: Date): CalendarWindow {
-  return { from: startOfDay(day).toISOString(), to: endOfDay(day).toISOString() };
+/** One salon-local day, midnight to its last millisecond, sent as instants. */
+export function dayWindow(day: Date, timeZone: string): CalendarWindow {
+  const start = salonStartOfDay(day, timeZone);
+  const end = salonEndOfDay(day, timeZone);
+  // `day` is always a salon-local `Date` produced by `toSalonDate`, so both
+  // edges resolve. Guarded defensively; the empty window fetches nothing.
+  if (!start || !end) return { from: "", to: "" };
+  return {
+    from: instantFromSalonDate(start, timeZone).toISOString(),
+    to: instantFromSalonDate(end, timeZone).toISOString(),
+  };
 }
 
-/** The whole Monday-first week that holds `day`. */
-export function weekWindow(day: Date): CalendarWindow {
+/** The whole Monday-first week that holds `day`, sent as instants. */
+export function weekWindow(day: Date, timeZone: string): CalendarWindow {
   const first = startOfWeek(day);
-  return { from: startOfDay(first).toISOString(), to: endOfDay(addDays(first, 6)).toISOString() };
+  const start = salonStartOfDay(first, timeZone);
+  const end = salonEndOfDay(addDays(first, 6), timeZone);
+  if (!start || !end) return { from: "", to: "" };
+  return {
+    from: instantFromSalonDate(start, timeZone).toISOString(),
+    to: instantFromSalonDate(end, timeZone).toISOString(),
+  };
 }
 
 /**
- * The calendar month, **not** the drawn grid: a padded cell from September is paper, and
- * fetching it would put a chip in a day the desk cannot see the edges of.
+ * The calendar month, **not** the drawn grid: a padded cell from September is
+ * paper, and fetching it would put a chip in a day the desk cannot see the
+ * edges of. Sent as instants.
  */
-export function monthWindow(day: Date): CalendarWindow {
-  return { from: startOfMonth(day).toISOString(), to: endOfDay(endOfMonth(day)).toISOString() };
+export function monthWindow(day: Date, timeZone: string): CalendarWindow {
+  const start = salonStartOfDay(startOfMonth(day), timeZone);
+  const end = salonEndOfDay(endOfMonth(day), timeZone);
+  if (!start || !end) return { from: "", to: "" };
+  return {
+    from: instantFromSalonDate(start, timeZone).toISOString(),
+    to: instantFromSalonDate(end, timeZone).toISOString(),
+  };
 }
 
 /**
@@ -223,12 +265,16 @@ export function monthWindow(day: Date): CalendarWindow {
  * draw 09:00 an hour early. The day difference is taken from the calendar fields, which
  * also keeps a DST jump from turning "tomorrow" into 0.96 of a day.
  */
-export function minutesFromDayStart(instant: Date, day: Date): number {
-  if (Number.isNaN(instant.getTime())) return Number.NaN;
+export function minutesFromDayStart(instant: Date, day: Date, timeZone: string): number {
+  const start = toSalonDate(instant, timeZone);
+  if (!start) return Number.NaN;
   const wholeDays = Math.round(
-    (startOfDay(instant).getTime() - startOfDay(day).getTime()) / 86_400_000,
+    (startOfDay(start).getTime() - startOfDay(day).getTime()) / 86_400_000,
   );
-  return wholeDays * 1_440 + minutesIntoDay(instant);
+  // `start` is salon-local: its host-local getters read the salon wall clock,
+  // so minutes into the day come straight off its fields — no timezone
+  // re-interpretation (which would depend on the host clock).
+  return wholeDays * 1_440 + start.getHours() * 60 + start.getMinutes();
 }
 
 /** A booking's span on one day, in grid minutes clamped to the visible window. */
@@ -254,32 +300,61 @@ export function blockMinutes(
     durationMinutes?: number | null;
   },
   day: Date,
+  timeZone: string,
 ): BlockSpan | null {
-  const start = new Date(booking.startsAt);
-  if (Number.isNaN(start.getTime())) return null;
+  const start = toSalonDate(booking.startsAt, timeZone);
+  if (!start) return null;
 
-  // `durationMinutes` is the fallback span when `endsAt` is absent *or* unparseable (the
-  // contract allows the former), so the block never collapses to nothing or to `NaN`.
-  const ended = booking.endsAt != null ? new Date(booking.endsAt) : null;
-  const end =
-    ended !== null && !Number.isNaN(ended.getTime())
-      ? ended
-      : new Date(start.getTime() + (booking.durationMinutes ?? 30) * 60_000);
+  // `durationMinutes` is the fallback span when `endsAt` is absent *or*
+  // unparseable (the contract allows the former), so the block never collapses
+  // to nothing or to `NaN`. The fallback lands `durationMinutes` later on the
+  // salon clock.
+  let end: Date | null = null;
+  if (booking.endsAt != null) {
+    end = toSalonDate(booking.endsAt, timeZone);
+  }
+  if (end === null) {
+    const fallback = new Date(start.getTime() + (booking.durationMinutes ?? 30) * 60_000);
+    end = toSalonDate(fallback, timeZone);
+    if (!end) return null;
+  }
 
   const offset = DAY_START_HOUR * 60;
-  const startMin = clamp(minutesFromDayStart(start, day) - offset, 0, DAY_MINUTES);
-  const endMin = clamp(minutesFromDayStart(end, day) - offset, 0, DAY_MINUTES);
+  // `start`/`end` are salon-local dates used only for the fallback duration maths.
+  // `minutesFromDayStart` converts raw instants itself — passing a salon-local
+  // date here would double-apply the timezone. Use the raw instants instead.
+  const startMin = clamp(
+    minutesFromDayStart(new Date(booking.startsAt), day, timeZone) - offset,
+    0,
+    DAY_MINUTES,
+  );
+  let endMin: number | null = null;
+  if (booking.endsAt != null) {
+    const endInstant = new Date(booking.endsAt);
+    if (!Number.isNaN(endInstant.getTime())) {
+      endMin = clamp(minutesFromDayStart(endInstant, day, timeZone) - offset, 0, DAY_MINUTES);
+    }
+  }
+  if (endMin === null) {
+    // `start` is salon-local: its host-local fields read the salon wall clock,
+    // so add duration minutes directly to its fields — no UTC timestamp
+    // arithmetic (which would shift by the host/salon offset when they differ).
+    const endMinutes = start.getHours() * 60 + start.getMinutes() + (booking.durationMinutes ?? 30);
+    endMin = clamp(endMinutes - offset, 0, DAY_MINUTES);
+  }
 
   if (endMin <= startMin) return null;
   return { start: startMin, end: endMin };
 }
 
 /**
- * A block's box on `day`'s track, or `null` when the booking is not drawn on that day.
+ * A block's box on `day`'s track, or `null` when the booking is not drawn on
+ * that day.
  *
- * `top`/`height` are in pixels and already clamped, so a booking that starts before 08:00
- * is drawn from the top edge rather than off-grid, and one that runs past 20:00 is clipped
- * at the bottom. `MIN_BLOCK_PX` keeps a very short booking clickable.
+ * `top`/`height` are in pixels and already clamped, so a booking that starts
+ * before 08:00 salon time is drawn from the top edge rather than off-grid, and
+ * one that runs past 20:00 salon time is clipped at the bottom. `MIN_BLOCK_PX`
+ * keeps a very short booking clickable.
  */
 export function blockBox(
   booking: {
@@ -288,8 +363,9 @@ export function blockBox(
     durationMinutes?: number | null;
   },
   day: Date,
+  timeZone: string,
 ): { top: number; height: number } | null {
-  const span = blockMinutes(booking, day);
+  const span = blockMinutes(booking, day, timeZone);
   if (span === null) return null;
 
   return {
@@ -364,10 +440,14 @@ export function packLanes(
 }
 
 /** Where the "now" indicator sits, or `null` outside the visible window. */
-export function nowLineTop(now: Date): number | null {
-  const minutes = minutesIntoDay(now) - DAY_START_HOUR * 60;
-  if (minutes < 0 || minutes > DAY_MINUTES) return null;
-  return minutes * PX_PER_MINUTE;
+export function nowLineTop(now: Date, _timeZone: string): number | null {
+  // `now` is salon-local: its host-local getters read the salon wall clock,
+  // so minutes into the day come straight off its fields — no timezone
+  // re-interpretation (which would depend on the host clock).
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const m = minutes - DAY_START_HOUR * 60;
+  if (m < 0 || m > DAY_MINUTES) return null;
+  return m * PX_PER_MINUTE;
 }
 
 /** Round a fractional minute offset to the nearest slot (default quarter-hour). */
@@ -378,16 +458,27 @@ export function snapToSlot(minutes: number, slot = SNAP_MINUTES): number {
 /**
  * The instant a drop at `offsetMinutes` from the gutter top means, snapped.
  *
- * `offsetMinutes` is a raw pixel-derived minute offset within the day; this
- * turns it back into an absolute instant on `day` so a drag can be posted as a
- * real `startsAt`. Kept here so slice 6c's gesture reuses one definition of
+ * `offsetMinutes` is a raw pixel-derived minute offset within the salon day;
+ * this turns it back into the absolute instant on `day` a drag posts as
+ * `startsAt`. Kept here so slice 6c's gesture reuses one definition of
  * "the time under the pointer" that the tests can pin.
  */
-export function instantFromOffset(day: Date, offsetMinutes: number): Date {
+export function instantFromOffset(day: Date, offsetMinutes: number, timeZone: string): Date {
   const snapped = clamp(snapToSlot(offsetMinutes), 0, DAY_MINUTES);
-  const result = new Date(day.getFullYear(), day.getMonth(), day.getDate());
-  result.setMinutes(DAY_START_HOUR * 60 + snapped);
-  return result;
+  // Salon wall-clock: `day` at 08:00, moved `snapped` minutes. Host-local
+  // getters then read that salon wall clock, which `instantFromSalonDate` turns
+  // back into the real instant the API expects.
+  const result = new Date(
+    day.getFullYear(),
+    day.getMonth(),
+    day.getDate(),
+    DAY_START_HOUR,
+    0,
+    0,
+    0,
+  );
+  result.setMinutes(result.getMinutes() + snapped);
+  return instantFromSalonDate(result, timeZone);
 }
 
 /** One vertical track. `id === null` is the Unassigned column. */
@@ -450,11 +541,12 @@ export function buildCalendarColumns(
 export function rescheduleFields(
   booking: AppointmentSummary,
   drop: { day: Date; offsetMinutes: number; staffId: string | null },
+  timeZone: string,
 ): { startsAt?: string; staffId?: string | null } {
   const next: { startsAt?: string; staffId?: string | null } = {};
 
-  const movedStart = instantFromOffset(drop.day, drop.offsetMinutes);
-  // Same minute on the same day is not a move; comparing instants avoids a
+  const movedStart = instantFromOffset(drop.day, drop.offsetMinutes, timeZone);
+  // Same minute on the same salon day is not a move; comparing instants avoids a
   // needless write for a block dropped a pixel from where it began.
   if (movedStart.getTime() !== new Date(booking.startsAt).getTime()) {
     next.startsAt = movedStart.toISOString();

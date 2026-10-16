@@ -63,8 +63,8 @@ describe("Reports", () => {
   it("renders totals and all three server-backed tables", () => {
     render(<Reports />);
 
-    expect(screen.getByText("$105.00")).toBeInTheDocument();
-    expect(screen.getByText("$95.00")).toBeInTheDocument();
+    expect(screen.getByText("S$105.00")).toBeInTheDocument();
+    expect(screen.getByText("S$95.00")).toBeInTheDocument();
     expect(screen.getByText("Signature cut")).toBeInTheDocument();
     expect(screen.getByText("Hair oil")).toBeInTheDocument();
     expect(screen.getByText("Stella Stylist")).toBeInTheDocument();
@@ -96,8 +96,10 @@ describe("Reports", () => {
       to: string;
       timeZone: string;
     };
-    expect(latest.from).toBe(new Date(2026, 8, 1).toISOString());
-    expect(latest.to).toBe(new Date(2026, 8, 30, 23, 59, 59, 999).toISOString());
+    // User picks local dates in the salon's timezone (Asia/Singapore): "2026-09-01" means
+    // 00:00 SGT = 16:00 UTC the previous day; "2026-09-30 23:59:59.999" means 15:59:59.999 UTC.
+    expect(latest.from).toBe("2026-08-31T16:00:00.000Z");
+    expect(latest.to).toBe("2026-09-30T15:59:59.999Z");
     expect(latest.timeZone).toBeTruthy();
   });
 

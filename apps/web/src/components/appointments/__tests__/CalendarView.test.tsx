@@ -19,8 +19,9 @@ import { HOUR_HEIGHT } from "../calendar-geometry";
 function booking(overrides: Partial<AppointmentSummary> = {}): AppointmentSummary {
   return {
     id: "appt-1",
-    startsAt: "2026-10-09T09:00:00.000Z",
-    endsAt: "2026-10-09T10:00:00.000Z",
+    // 09:00–10:00 salon time (Asia/Singapore = UTC+8): 01:00–02:00 UTC.
+    startsAt: "2026-10-09T01:00:00.000Z",
+    endsAt: "2026-10-09T02:00:00.000Z",
     status: "SCHEDULED",
     durationMinutes: 60,
     comment: null,
@@ -146,7 +147,8 @@ describe("CalendarView drag-to-reschedule", () => {
    */
   const dragged = booking({
     id: "appt-drag",
-    startsAt: new Date(2026, 9, 9, 10, 0).toISOString(),
+    // 10:00 salon time (Asia/Singapore = UTC+8): 02:00 UTC.
+    startsAt: "2026-10-09T02:00:00.000Z",
     endsAt: new Date(2026, 9, 9, 11, 0).toISOString(),
     staffId: "staff-1",
     staffName: "Stella Stylist",
@@ -214,7 +216,8 @@ describe("CalendarView drag-to-reschedule", () => {
     expect(onReschedule).toHaveBeenCalledTimes(1);
     const [id, input] = onReschedule.mock.calls[0];
     expect(id).toBe("appt-drag");
-    expect(new Date(input.startsAt as string).getHours()).toBe(11);
+    // 11:00 salon time = 03:00 UTC; compare the instant, not host-local getters.
+    expect(input.startsAt).toBe("2026-10-09T03:00:00.000Z");
     expect(input.staffId).toBeUndefined();
   });
 
