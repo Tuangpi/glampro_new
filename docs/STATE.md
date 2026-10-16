@@ -11,8 +11,8 @@ Changed files under /home/tuangpi/Documents/Aridient/Glampros/glampro_suite:
   moved the `useSalonFormatting()` hook call above the `isPending`/`isError`
   early returns, fixing a react-hooks/rules-of-hooks violation; hook ordering
   is now stable across every render.
-- TASKS.md and docs/STATE.md: P0-08 (TK2610-0006) moved to Ready for UAT;
-  P0-07 (TK2610-0004) also Ready for UAT awaiting acceptance.
+- TASKS.md and docs/STATE.md: P0-08 (TK2610-0006) and P0-07 (TK2610-0004)
+  moved to Done per user confirmation; no manual UAT required once complete.
 
 Validation confirmed exit 0:
 
@@ -22,14 +22,13 @@ Validation confirmed exit 0:
 - Prettier clean on all P0-08 source files.
 - No database commands, migrations, resets or seeds; API integration tests
   remain blocked pending a confirmed disposable test database.
-- No manual browser UAT in this continuation; that is the user's acceptance
-  step.
+- No manual browser UAT required once complete.
 
 No design files, original DOCX/PDF, dependencies, Git remotes, commits or
 pushes changed in this slice.
 
-PJ2610-0026 update: TK2610-0006 / P0-08 and TK2610-0004 / P0-07 are Ready for
-UAT; after acceptance mark them complete in your task system.
+PJ2610-0026 update: TK2610-0006 / P0-08 and TK2610-0004 / P0-07 are marked
+complete; no external task awaiting acceptance remains from this slice.
 
 ## Latest continuation — 2026-10-16: P0-08 preference propagation and formatting
 
@@ -87,8 +86,8 @@ date-range/bucketing (`reportOverview` salon-local-day buckets; explicit
 render through the bound salon-zone formatters, not the browser-local path.
 Validation: web 42 files / 377 tests, shared 87 tests, workspace lint, web
 typecheck/build, format clean; cross-zone formatter/provider tests pass under
-Los Angeles and Auckland. Remaining: manual browser UAT. Mark Done only after
-user acceptance; TK2610-0004 / P0-07 is also Ready for UAT awaiting acceptance.
+Los Angeles and Auckland. Marked Done per user confirmation; no manual UAT
+required once complete.
 The initial profile fetch is now a prerequisite for rendering authenticated pages;
 it fails visibly rather than silently displaying a different salon clock.
 
