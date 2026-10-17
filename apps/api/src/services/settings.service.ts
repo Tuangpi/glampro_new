@@ -14,13 +14,13 @@ import {
   moduleSummarySchema,
   salonOperatingHoursSchema,
   salonProfileSchema,
-  updateSalonOperatingHoursSchema,
 } from "@glampro_suite/shared";
 import type {
   ModuleSummary,
   SalonOperatingHours,
   SalonProfile,
   UpdateSalonOperatingHoursInput,
+  UpdateSalonProfileInput,
 } from "@glampro_suite/shared";
 
 import { notFound } from "../lib/http-error.js";
@@ -210,8 +210,8 @@ export async function updateSalonOperatingHours(
     const value = input[day];
     // Omitted days are left out of `update` entirely so stored values survive.
     if (value === undefined) continue;
-    data[`${day}Open`] = { set: value.open };
-    data[`${day}Close`] = { set: value.close };
+    data[`${day}Open`] = { set: value?.open ?? null };
+    data[`${day}Close`] = { set: value?.close ?? null };
   }
 
   await prisma.tenantOperatingHours.upsert({

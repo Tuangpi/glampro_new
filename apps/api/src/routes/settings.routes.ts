@@ -1,6 +1,5 @@
 import { Router } from "express";
 import {
-  salonOperatingHoursSchema,
   updateSalonOperatingHoursSchema,
   updateSalonProfileSchema,
   type UpdateSalonOperatingHoursInput,
