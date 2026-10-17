@@ -1250,3 +1250,36 @@ migrations, remotes, commits or pushes changed in this slice.
 
 PJ2610-0026 update: no external task is ready to mark complete. SETUP-06 remains
 an incremental documentation audit; P0-07 still needs API middleware validation.
+
+## Session — 2026-10-16: Done-at-Ready-for-UAT policy applied; SETUP-01 → Done
+
+Applied the tracker policy change agreed for this and all coming tasks: a slice at `Ready for UAT` is now marked `Done` in TASKS.md at hand-off and does **not** wait for user acceptance. Acceptance still happens externally (PJ2610-0026); the local tracker marks Done at Ready for UAT. Parent phases/milestones still need all children and explicit sign-off. Updated TASKS.md completion rule (line 31–32) and session-end reminder (line 37) accordingly.
+
+- TASKS.md: completion rule changed ("mark Done at Ready for UAT — do not wait for user acceptance"); session-end reminder changed ("mark it complete in your task system at hand-off — no wait for UAT"); SETUP-01 status Ready for UAT → Done with evidence reworded ("Submitted for acceptance; marked Done at Ready for UAT per tracker policy.").
+- docs/STATE.md: this entry.
+
+No other task is currently Ready for UAT in TASKS.md. TK2610-0004 / P0-07 and TK2610-0006 / P0-08 are already Done per prior user confirmation. No design files, original DOCX/PDF, dependencies, application behavior, database, migrations, remotes, commits or pushes changed in this slice.
+
+PJ2610-0026 update: no external task is ready to mark complete; SETUP-01 is Done in the local tracker awaiting external acceptance.
+
+## Session — 2026-10-16: API baseline fix (P0-03 settings surface) and commit
+
+Fixed 5 typecheck + 2 lint errors on the API baseline at HEAD — all pre-existing in `apps/api/src/routes/settings.routes.ts` and `apps/api/src/services/settings.service.ts` (no uncommitted source changes; these were not introduced by this session):
+
+- routes: removed unused import `salonOperatingHoursSchema`.
+- service: removed unused import `updateSalonOperatingHoursSchema`; added missing type import `UpdateSalonProfileInput` (used at `updateSalonProfile` signature but never imported).
+- service: null-safe day write (`value?.open ?? null`, `value?.close ?? null`) so `PATCH /settings/hours` with a `null` day (closed) sets both fields to null instead of throwing `value.open` at runtime — matches the create path and the P0-03 "null day = closed" semantics.
+
+Changed files:
+- apps/api/src/routes/settings.routes.ts
+- apps/api/src/services/settings.service.ts
+
+Validation confirmed exit 0:
+- API typecheck (`tsc --noEmit`): passed (was 5 errors).
+- API lint (`eslint .`): passed (was 2 errors).
+- Shared typecheck: passed. Web typecheck: passed.
+- Shared tests: passed. Web tests: 381 passed.
+
+No database commands, migrations, resets or seeds; API integration tests remain blocked pending confirmation of a disposable test database. No design files, original DOCX/PDF, dependencies, remotes, commits or pushes changed in this slice.
+
+PJ2610-0026 update: no external task is ready to mark complete; SETUP-01 and the API baseline fix await commit. Remaining blockers: disposable database (SETUP-02/05, P0-07 middleware validation) and ADR 0010/0011 decisions (SETUP-06).
